@@ -60,6 +60,14 @@ type AddOnDefinition = {
 type EventFundraisingAddOnLike = Partial<EventFundraisingAddOn> &
   Record<string, unknown>;
 
+type ConfiguredAddOn = {
+  definition: AddOnDefinition;
+  addOn: EventFundraisingAddOn;
+  readinessItems: ReadinessItem[];
+  readyForCheckout: boolean;
+  warnings: number;
+};
+
 const ADD_ON_DEFINITIONS: AddOnDefinition[] = [
   {
     id: "event-addon-heads-or-tails",
@@ -447,7 +455,32 @@ function addOnReadyForCheckout(addOn: EventFundraisingAddOn) {
     Number(addOn.entryPriceCents || 0) > 0
   );
 }
-async function requireEventAccess(eventId: string) {
+
+function getVisibleConfiguredAddOnsForTier(
+  configuredAddOns: ConfiguredAddOn[],
+  tier: string,
+) {
+  if (tier === "foundation") {
+    return configuredAddOns;
+  }
+
+  if (tier === "professional") {
+    const enabled = configuredAddOns
+      .filter((item) => item.addOn.enabled)
+      .sort(
+        (a, b) =>
+          Number(a.addOn.sortOrder || 0) - Number(b.addOn.sortOrder || 0),
+      );
+
+    if (enabled.length > 0) {
+      return [enabled[0]];
+    }
+
+    return [configuredAddOns[0]].filter(Boolean);
+  }
+
+  return [];
+}async function requireEventAccess(eventId: string) {
   const session = await auth();
 
   if (!session?.user) {
@@ -562,37 +595,55 @@ export default async function EventFundraisingAddOnsPage({
   const limits = getTenantEventFundraisingAddOnLimits(tenantSettings);
 
   const canManageAddOns = addOnsCapability.allowed;
-  const canUseMultipleAddOns = multipleAddOnsCapability.allowed;
+  const canUseMultipleAddOns =
+    tier === "foundation" && multipleAddOnsCapability.allowed;
   const addOns = event.event_addons_json || [];
 
-  const configuredAddOns = ADD_ON_DEFINITIONS.map((definition) => {
-    const addOn = getAddOn(addOns, definition);
-    const readinessItems = buildAddOnReadiness({
-      addOn,
-      currency: event.currency || "GBP",
-      definition,
-    });
-    const readyForCheckout = addOnReadyForCheckout(addOn);
-    const warnings = readinessItems.filter((item) => item.tone === "warning")
-      .length;
+  const configuredAddOns: ConfiguredAddOn[] = ADD_ON_DEFINITIONS.map(
+    (definition) => {
+      const addOn = getAddOn(addOns, definition);
+      const readinessItems = buildAddOnReadiness({
+        addOn,
+        currency: event.currency || "GBP",
+        definition,
+      });
+      const readyForCheckout = addOnReadyForCheckout(addOn);
+      const warnings = readinessItems.filter((item) => item.tone === "warning")
+        .length;
 
-    return {
-      definition,
-      addOn,
-      readinessItems,
-      readyForCheckout,
-      warnings,
-    };
-  });
+      return {
+        definition,
+        addOn,
+        readinessItems,
+        readyForCheckout,
+        warnings,
+      };
+    },
+  );
 
-  const enabledAddOns = configuredAddOns
+  const visibleConfiguredAddOns = canManageAddOns
+    ? getVisibleConfiguredAddOnsForTier(configuredAddOns, tier)
+    : [];
+
+  const enabledAddOns = visibleConfiguredAddOns
     .map((item) => item.addOn)
     .filter((addOn) => addOn.enabled);
 
-  const checkoutReadyAddOns = configuredAddOns.filter(
+  const checkoutReadyAddOns = visibleConfiguredAddOns.filter(
     (item) => item.readyForCheckout,
   );
-  const firstEnabledAddOn = configuredAddOns.find((item) => item.addOn.enabled);
+  const firstEnabledAddOn = visibleConfiguredAddOns.find(
+    (item) => item.addOn.enabled,
+  );
+
+  const savedEnabledAddOns = configuredAddOns
+    .map((item) => item.addOn)
+    .filter((addOn) => addOn.enabled);
+
+  const hiddenByTierCount =
+    canManageAddOns && tier !== "foundation"
+      ? Math.max(0, configuredAddOns.length - visibleConfiguredAddOns.length)
+      : 0;
 
   const upgradeRequired = searchParams?.error === "upgrade-required";
   const multipleUpgradeRequired =
@@ -613,8 +664,9 @@ export default async function EventFundraisingAddOnsPage({
 
           <p style={styles.heroText}>
             Add live fundraising tools to this event. Heads or Tails and Higher
-            or Lower can now be shown publicly, collected during checkout and
-            reported clearly in event orders.
+            or Lower can be shown publicly, collected during checkout and
+            reported clearly in event orders, with the editor matching the
+            tenant’s current plan.
           </p>
 
           <div className="heroMetaGrid" style={styles.heroMetaGrid}>
@@ -649,14 +701,16 @@ export default async function EventFundraisingAddOnsPage({
                 } checkout-ready`
               : firstEnabledAddOn
                 ? `${firstEnabledAddOn.definition.shortName} is display-ready`
-                : "No event add-ons enabled"}
+                : canManageAddOns
+                  ? "No event add-ons enabled"
+                  : "Event add-ons locked"}
           </strong>
           <span style={styles.heroPanelText}>
-            {checkoutReadyAddOns.length > 0
-              ? "Checkout-ready add-ons can appear in public event checkout and report separately in event orders."
-              : firstEnabledAddOn
-                ? "At least one add-on can appear on the public event page. Add a valid price and enable checkout collection to sell entries online."
-                : "Enable an add-on to prepare event-night fundraising for this event."}
+            {tier === "foundation"
+              ? "Foundation can manage multiple event add-ons on the same event."
+              : tier === "professional"
+                ? "Professional can manage one event add-on per event. Upgrade to Foundation for multiple add-ons together."
+                : "Event fundraising add-ons are available on Professional and Foundation plans."}
           </span>
         </div>
       </section>
@@ -723,6 +777,21 @@ export default async function EventFundraisingAddOnsPage({
         />
       ) : null}
 
+      {tier === "professional" && savedEnabledAddOns.length > 1 ? (
+        <section className="upgradeBanner" style={styles.upgradeBanner}>
+          <div style={styles.upgradeEyebrow}>Professional limit applied</div>
+          <h2 style={styles.upgradeTitle}>One add-on is active for this event</h2>
+          <p style={styles.upgradeText}>
+            This event still has multiple saved add-ons from a previous plan,
+            but Professional shows and uses only the first enabled add-on. Upgrade
+            to Foundation to manage multiple add-ons together again.
+          </p>
+          <Link href="/admin/settings/billing" style={styles.primaryLink}>
+            View billing
+          </Link>
+        </section>
+      ) : null}
+
       <section className="summaryGrid" style={styles.summaryGrid}>
         <SummaryCard
           label="Community"
@@ -732,7 +801,7 @@ export default async function EventFundraisingAddOnsPage({
         <SummaryCard
           label="Professional"
           value="One add-on"
-          detail="Use either Heads or Tails or Higher or Lower on an event."
+          detail="Use one live fundraising add-on on an event."
         />
         <SummaryCard
           label="Foundation"
@@ -749,8 +818,8 @@ export default async function EventFundraisingAddOnsPage({
               <h2 style={styles.readinessTitle}>Event add-ons checklist</h2>
               <p style={styles.readinessIntro}>
                 A quick admin view of what is enabled, what is public-ready,
-                what is checkout-ready and what is already reporting in event
-                orders.
+                what is checkout-ready and what is reporting in event orders for
+                this tenant’s current plan.
               </p>
             </div>
 
@@ -776,7 +845,7 @@ export default async function EventFundraisingAddOnsPage({
             className="readinessOverviewGrid"
             style={styles.readinessOverviewGrid}
           >
-            {configuredAddOns.map((item) => (
+            {visibleConfiguredAddOns.map((item) => (
               <article
                 key={item.definition.type}
                 style={styles.readinessOverviewCard}
@@ -816,6 +885,17 @@ export default async function EventFundraisingAddOnsPage({
             ))}
           </div>
 
+          {hiddenByTierCount > 0 ? (
+            <div style={styles.professionalNoticeDark}>
+              <strong>{hiddenByTierCount} add-on option hidden on this plan</strong>
+              <span>
+                Professional shows one add-on editor for this event. Foundation
+                unlocks multiple add-on editors and multiple public add-ons
+                together.
+              </span>
+            </div>
+          ) : null}
+
           <div style={styles.readinessActions}>
             <Link
               href={`/e/${encodeURIComponent(event.slug)}`}
@@ -849,7 +929,7 @@ export default async function EventFundraisingAddOnsPage({
         </section>
       ) : (
         <div style={styles.addOnPanels}>
-          {configuredAddOns.map((item) => (
+          {visibleConfiguredAddOns.map((item) => (
             <AddOnSettingsPanel
               key={item.definition.type}
               eventId={event.id}
@@ -1055,9 +1135,8 @@ function AddOnSettingsPanel({
           <div style={styles.professionalNotice}>
             <strong>Professional add-on limit</strong>
             <span>
-              This tenant can enable one event fundraising add-on per event.
-              Save only one enabled add-on at a time, or upgrade to Foundation
-              for multiple add-ons per event.
+              This tenant can manage one event fundraising add-on per event.
+              Upgrade to Foundation for multiple add-ons together.
             </span>
           </div>
         ) : (
@@ -1864,6 +1943,19 @@ const styles: Record<string, CSSProperties> = {
     background: "#fffbeb",
     border: "1px solid #fde68a",
     color: "#92400e",
+    fontSize: 13,
+    fontWeight: 800,
+    lineHeight: 1.45,
+  },
+
+  professionalNoticeDark: {
+    display: "grid",
+    gap: 4,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(250,204,21,0.12)",
+    border: "1px solid rgba(250,204,21,0.34)",
+    color: "#fef3c7",
     fontSize: 13,
     fontWeight: 800,
     lineHeight: 1.45,
