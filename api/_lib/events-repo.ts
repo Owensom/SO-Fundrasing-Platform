@@ -336,10 +336,7 @@ function normaliseImageFocus(value: number | null | undefined): number {
   return Math.max(0, Math.min(100, Math.round(number)));
 }
 
-function normaliseNonNegativeInteger(
-  value: number | string | null | undefined,
-  fallback = 0,
-): number {
+function normaliseNonNegativeInteger(value: unknown, fallback = 0): number {
   const number = Number(value);
   if (!Number.isFinite(number) || number < 0) return fallback;
   return Math.floor(number);
