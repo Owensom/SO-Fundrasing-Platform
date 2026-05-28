@@ -35,6 +35,7 @@ type CheckoutItem = {
 type CheckoutAddOnItem = {
   type?: string;
   quantity?: number;
+  buyerAnswer?: string;
 };
 
 type ValidatedCheckoutAddOn = {
@@ -43,6 +44,14 @@ type ValidatedCheckoutAddOn = {
   quantity: number;
   unitAmount: number;
   totalAmount: number;
+  buyerAnswer: string | null;
+  legalQuestionEnabled: boolean;
+  legalQuestionText: string | null;
+  legalQuestionHelperText: string | null;
+  prizeValueRangeEnabled: boolean;
+  prizeValueRangeMinCents: number | null;
+  prizeValueRangeMaxCents: number | null;
+  prizeValueRangeNote: string | null;
 };
 
 type EventCheckoutPaymentSummary = {
@@ -85,6 +94,11 @@ function siteUrl(req: Request) {
 
 function cleanText(value: unknown) {
   return String(value || "").trim();
+}
+
+function cleanNullableText(value: unknown) {
+  const clean = cleanText(value);
+  return clean || null;
 }
 
 function cleanAccessCode(value: unknown) {
@@ -514,6 +528,7 @@ function normaliseEventAddOns(rawAddOns: unknown): CheckoutAddOnItem[] {
     const item = addOn as CheckoutAddOnItem;
     const type = cleanText(item.type);
     const quantity = positiveQuantity(item.quantity);
+    const buyerAnswer = cleanText(item.buyerAnswer).slice(0, 500);
 
     if (!type || quantity <= 0) {
       continue;
@@ -522,10 +537,28 @@ function normaliseEventAddOns(rawAddOns: unknown): CheckoutAddOnItem[] {
     normalisedAddOns.push({
       type,
       quantity,
+      buyerAnswer,
     });
   }
 
   return normalisedAddOns;
+}
+
+function getConfiguredCheckoutAddOn(input: {
+  eventAddOns: unknown[];
+  type: EventCheckoutAddOnType;
+}) {
+  return input.eventAddOns.find((addOn) => {
+    if (!addOn || typeof addOn !== "object") return false;
+
+    const current = addOn as Record<string, unknown>;
+
+    return (
+      cleanText(current.type) === input.type &&
+      truthy(current.enabled) &&
+      truthy(current.collectAtCheckout)
+    );
+  }) as Record<string, unknown> | undefined;
 }
 
 function validateCheckoutAddOns(input: {
@@ -554,17 +587,10 @@ function validateCheckoutAddOns(input: {
       throw new Error("Invalid event add-on.");
     }
 
-    const configuredAddOn = eventAddOns.find((addOn) => {
-      if (!addOn || typeof addOn !== "object") return false;
-
-      const current = addOn as Record<string, unknown>;
-
-      return (
-        cleanText(current.type) === type &&
-        truthy(current.enabled) &&
-        truthy(current.collectAtCheckout)
-      );
-    }) as Record<string, unknown> | undefined;
+    const configuredAddOn = getConfiguredCheckoutAddOn({
+      eventAddOns,
+      type,
+    });
 
     if (!configuredAddOn) {
       throw new Error("This event add-on is not available for checkout.");
@@ -593,6 +619,31 @@ function validateCheckoutAddOns(input: {
     }
 
     const title = cleanText(configuredAddOn.title) || defaultAddOnTitle(type);
+    const legalQuestionEnabled = Boolean(
+      type === "higher_or_lower" &&
+        truthy(configuredAddOn.legalQuestionEnabled) &&
+        cleanText(configuredAddOn.legalQuestionText),
+    );
+    const buyerAnswer = cleanText(submittedAddOn.buyerAnswer).slice(0, 500);
+
+    if (legalQuestionEnabled && !buyerAnswer) {
+      throw new Error(
+        "Please answer the Higher or Lower skill question before continuing.",
+      );
+    }
+
+    const prizeValueRangeEnabled = Boolean(
+      type === "higher_or_lower" &&
+        truthy(configuredAddOn.prizeValueRangeEnabled),
+    );
+
+    const prizeValueRangeMinCents = prizeValueRangeEnabled
+      ? safeMoneyCents(configuredAddOn.prizeValueRangeMinCents)
+      : null;
+
+    const prizeValueRangeMaxCents = prizeValueRangeEnabled
+      ? safeMoneyCents(configuredAddOn.prizeValueRangeMaxCents)
+      : null;
 
     validatedAddOns.push({
       type,
@@ -600,6 +651,18 @@ function validateCheckoutAddOns(input: {
       quantity,
       unitAmount: entryPriceCents,
       totalAmount: entryPriceCents * quantity,
+      buyerAnswer: buyerAnswer || null,
+      legalQuestionEnabled,
+      legalQuestionText: cleanNullableText(configuredAddOn.legalQuestionText),
+      legalQuestionHelperText: cleanNullableText(
+        configuredAddOn.legalQuestionHelperText,
+      ),
+      prizeValueRangeEnabled,
+      prizeValueRangeMinCents,
+      prizeValueRangeMaxCents,
+      prizeValueRangeNote: cleanNullableText(
+        configuredAddOn.prizeValueRangeNote,
+      ),
     });
   }
 
@@ -614,6 +677,22 @@ function eventAddOnSummary(addOns: ValidatedCheckoutAddOn[]) {
   return addOns
     .map((addOn) => `${addOn.title} × ${addOn.quantity}`)
     .join(", ");
+}
+
+function addOnOrderItemMetadata(addOn: ValidatedCheckoutAddOn) {
+  return {
+    kind: "event_addon",
+    addOnType: addOn.type,
+    addOnTitle: addOn.title,
+    buyerAnswer: addOn.buyerAnswer,
+    legalQuestionEnabled: addOn.legalQuestionEnabled,
+    legalQuestionText: addOn.legalQuestionText,
+    legalQuestionHelperText: addOn.legalQuestionHelperText,
+    prizeValueRangeEnabled: addOn.prizeValueRangeEnabled,
+    prizeValueRangeMinCents: addOn.prizeValueRangeMinCents,
+    prizeValueRangeMaxCents: addOn.prizeValueRangeMaxCents,
+    prizeValueRangeNote: addOn.prizeValueRangeNote,
+  };
 }
 
 async function createEventAddOnOrderItems(input: {
@@ -634,6 +713,7 @@ async function createEventAddOnOrderItems(input: {
       guest_name: input.buyerName,
       dietary_requirements: null,
       menu_choice: null,
+      metadata: addOnOrderItemMetadata(addOn),
     } as never);
   }
 }
