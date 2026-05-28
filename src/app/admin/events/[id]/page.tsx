@@ -618,6 +618,43 @@ function hasGuestCateringDetail(row: EventGuestCateringRow) {
       String(row.menu_choice || "").trim(),
   );
 }
+
+function eventAddOnDisplayName(addOn: {
+  type?: string;
+  title?: string;
+}) {
+  const title = String(addOn.title || "").trim();
+
+  if (title) return title;
+
+  if (addOn.type === "higher_or_lower") return "Higher or Lower";
+  if (addOn.type === "heads_or_tails") return "Heads or Tails";
+
+  return "Event add-on";
+}
+
+function eventAddOnCountLabel(count: number) {
+  if (count === 1) return "1 add-on";
+  return `${count} add-ons`;
+}
+
+function formatEventAddOnList(
+  addOns: Array<{ type?: string; title?: string }>,
+  fallback = "None enabled",
+) {
+  if (addOns.length === 0) return fallback;
+
+  return addOns.map(eventAddOnDisplayName).join(", ");
+}
+
+function eventAddOnCheckoutReady(addOn: {
+  collectAtCheckout?: boolean | null;
+  entryPriceCents?: number | null;
+}) {
+  return Boolean(
+    addOn.collectAtCheckout && Number(addOn.entryPriceCents || 0) > 0,
+  );
+}
 async function getActivePublishedCampaignCountForTenant(tenantSlug: string) {
   const rows = await query<ActiveCampaignCountRow>(
     `
@@ -2158,12 +2195,33 @@ export default async function AdminEventManagePage({
 
   const ticketTypes = event.ticket_types || [];
   const seats = event.seats || [];
-  const eventAddOns = event.event_addons_json || [];
+   const eventAddOns = event.event_addons_json || [];
   const enabledEventAddOns = eventAddOns.filter((addOn) => addOn.enabled);
-  const headsOrTailsAddOn = eventAddOns.find(
-    (addOn) => addOn.type === "heads_or_tails",
+  const checkoutReadyEventAddOns = enabledEventAddOns.filter(
+    eventAddOnCheckoutReady,
   );
-  const headsOrTailsEnabled = Boolean(headsOrTailsAddOn?.enabled);
+
+  const eventAddOnsSummaryValue =
+    enabledEventAddOns.length > 0
+      ? formatEventAddOnList(enabledEventAddOns)
+      : canManageEventAddOns
+        ? "Available"
+        : "Locked";
+
+  const eventAddOnsBadge =
+    enabledEventAddOns.length > 0
+      ? `${eventAddOnCountLabel(enabledEventAddOns.length)} enabled`
+      : canManageEventAddOns
+        ? "Available"
+        : "Upgrade required";
+
+  const eventAddOnsStatusText =
+    enabledEventAddOns.length > 0
+      ? "Enabled"
+      : canManageEventAddOns
+        ? "Ready to configure"
+        : "Upgrade required";
+
   const eventAddOnsHref = `/admin/events/${encodeURIComponent(
     event.id,
   )}/addons`;
@@ -2347,23 +2405,27 @@ export default async function AdminEventManagePage({
           ? "Guest menu or dietary fields are enabled."
           : "Guest menu and dietary fields are hidden.",
     },
-    {
+        {
       label: "Event add-ons",
-      value: headsOrTailsEnabled
-        ? "Heads or Tails"
-        : canManageEventAddOns
-          ? "Available"
-          : "Locked",
-      tone: headsOrTailsEnabled
-        ? "good"
-        : canManageEventAddOns
-          ? "neutral"
-          : "warning",
-      detail: headsOrTailsEnabled
-        ? "Heads or Tails is enabled for this event."
-        : canManageEventAddOns
-          ? "Professional/Foundation event add-ons can be configured."
-          : "Event fundraising add-ons require Professional or Foundation.",
+      value: eventAddOnsSummaryValue,
+      tone:
+        enabledEventAddOns.length > 0
+          ? "good"
+          : canManageEventAddOns
+            ? "neutral"
+            : "warning",
+      detail:
+        enabledEventAddOns.length > 0
+          ? `${formatEventAddOnList(enabledEventAddOns)} ${
+              checkoutReadyEventAddOns.length > 0
+                ? `• ${eventAddOnCountLabel(
+                    checkoutReadyEventAddOns.length,
+                  )} checkout-ready`
+                : "• organiser collection only"
+            }`
+          : canManageEventAddOns
+            ? "Professional/Foundation event add-ons can be configured."
+            : "Event fundraising add-ons require Professional or Foundation.",
     },
     {
       label: "Operations",
@@ -2690,8 +2752,8 @@ export default async function AdminEventManagePage({
         <SummaryCard
           label="Event add-ons"
           value={
-            headsOrTailsEnabled
-              ? "Heads or Tails"
+            enabledEventAddOns.length > 0
+              ? formatEventAddOnList(enabledEventAddOns)
               : enabledEventAddOns.length
           }
         />
@@ -2702,1169 +2764,26 @@ export default async function AdminEventManagePage({
         <SummaryCard label="VIP" value={vipSeats} />
         <SummaryCard label="Complimentary" value={complimentarySeats} />
       </section>
-            <CollapsibleSection
-        id="overview"
-        eyebrow="Section 1"
-        title="Overview"
-        description="Core event details and headline setup. This is open by default because it contains the main event save form."
-        badge={formatDisplayDate(event.starts_at)}
-        defaultOpen
-      >
-        <div className="panel" style={styles.panel}>
-          <div style={styles.panelHeader}>
-            <div>
-              <div style={styles.innerEyebrow}>Event setup</div>
-              <h3 style={styles.panelTitle}>Event details</h3>
-              <p style={styles.sectionText}>
-                Update the public event page, timing, capacity, image and guest
-                collection settings.
-              </p>
-            </div>
-          </div>
-
-          <form action={updateEventAction} style={styles.form}>
-            <input type="hidden" name="id" value={event.id} />
-
-            <div className="twoCol" style={styles.twoCol}>
-              <Field label="Title">
-                <input
-                  name="title"
-                  required
-                  defaultValue={event.title}
-                  style={styles.input}
-                />
-              </Field>
-
-              <Field label="Slug">
-                <input
-                  name="slug"
-                  required
-                  defaultValue={event.slug}
-                  style={styles.input}
-                />
-              </Field>
-            </div>
-            <Field label="Description">
-              <textarea
-                name="description"
-                rows={3}
-                defaultValue={event.description || ""}
-                style={styles.textarea}
-              />
-            </Field>
-
-            <div className="mediaBox" style={styles.mediaBox}>
-              <div style={styles.mediaControls}>
-                <h3 style={styles.panelTitle}>Event image</h3>
-
-                <p style={styles.sectionText}>
-                  Upload or replace the public event image, then choose the focal
-                  point for wide banners and cards.
-                </p>
-
-                <ImageFocusUploadField
-                  currentImageUrl={event.image_url ?? ""}
-                  currentFocusX={event.image_focus_x ?? 50}
-                  currentFocusY={event.image_focus_y ?? 50}
-                  label="Event image upload"
-                  previewAlt={event.title}
-                  subscriptionTier={tenantSettings?.subscription_tier}
-                  customImagesAllowed={customImagesCapability.allowed}
-                />
-              </div>
-
-              <div className="previewBox" style={styles.previewBox}>
-                <img
-                  src={event.image_url || DEFAULT_EVENTS_IMAGE}
-                  alt={event.title || "SO Events"}
-                  style={{
-                    ...styles.previewImage,
-                    ...(hasCustomImage ? imageFocusStyle : defaultImageStyle),
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="twoCol" style={styles.twoCol}>
-              <Field label="Location">
-                <input
-                  name="location"
-                  defaultValue={event.location || ""}
-                  style={styles.input}
-                />
-              </Field>
-
-              <Field label="General admission capacity">
-                <input
-                  name="capacity"
-                  type="number"
-                  min="0"
-                  defaultValue={event.capacity || ""}
-                  placeholder="Leave blank for unlimited"
-                  style={styles.input}
-                />
-              </Field>
-            </div>
-
-            <div className="twoCol" style={styles.twoCol}>
-              <Field label="Starts at">
-                <input
-                  name="starts_at"
-                  type="datetime-local"
-                  defaultValue={formatDateTimeLocal(event.starts_at)}
-                  style={styles.input}
-                />
-              </Field>
-
-              <Field label="Ends at">
-                <input
-                  name="ends_at"
-                  type="datetime-local"
-                  defaultValue={formatDateTimeLocal(event.ends_at)}
-                  style={styles.input}
-                />
-              </Field>
-            </div>
-
-            <div className="threeCol" style={styles.threeCol}>
-              <Field label="Currency">
-                <select
-                  name="currency"
-                  defaultValue={event.currency}
-                  style={styles.input}
-                >
-                  <option value="GBP">GBP</option>
-                  <option value="EUR">EUR</option>
-                  <option value="USD">USD</option>
-                </select>
-              </Field>
-
-              <Field label="Type">
-                <select
-                  name="event_type"
-                  defaultValue={event.event_type}
-                  style={styles.input}
-                >
-                  <option value="general_admission">General admission</option>
-                  <option value="reserved_seating">Reserved seating</option>
-                  <option value="tables">Tables</option>
-                </select>
-              </Field>
-
-              <Field label="Status">
-                <select
-                  name="status"
-                  defaultValue={event.status}
-                  style={styles.input}
-                >
-                  <option value="draft">Draft</option>
-                  <option value="published">Published</option>
-                  <option value="closed">Closed</option>
-                </select>
-              </Field>
-            </div>
-
-            <div className="twoCol" style={styles.twoCol}>
-              <Field label="Ask for dietary requirements">
-                <select
-                  name="ask_dietary_requirements"
-                  defaultValue={
-                    event.ask_dietary_requirements ? "true" : "false"
-                  }
-                  style={styles.input}
-                >
-                  <option value="true">Yes, ask buyers/guests</option>
-                  <option value="false">No, hide this field</option>
-                </select>
-              </Field>
-
-              <Field label="Ask for menu choice">
-                <select
-                  name="ask_menu_choice"
-                  defaultValue={event.ask_menu_choice ? "true" : "false"}
-                  style={styles.input}
-                >
-                  <option value="true">Yes, ask buyers/guests</option>
-                  <option value="false">No, hide this field</option>
-                </select>
-              </Field>
-            </div>
-
-            <section className="submitBar" style={styles.submitBar}>
-              <div>
-                <strong style={{ color: "#0f172a" }}>
-                  Save event details
-                </strong>
-                <div style={styles.mutedSmall}>
-                  This updates the public event page and admin values.
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="primaryButton"
-                style={styles.primaryButton}
-              >
-                Save event details
-              </button>
-            </section>
-          </form>
-        </div>
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        id="tickets"
-        eyebrow="Section 2"
-        title="Tickets & Prices"
-        description="Add public ticket choices, pricing, limits and visibility."
-        badge={`${activeTicketTypes.length} active`}
-      >
-        <div className="ticketLayout" style={styles.ticketLayout}>
-          <CompactPanel title="Add ticket type" eyebrow="New ticket">
-            <form action={addTicketTypeAction} style={styles.form}>
-              <input type="hidden" name="event_id" value={event.id} />
-
-              <Field label="Ticket name">
-                <input name="name" required style={styles.input} />
-              </Field>
-
-              <Field label="Description">
-                <input name="description" style={styles.input} />
-              </Field>
-
-              <div className="threeCol" style={styles.threeCol}>
-                <Field label="Price">
-                  <input
-                    name="price"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    style={styles.input}
-                  />
-                </Field>
-
-                <Field label="Ticket limit">
-                  <input
-                    name="capacity"
-                    type="number"
-                    min="0"
-                    placeholder="Leave blank"
-                    style={styles.input}
-                  />
-                </Field>
-
-                <Field label="Display order">
-                  <input
-                    name="sort_order"
-                    type="number"
-                    min="0"
-                    defaultValue={ticketTypes.length}
-                    style={styles.input}
-                  />
-                  <p style={styles.helperText}>Lower numbers appear first.</p>
-                </Field>
-              </div>
-
-              <Field label="Visibility">
-                <select
-                  name="is_active"
-                  defaultValue="true"
-                  style={styles.input}
-                >
-                  <option value="true">Active</option>
-                  <option value="false">Hidden</option>
-                </select>
-              </Field>
-
-              <button
-                type="submit"
-                className="primaryButton"
-                style={styles.primaryButton}
-              >
-                Add ticket type
-              </button>
-            </form>
-          </CompactPanel>
-
-          <CompactPanel title="Current ticket types" eyebrow="Existing tickets">
-            <div className="ticketListScroll" style={styles.ticketListScroll}>
-              {ticketTypes.length === 0 ? (
-                <div style={styles.emptyBox}>No ticket types yet.</div>
-              ) : (
-                ticketTypes.map((ticketType) => (
-                  <details key={ticketType.id} style={styles.ticketDetails}>
-                    <summary
-                      className="ticketSummary"
-                      style={styles.ticketSummary}
-                    >
-                      <div>
-                        <strong>{ticketType.name}</strong>
-                        <div style={styles.mutedSmall}>
-                          {formatMoney(ticketType.price, event.currency)}
-                          {ticketType.capacity
-                            ? ` • ${ticketType.capacity} limit`
-                            : " • Unlimited"}
-                        </div>
-                      </div>
-
-                      <span
-                        style={{
-                          ...styles.statusMiniPill,
-                          ...(ticketType.is_active
-                            ? {
-                                background: "#dcfce7",
-                                color: "#166534",
-                                borderColor: "#bbf7d0",
-                              }
-                            : {
-                                background: "#f8fafc",
-                                color: "#64748b",
-                                borderColor: "#e2e8f0",
-                              }),
-                        }}
-                      >
-                        {ticketType.is_active ? "Active" : "Hidden"}
-                      </span>
-                    </summary>
-
-                    <div style={styles.ticketDetailsBody}>
-                      <form action={updateTicketTypeAction} style={styles.form}>
-                        <input type="hidden" name="event_id" value={event.id} />
-                        <input
-                          type="hidden"
-                          name="ticket_type_id"
-                          value={ticketType.id}
-                        />
-
-                        <div className="twoCol" style={styles.twoCol}>
-                          <Field label="Name">
-                            <input
-                              name="name"
-                              required
-                              defaultValue={ticketType.name}
-                              style={styles.input}
-                            />
-                          </Field>
-
-                          <Field label="Description">
-                            <input
-                              name="description"
-                              defaultValue={ticketType.description || ""}
-                              style={styles.input}
-                            />
-                          </Field>
-                        </div>
-
-                        <div className="fourCol" style={styles.fourCol}>
-                          <Field label="Price">
-                            <input
-                              name="price"
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              defaultValue={moneyFromCents(ticketType.price)}
-                              style={styles.input}
-                            />
-                          </Field>
-
-                          <Field label="Limit">
-                            <input
-                              name="capacity"
-                              type="number"
-                              min="0"
-                              defaultValue={ticketType.capacity || ""}
-                              placeholder="Unlimited"
-                              style={styles.input}
-                            />
-                          </Field>
-
-                          <Field label="Display order">
-                            <input
-                              name="sort_order"
-                              type="number"
-                              min="0"
-                              defaultValue={ticketType.sort_order}
-                              style={styles.input}
-                            />
-                            <p style={styles.helperText}>
-                              Lower numbers appear first.
-                            </p>
-                          </Field>
-
-                          <Field label="Visibility">
-                            <select
-                              name="is_active"
-                              defaultValue={
-                                ticketType.is_active ? "true" : "false"
-                              }
-                              style={styles.input}
-                            >
-                              <option value="true">Active</option>
-                              <option value="false">Hidden</option>
-                            </select>
-                          </Field>
-                        </div>
-
-                        <button
-                          type="submit"
-                          className="primaryButton"
-                          style={styles.primaryButton}
-                        >
-                          Save ticket
-                        </button>
-                      </form>
-
-                      <form action={deleteTicketTypeAction}>
-                        <input type="hidden" name="event_id" value={event.id} />
-                        <input
-                          type="hidden"
-                          name="ticket_type_id"
-                          value={ticketType.id}
-                        />
-                        <button
-                          type="submit"
-                          className="dangerOutlineButton"
-                          style={styles.dangerOutlineButton}
-                        >
-                          Delete ticket type
-                        </button>
-                      </form>
-                    </div>
-                  </details>
-                ))
-              )}
-            </div>
-
-            <form action={clearTicketTypesAction}>
-              <input type="hidden" name="event_id" value={event.id} />
-              <button
-                type="submit"
-                className="dangerOutlineButton"
-                style={styles.dangerOutlineButton}
-              >
-                Clear all ticket types
-              </button>
-            </form>
-          </CompactPanel>
-        </div>
-      </CollapsibleSection>
-            <CollapsibleSection
-        id="access-codes"
-        eyebrow="Section 3"
-        title="VIP / Complimentary Access Codes"
-        description={
-          canManageAccessCodes
-            ? "Create event-scoped codes for VIP, complimentary, sponsor, staff or guest-list bookings."
-            : "VIP and complimentary access codes are a Professional/Foundation events feature."
-        }
-        badge={
-          canManageAccessCodes
-            ? `${accessCodes.length} codes`
-            : "Upgrade required"
-        }
-      >
-        <div className="accessCodeGrid" style={styles.accessCodeGrid}>
-          <CompactPanel title="Create access code" eyebrow="VIP tools">
-            {canManageAccessCodes ? (
-              <form action={createEventAccessCodeAction} style={styles.form}>
-                <input type="hidden" name="event_id" value={event.id} />
-
-                <Field label="Code">
-                  <input
-                    name="code"
-                    required
-                    placeholder="VIP2026"
-                    style={styles.input}
-                  />
-                  <p style={styles.helperText}>
-                    Letters, numbers and dashes only. Codes are saved in
-                    uppercase.
-                  </p>
-                </Field>
-
-                <Field label="Label">
-                  <input
-                    name="label"
-                    placeholder="Sponsor table, VIP guests, committee"
-                    style={styles.input}
-                  />
-                </Field>
-
-                <div className="twoCol" style={styles.twoCol}>
-                  <Field label="Access type">
-                    <select
-                      name="access_type"
-                      defaultValue="complimentary"
-                      style={styles.input}
-                    >
-                      <option value="complimentary">Complimentary</option>
-                      <option value="vip">VIP</option>
-                      <option value="sponsor">Sponsor</option>
-                      <option value="staff">Staff</option>
-                      <option value="guestlist">Guest list</option>
-                    </select>
-                  </Field>
-
-                  <Field label="Maximum uses">
-                    <input
-                      name="max_uses"
-                      type="number"
-                      min="1"
-                      placeholder="Unlimited"
-                      style={styles.input}
-                    />
-                  </Field>
-                </div>
-
-                <Field label="Restrict to ticket type">
-                  <select
-                    name="ticket_type_id"
-                    defaultValue=""
-                    style={styles.input}
-                  >
-                    <option value="">Any ticket type</option>
-                    {ticketTypes.map((ticketType) => (
-                      <option key={ticketType.id} value={ticketType.id}>
-                        {ticketType.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-
-                <Field label="Expires at">
-                  <input
-                    name="expires_at"
-                    type="datetime-local"
-                    style={styles.input}
-                  />
-                </Field>
-
-                <Field label="Notes">
-                  <textarea
-                    name="notes"
-                    rows={3}
-                    placeholder="Internal note only"
-                    style={styles.textarea}
-                  />
-                </Field>
-
-                <button
-                  type="submit"
-                  className="primaryButton"
-                  style={styles.primaryButton}
-                >
-                  Create access code
-                </button>
-              </form>
-            ) : (
-              <div style={styles.lockedFeatureCard}>
-                <div style={styles.lockedFeatureEyebrow}>Professional</div>
-                <h4 style={styles.lockedFeatureTitle}>
-                  Access codes are locked
-                </h4>
-                <p style={styles.lockedFeatureText}>
-                  {accessCodeCapability.reason ||
-                    getEventVipAccessCodesUpgradeMessage()}
-                </p>
-                <a
-                  href="/admin/settings/billing"
-                  style={styles.campaignLimitPrimary}
-                >
-                  View billing
-                </a>
-              </div>
-            )}
-          </CompactPanel>
-
-          <CompactPanel title="Current access codes" eyebrow="Existing codes">
-            {accessCodes.length === 0 ? (
-              <div style={styles.emptyBox}>No access codes yet.</div>
-            ) : (
-              <div className="accessCodeList" style={styles.accessCodeList}>
-                {accessCodes.map((accessCode) => (
-                  <details key={accessCode.id} style={styles.accessCodeDetails}>
-                    <summary
-                      className="accessCodeSummary"
-                      style={styles.accessCodeSummary}
-                    >
-                      <div style={styles.accessCodePrimary}>
-                        <strong
-                          className="accessCodeValue"
-                          style={styles.accessCodeValue}
-                        >
-                          {accessCode.code}
-                        </strong>
-                        <span style={styles.mutedSmall}>
-                          {accessTypeLabel(accessCode.access_type)}
-                          {accessCode.label ? ` • ${accessCode.label}` : ""}
-                        </span>
-                      </div>
-
-                      <span
-                        className="statusMiniPill"
-                        style={{
-                          ...styles.statusMiniPill,
-                          ...accessStatusStyle(accessCode),
-                        }}
-                      >
-                        {accessStatusLabel(accessCode)}
-                      </span>
-                    </summary>
-
-                    <div style={styles.accessCodeBody}>
-                      <div className="guestMetaGrid" style={styles.guestMetaGrid}>
-                        <InfoTile
-                          label="Used"
-                          value={
-                            accessCode.max_uses === null
-                              ? `${accessCode.used_count} / Unlimited`
-                              : `${accessCode.used_count} / ${accessCode.max_uses}`
-                          }
-                        />
-                        <InfoTile
-                          label="Ticket restriction"
-                          value={
-                            accessCode.ticket_type_name || "Any ticket type"
-                          }
-                        />
-                        <InfoTile
-                          label="Expires"
-                          value={
-                            accessCode.expires_at
-                              ? formatDisplayDate(accessCode.expires_at)
-                              : "No expiry"
-                          }
-                        />
-                        <InfoTile
-                          label="Created"
-                          value={formatDisplayDate(accessCode.created_at)}
-                        />
-                      </div>
-                      <form
-                        action={updateEventAccessCodeAction}
-                        style={styles.form}
-                      >
-                        <input type="hidden" name="event_id" value={event.id} />
-                        <input
-                          type="hidden"
-                          name="access_code_id"
-                          value={accessCode.id}
-                        />
-
-                        <div className="twoCol" style={styles.twoCol}>
-                          <Field label="Code">
-                            <input
-                              name="code"
-                              required
-                              defaultValue={accessCode.code}
-                              style={styles.input}
-                            />
-                          </Field>
-
-                          <Field label="Label">
-                            <input
-                              name="label"
-                              defaultValue={accessCode.label || ""}
-                              style={styles.input}
-                            />
-                          </Field>
-                        </div>
-
-                        <div className="threeCol" style={styles.threeCol}>
-                          <Field label="Access type">
-                            <select
-                              name="access_type"
-                              defaultValue={accessCode.access_type}
-                              style={styles.input}
-                            >
-                              <option value="complimentary">
-                                Complimentary
-                              </option>
-                              <option value="vip">VIP</option>
-                              <option value="sponsor">Sponsor</option>
-                              <option value="staff">Staff</option>
-                              <option value="guestlist">Guest list</option>
-                            </select>
-                          </Field>
-
-                          <Field label="Maximum uses">
-                            <input
-                              name="max_uses"
-                              type="number"
-                              min="1"
-                              defaultValue={accessCode.max_uses || ""}
-                              placeholder="Unlimited"
-                              style={styles.input}
-                            />
-                          </Field>
-
-                          <Field label="Active">
-                            <select
-                              name="is_active"
-                              defaultValue={
-                                accessCode.is_active ? "true" : "false"
-                              }
-                              style={styles.input}
-                            >
-                              <option value="true">Active</option>
-                              <option value="false">Inactive</option>
-                            </select>
-                          </Field>
-                        </div>
-
-                        <div className="twoCol" style={styles.twoCol}>
-                          <Field label="Restrict to ticket type">
-                            <select
-                              name="ticket_type_id"
-                              defaultValue={accessCode.ticket_type_id || ""}
-                              style={styles.input}
-                            >
-                              <option value="">Any ticket type</option>
-                              {ticketTypes.map((ticketType) => (
-                                <option
-                                  key={ticketType.id}
-                                  value={ticketType.id}
-                                >
-                                  {ticketType.name}
-                                </option>
-                              ))}
-                            </select>
-                          </Field>
-
-                          <Field label="Expires at">
-                            <input
-                              name="expires_at"
-                              type="datetime-local"
-                              defaultValue={formatDateTimeLocal(
-                                accessCode.expires_at,
-                              )}
-                              style={styles.input}
-                            />
-                          </Field>
-                        </div>
-
-                        <Field label="Notes">
-                          <textarea
-                            name="notes"
-                            rows={3}
-                            defaultValue={accessCode.notes || ""}
-                            style={styles.textarea}
-                          />
-                        </Field>
-
-                        <button
-                          type="submit"
-                          className="primaryButton"
-                          style={styles.primaryButton}
-                        >
-                          Save access code
-                        </button>
-                      </form>
-
-                      <form action={deleteEventAccessCodeAction}>
-                        <input type="hidden" name="event_id" value={event.id} />
-                        <input
-                          type="hidden"
-                          name="access_code_id"
-                          value={accessCode.id}
-                        />
-
-                        <button
-                          type="submit"
-                          className="dangerOutlineButton"
-                          style={styles.dangerOutlineButton}
-                        >
-                          Delete access code
-                        </button>
-                      </form>
-                    </div>
-                  </details>
-                ))}
-              </div>
-            )}
-          </CompactPanel>
-        </div>
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        id="prizes-menu"
-        eyebrow="Section 4"
-        title="Prizes & Menu"
-        description="Manage optional golden-ticket prizes and event menu choices."
-        badge={`${(event.prizes_json || []).length} prizes • ${
-          (event.menu_options || []).length
-        } menu`}
-      >
-        <EventPrizeMenuSettings
-          eventId={event.id}
-          initialPrizes={event.prizes_json || []}
-          initialMenuOptions={event.menu_options || []}
-          updatePrizesAction={updatePrizesAction}
-          updateMenuOptionsAction={updateMenuOptionsAction}
-        />
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        id="guest-catering"
-        eyebrow="Section 5"
-        title="Guest & Catering"
-        description={
-          canEditGuestCatering
-            ? "Review and update paid guest names, menu choices and dietary requirements."
-            : "Read-only list of paid event guests, menu choices and dietary requirements."
-        }
-        badge={`${guestCateringRows.length} paid guests`}
-      >
-        <div className="panel" style={styles.panel}>
-          <div style={styles.panelHeader}>
-            <div>
-              <div style={styles.innerEyebrow}>
-                {canEditGuestCatering ? "Editable guests" : "Confirmed guests"}
-              </div>
-              <h3 style={styles.panelTitle}>Guest & catering list</h3>
-              <p style={styles.sectionText}>
-                This list only includes paid event order items. Pending or
-                abandoned checkout sessions are excluded.
-              </p>
-            </div>
-
-            <div className="guestHeaderActions" style={styles.guestHeaderActions}>
-              <a
-                href={guestCateringCsvHref}
-                className="exportButton"
-                style={styles.exportButton}
-              >
-                Export CSV
-              </a>
-
-              {canSendMenuRequests ? (
-                <form
-                  action={menuRequestHref}
-                  method="post"
-                  className="inlineForm"
-                  style={styles.inlineForm}
-                >
-                  <button
-                    type="submit"
-                    className="menuRequestButton"
-                    style={styles.menuRequestButton}
-                    disabled={missingMenuResponses === 0}
-                  >
-                    Send missing menu requests
-                  </button>
-                </form>
-              ) : null}
-            </div>
-          </div>
-
-          {menuRequestsSent ? (
-            <div style={styles.menuRequestSuccess}>
-              <strong>Menu request emails processed.</strong>
-              <span>
-                Sent: {Number.isFinite(sentCount) ? sentCount : 0} • Skipped no
-                email: {Number.isFinite(skippedCount) ? skippedCount : 0} •
-                Failed: {Number.isFinite(failedCount) ? failedCount : 0}
-              </span>
-            </div>
-          ) : null}
-
-          <div className="guestCateringGrid" style={styles.guestCateringStats}>
-            <SummaryCard label="Paid guests" value={guestCateringRows.length} />
-            <SummaryCard label="Menu choices" value={menuResponses} />
-            <SummaryCard label="Missing menu" value={missingMenuResponses} />
-            <SummaryCard label="Dietary notes" value={dietaryResponses} />
-          </div>
-
-          {!canEditGuestCatering ? (
-            <div className="guestUpgradeGrid" style={styles.guestUpgradeGrid}>
-              <div style={styles.lockedFeatureCard}>
-                <div style={styles.lockedFeatureEyebrow}>Professional</div>
-                <h4 style={styles.lockedFeatureTitle}>
-                  Edit guest details after purchase
-                </h4>
-                <p style={styles.lockedFeatureText}>
-                  {guestCateringEditCapability.reason ||
-                    getEventGuestCateringEditUpgradeMessage()}
-                </p>
-              </div>
-
-              <div style={styles.lockedFeatureCard}>
-                <div style={styles.lockedFeatureEyebrow}>Foundation</div>
-                <h4 style={styles.lockedFeatureTitle}>
-                  Request missing menu choices
-                </h4>
-                <p style={styles.lockedFeatureText}>
-                  {guestMenuRequestCapability.reason ||
-                    getEventGuestMenuRequestEmailsUpgradeMessage()}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div style={styles.editEnabledNotice}>
-              <strong>Professional editing enabled.</strong>
-              <span>
-                Updates are saved to the guest/order item record and mirrored to
-                linked seats where applicable. Payment records are not changed.
-              </span>
-            </div>
-          )}
-
-          {canSendMenuRequests ? (
-            <div style={styles.menuRequestNotice}>
-              <strong>Foundation menu requests enabled.</strong>
-              <span>
-                The request button sends secure update links only to paid guests
-                missing a menu choice. Links expire after 21 days.
-              </span>
-            </div>
-          ) : null}
-
-          {guestCateringRows.length === 0 ? (
-            <div style={styles.emptyBox}>
-              No paid guest or catering data has been recorded for this event
-              yet.
-            </div>
-          ) : (
-            <div className="guestCardList" style={styles.guestCardList}>
-              {guestCateringRows.map((row) => (
-                <article
-                  key={row.order_item_id}
-                  className="guestCard"
-                  style={styles.guestCard}
-                >
-                  <div className="guestCardHeader" style={styles.guestCardHeader}>
-                    <div style={styles.guestPrimary}>
-                      <div className="guestName" style={styles.guestName}>
-                        {guestDisplayName(row)}
-                      </div>
-                      <div className="guestEmail" style={styles.guestEmail}>
-                        {guestDisplayEmail(row)}
-                      </div>
-                    </div>
-
-                    <span
-                      className="statusMiniPill"
-                      style={{
-                        ...styles.statusMiniPill,
-                        background: "#dcfce7",
-                        color: "#166534",
-                        borderColor: "#bbf7d0",
-                      }}
-                    >
-                      Paid
-                    </span>
-                  </div>
-
-                  <div className="guestMetaGrid" style={styles.guestMetaGrid}>
-                    <InfoTile
-                      label="Seat / ticket"
-                      value={seatDisplayLabel(row)}
-                    />
-                    <InfoTile label="Ticket" value={ticketDisplayLabel(row)} />
-                    <InfoTile
-                      label="Quantity"
-                      value={String(Number(row.quantity || 1))}
-                    />
-                    <InfoTile
-                      label="Value"
-                      value={formatMoney(
-                        Number(row.unit_amount || 0) *
-                          Math.max(1, Number(row.quantity || 1)),
-                        row.currency || event.currency,
-                      )}
-                    />
-                    <InfoTile
-                      label="Order date"
-                      value={formatDisplayDate(row.order_created_at)}
-                    />
-                    <InfoTile
-                      label="Buyer"
-                      value={`${fallbackText(
-                        row.buyer_name,
-                        "Unknown buyer",
-                      )} • ${fallbackText(row.buyer_email, "No email")}`}
-                    />
-                  </div>
-
-                  {canEditGuestCatering ? (
-                    <form
-                      action={updateGuestCateringItemAction}
-                      className="guestEditGrid"
-                      style={styles.guestEditForm}
-                    >
-                      <input type="hidden" name="event_id" value={event.id} />
-                      <input
-                        type="hidden"
-                        name="order_item_id"
-                        value={row.order_item_id}
-                      />
-
-                      <Field label="Guest name">
-                        <input
-                          name="guest_name"
-                          defaultValue={row.guest_name || ""}
-                          placeholder="Guest name"
-                          style={styles.input}
-                        />
-                      </Field>
-
-                      <Field label="Menu choice">
-                        {event.menu_options && event.menu_options.length > 0 ? (
-                          <select
-                            name="menu_choice"
-                            defaultValue={row.menu_choice || ""}
-                            style={styles.input}
-                          >
-                            <option value="">No menu choice selected</option>
-                            {(event.menu_options || [])
-                              .filter(
-                                (option) =>
-                                  option.isActive ?? option.is_active ?? true,
-                              )
-                              .map((option, index) => {
-                                const name = String(
-                                  option.name || option.title || "",
-                                ).trim();
-
-                                if (!name) return null;
-
-                                return (
-                                  <option key={`${name}-${index}`} value={name}>
-                                    {name}
-                                  </option>
-                                );
-                              })}
-                          </select>
-                        ) : (
-                          <input
-                            name="menu_choice"
-                            defaultValue={row.menu_choice || ""}
-                            placeholder="Menu choice"
-                            style={styles.input}
-                          />
-                        )}
-                      </Field>
-
-                      <Field label="Dietary requirements">
-                        <textarea
-                          name="dietary_requirements"
-                          defaultValue={row.dietary_requirements || ""}
-                          placeholder="None, vegetarian, gluten free, allergies..."
-                          rows={3}
-                          style={styles.textarea}
-                        />
-                      </Field>
-
-                      <button
-                        type="submit"
-                        className="primaryButton"
-                        style={styles.primaryButton}
-                      >
-                        Save guest details
-                      </button>
-                    </form>
-                  ) : (
-                    <>
-                      <div
-                        className="cateringDetailGrid"
-                        style={styles.cateringDetailGrid}
-                      >
-                        <div
-                          style={{
-                            ...styles.cateringDetailCard,
-                            ...(String(row.menu_choice || "").trim()
-                              ? styles.cateringDetailPositive
-                              : styles.cateringDetailMissing),
-                          }}
-                        >
-                          <span style={styles.cateringLabel}>Menu choice</span>
-                          <strong
-                            className="cateringValue"
-                            style={styles.cateringValue}
-                          >
-                            {fallbackText(row.menu_choice)}
-                          </strong>
-                        </div>
-
-                        <div
-                          style={{
-                            ...styles.cateringDetailCard,
-                            ...(String(row.dietary_requirements || "").trim()
-                              ? styles.cateringDetailPositive
-                              : styles.cateringDetailNeutral),
-                          }}
-                        >
-                          <span style={styles.cateringLabel}>
-                            Dietary requirements
-                          </span>
-                          <strong
-                            className="cateringValue"
-                            style={styles.cateringValue}
-                          >
-                            {fallbackText(row.dietary_requirements)}
-                          </strong>
-                        </div>
-                      </div>
-
-                      {!hasGuestCateringDetail(row) ? (
-                        <p style={styles.guestNote}>
-                          No menu choice or dietary requirement was supplied at
-                          checkout.
-                        </p>
-                      ) : null}
-                    </>
-                  )}
-                </article>
-              ))}
-            </div>
-          )}
-        </div>
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        id="winner-draw"
-        eyebrow="Section 6"
-        title="Winner Draw"
-        description="Draw event winners from eligible paid event entries and keep winner history."
-        badge={`${winners.length} winners`}
-      >
-        <EventWinnerDrawPanel
-          eventId={event.id}
-          eventType={event.event_type}
-          prizes={event.prizes_json || []}
-          winners={winners}
-          drawWinnerAction={runWinnerDrawAction}
-          deleteWinnerAction={deleteWinnerAction}
-          clearWinnersAction={clearWinnersAction}
-        />
-      </CollapsibleSection>
-
-      <CollapsibleSection
+         <CollapsibleSection
         id="event-addons"
-        eyebrow="Section 6D"
+        eyebrow="Section 6D / 6E"
         title="Event Fundraising Add-ons"
         description={
           canManageEventAddOns
-            ? "Configure live fundraising add-ons such as Heads or Tails for this event."
+            ? "Configure live event fundraising add-ons such as Heads or Tails and Higher or Lower."
             : "Event fundraising add-ons are available on Professional and Foundation plans."
         }
-        badge={
-          headsOrTailsEnabled
-            ? "Heads or Tails enabled"
-            : canManageEventAddOns
-              ? "Available"
-              : "Upgrade required"
-        }
+        badge={eventAddOnsBadge}
       >
         <div className="panel" style={styles.panel}>
           <div style={styles.panelHeader}>
             <div>
               <div style={styles.innerEyebrow}>Live fundraising</div>
-              <h3 style={styles.panelTitle}>Heads or Tails</h3>
+              <h3 style={styles.panelTitle}>Event fundraising add-ons</h3>
               <p style={styles.sectionText}>
-                Add Heads or Tails to this event as a live fundraising add-on.
-                This keeps the existing event tickets, seating, VIP access,
-                guest catering, emails and checkout flow separate and stable.
+                Add event-night fundraising games to this event while keeping
+                the existing tickets, seating, VIP access, guest catering,
+                emails and checkout flow stable.
               </p>
             </div>
 
@@ -3872,7 +2791,7 @@ export default async function AdminEventManagePage({
               className="statusMiniPill"
               style={{
                 ...styles.statusMiniPill,
-                ...(headsOrTailsEnabled
+                ...(enabledEventAddOns.length > 0
                   ? {
                       background: "#dcfce7",
                       color: "#166534",
@@ -3891,31 +2810,71 @@ export default async function AdminEventManagePage({
                       }),
               }}
             >
-              {headsOrTailsEnabled
-                ? "Enabled"
-                : canManageEventAddOns
-                  ? "Ready to configure"
-                  : "Upgrade required"}
+              {eventAddOnsStatusText}
             </span>
           </div>
 
           <div className="summaryGrid" style={styles.summaryGrid}>
             <SummaryCard
-              label="Status"
-              value={headsOrTailsEnabled ? "Enabled" : "Disabled"}
+              label="Enabled add-ons"
+              value={
+                enabledEventAddOns.length > 0
+                  ? eventAddOnCountLabel(enabledEventAddOns.length)
+                  : "None"
+              }
             />
+
             <SummaryCard
-              label="Checkout collection"
-              value={headsOrTailsAddOn?.collectAtCheckout ? "On" : "Off"}
+              label="Checkout-ready"
+              value={
+                checkoutReadyEventAddOns.length > 0
+                  ? eventAddOnCountLabel(checkoutReadyEventAddOns.length)
+                  : "None"
+              }
             />
+
             <SummaryCard
-              label="Entry price"
-              value={formatMoney(
-                headsOrTailsAddOn?.entryPriceCents || 0,
-                event.currency,
-              )}
+              label="Available types"
+              value={
+                eventAddOns.length > 0
+                  ? formatEventAddOnList(eventAddOns)
+                  : canManageEventAddOns
+                    ? "Ready to configure"
+                    : "Locked"
+              }
             />
           </div>
+
+          {enabledEventAddOns.length > 0 ? (
+            <div className="summaryGrid" style={styles.summaryGrid}>
+              {enabledEventAddOns.map((addOn) => (
+                <div key={addOn.type} style={styles.statBox}>
+                  <p style={styles.statLabel}>{eventAddOnDisplayName(addOn)}</p>
+                  <p className="statValue" style={styles.statValue}>
+                    {addOn.collectAtCheckout &&
+                    Number(addOn.entryPriceCents || 0) > 0
+                      ? "Checkout-ready"
+                      : "Enabled"}
+                  </p>
+                  <p style={styles.mutedSmall}>
+                    {addOn.collectAtCheckout &&
+                    Number(addOn.entryPriceCents || 0) > 0
+                      ? `${formatMoney(
+                          addOn.entryPriceCents || 0,
+                          event.currency,
+                        )} per entry`
+                      : "Collected by the organiser"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={styles.emptyBox}>
+              {canManageEventAddOns
+                ? "No event fundraising add-ons are enabled yet."
+                : "Upgrade is required before event fundraising add-ons can be configured."}
+            </div>
+          )}
 
           <section className="submitBar" style={styles.submitBar}>
             <div>
@@ -3923,8 +2882,9 @@ export default async function AdminEventManagePage({
                 Manage event fundraising add-ons
               </strong>
               <div style={styles.mutedSmall}>
-                Professional tenants can use Heads or Tails. Foundation tenants
-                can support multiple event add-ons as more types are introduced.
+                Professional tenants can use event fundraising add-ons.
+                Foundation tenants can support multiple add-ons on the same
+                event.
               </div>
             </div>
 
