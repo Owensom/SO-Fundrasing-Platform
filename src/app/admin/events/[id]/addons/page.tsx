@@ -66,7 +66,16 @@ type LegalQuestionFields = {
   legalQuestionHelperText?: string;
 };
 
-type AdminEventFundraisingAddOn = EventFundraisingAddOn & LegalQuestionFields;
+type PrizeValueRangeFields = {
+  prizeValueRangeEnabled?: boolean;
+  prizeValueRangeMinCents?: number;
+  prizeValueRangeMaxCents?: number;
+  prizeValueRangeNote?: string;
+};
+
+type AdminEventFundraisingAddOn = EventFundraisingAddOn &
+  LegalQuestionFields &
+  PrizeValueRangeFields;
 
 type EventFundraisingAddOnLike = Partial<AdminEventFundraisingAddOn> &
   Record<string, unknown>;
@@ -415,6 +424,10 @@ function normaliseAddOnForAdmin(
       legalQuestionText: "",
       legalQuestionAnswer: "",
       legalQuestionHelperText: "",
+      prizeValueRangeEnabled: false,
+      prizeValueRangeMinCents: 0,
+      prizeValueRangeMaxCents: 0,
+      prizeValueRangeNote: "",
     };
   }
 
@@ -495,6 +508,26 @@ function normaliseAddOnForAdmin(
       ["legalQuestionHelperText", "legal_question_helper_text"],
       "",
     ),
+    prizeValueRangeEnabled: readBooleanField(
+      addOn,
+      ["prizeValueRangeEnabled", "prize_value_range_enabled"],
+      false,
+    ),
+    prizeValueRangeMinCents: readNumberField(
+      addOn,
+      ["prizeValueRangeMinCents", "prize_value_range_min_cents"],
+      0,
+    ),
+    prizeValueRangeMaxCents: readNumberField(
+      addOn,
+      ["prizeValueRangeMaxCents", "prize_value_range_max_cents"],
+      0,
+    ),
+    prizeValueRangeNote: readStringField(
+      addOn,
+      ["prizeValueRangeNote", "prize_value_range_note"],
+      "",
+    ),
   };
 }
 function getAddOn(
@@ -555,6 +588,19 @@ function buildAddOnFromForm(
       : "",
     legalQuestionHelperText: isHigherOrLower
       ? cleanOptionalText(formData.get("legal_question_helper_text"))
+      : "",
+
+    prizeValueRangeEnabled: isHigherOrLower
+      ? String(formData.get("prize_value_range_enabled") || "") === "true"
+      : false,
+    prizeValueRangeMinCents: isHigherOrLower
+      ? poundsToCents(formData.get("prize_value_range_min"))
+      : 0,
+    prizeValueRangeMaxCents: isHigherOrLower
+      ? poundsToCents(formData.get("prize_value_range_max"))
+      : 0,
+    prizeValueRangeNote: isHigherOrLower
+      ? cleanOptionalText(formData.get("prize_value_range_note"))
       : "",
   };
 }
@@ -692,6 +738,13 @@ function buildAddOnReadiness(input: {
   const legalQuestionEnabled = Boolean(addOn.legalQuestionEnabled);
   const hasLegalQuestion = Boolean(String(addOn.legalQuestionText || "").trim());
   const hasLegalAnswer = Boolean(String(addOn.legalQuestionAnswer || "").trim());
+  const valueRangeEnabled = Boolean(addOn.prizeValueRangeEnabled);
+  const valueRangeMinCents = Number(addOn.prizeValueRangeMinCents || 0);
+  const valueRangeMaxCents = Number(addOn.prizeValueRangeMaxCents || 0);
+  const hasValidValueRange =
+    valueRangeMinCents > 0 &&
+    valueRangeMaxCents > 0 &&
+    valueRangeMaxCents >= valueRangeMinCents;
 
   return [
     ...baseItems,
@@ -707,6 +760,24 @@ function buildAddOnReadiness(input: {
         legalQuestionEnabled && (!hasLegalQuestion || !hasLegalAnswer)
           ? "warning"
           : legalQuestionEnabled
+            ? "good"
+            : "neutral",
+    },
+    {
+      label: "Prize value range",
+      value: valueRangeEnabled ? "Enabled" : "Off",
+      detail: valueRangeEnabled
+        ? hasValidValueRange
+          ? `Supporters can be shown that prize values range from ${formatMoney(
+              valueRangeMinCents,
+              input.currency,
+            )} to ${formatMoney(valueRangeMaxCents, input.currency)}.`
+          : "Complete a valid minimum and maximum value before showing the range publicly."
+        : "Optional transparency helper to support judgement-based play.",
+      tone:
+        valueRangeEnabled && !hasValidValueRange
+          ? "warning"
+          : valueRangeEnabled
             ? "good"
             : "neutral",
     },
@@ -1259,6 +1330,7 @@ export default async function EventFundraisingAddOnsPage({
               canUseMultipleAddOns={canUseMultipleAddOns}
               subscriptionTier={tier}
               customImagesAllowed={customImagesCapability.allowed}
+              currency={event.currency || "GBP"}
             />
           ))}
         </div>
@@ -1277,6 +1349,7 @@ function AddOnSettingsPanel({
   canUseMultipleAddOns,
   subscriptionTier,
   customImagesAllowed,
+  currency,
 }: {
   eventId: string;
   addOn: AdminEventFundraisingAddOn;
@@ -1287,6 +1360,7 @@ function AddOnSettingsPanel({
   canUseMultipleAddOns: boolean;
   subscriptionTier: string;
   customImagesAllowed: boolean;
+  currency: string;
 }) {
   const isHigherOrLower = definition.type === "higher_or_lower";
   const prizeRevealPrizes = (addOn.prizeRevealPrizes || []).slice(
@@ -1302,7 +1376,14 @@ function AddOnSettingsPanel({
   const revealProgress = revealProgressText(prizeRevealPrizes);
   const legalQuestionDefaultOpen =
     Boolean(addOn.legalQuestionEnabled) ||
-    Boolean(String(addOn.legalQuestionText || "").trim());
+    Boolean(String(addOn.legalQuestionText || "").trim()) ||
+    Boolean(addOn.prizeValueRangeEnabled);
+  const valueRangeMinCents = Number(addOn.prizeValueRangeMinCents || 0);
+  const valueRangeMaxCents = Number(addOn.prizeValueRangeMaxCents || 0);
+  const hasValidValueRange =
+    valueRangeMinCents > 0 &&
+    valueRangeMaxCents > 0 &&
+    valueRangeMaxCents >= valueRangeMinCents;
 
   return (
     <section className="panel" style={styles.panel}>
@@ -1486,12 +1567,13 @@ function AddOnSettingsPanel({
                   Legal / skill question
                 </div>
                 <h3 style={styles.legalQuestionTitle}>
-                  Higher or Lower entry question
+                  Higher or Lower entry safeguards
                 </h3>
                 <p style={styles.legalQuestionText}>
                   Optional storage for a genuine skill, knowledge or judgement
-                  question. This step saves the settings only and does not
-                  enforce checkout yet.
+                  question, plus a public prize value range to help supporters
+                  make an informed judgement. This step saves the settings only
+                  and does not enforce checkout yet.
                 </p>
               </div>
 
@@ -1507,6 +1589,22 @@ function AddOnSettingsPanel({
                   {addOn.legalQuestionEnabled ? "Question enabled" : "Optional"}
                 </span>
 
+                <span
+                  style={{
+                    ...styles.legalQuestionBadge,
+                    ...(addOn.prizeValueRangeEnabled && hasValidValueRange
+                      ? styles.legalQuestionBadgeEnabled
+                      : styles.legalQuestionBadgeNeutral),
+                  }}
+                >
+                  {addOn.prizeValueRangeEnabled && hasValidValueRange
+                    ? `${formatMoney(valueRangeMinCents, currency)} – ${formatMoney(
+                        valueRangeMaxCents,
+                        currency,
+                      )}`
+                    : "Value range optional"}
+                </span>
+
                 <span style={styles.prizeRevealToggle}>Open / close</span>
               </div>
             </summary>
@@ -1517,8 +1615,10 @@ function AddOnSettingsPanel({
                 <span>
                   For paid online entries, organisers should use a genuine
                   skill, knowledge or judgement question where appropriate and
-                  make sure their promotion is lawful for their event. This is a
-                  configuration aid, not legal advice.
+                  make sure their promotion is lawful for their event. Prize
+                  value ranges can help transparency, but they do not replace
+                  legal compliance. This is a configuration aid, not legal
+                  advice.
                 </span>
               </div>
 
@@ -1569,6 +1669,90 @@ function AddOnSettingsPanel({
                   style={styles.textarea}
                 />
               </Field>
+
+              <div style={styles.valueRangePanel}>
+                <div>
+                  <div style={styles.valueRangeEyebrow}>
+                    Prize value range
+                  </div>
+                  <h4 style={styles.valueRangeTitle}>
+                    Public value range transparency
+                  </h4>
+                  <p style={styles.valueRangeText}>
+                    Use this to show supporters the approximate value range of
+                    the prizes, for example “Prizes range from £20 to £250”.
+                    This can support informed judgement during the game.
+                  </p>
+                </div>
+
+                <div className="twoCol" style={styles.twoCol}>
+                  <Field label="Show prize value range publicly">
+                    <select
+                      name="prize_value_range_enabled"
+                      defaultValue={
+                        addOn.prizeValueRangeEnabled ? "true" : "false"
+                      }
+                      className="input"
+                      style={styles.input}
+                    >
+                      <option value="false">No, keep hidden</option>
+                      <option value="true">Yes, save public value range</option>
+                    </select>
+                  </Field>
+
+                  <Field label="Current range">
+                    <div style={styles.valueRangePreview}>
+                      {hasValidValueRange
+                        ? `${formatMoney(valueRangeMinCents, currency)} – ${formatMoney(
+                            valueRangeMaxCents,
+                            currency,
+                          )}`
+                        : "No valid range saved yet"}
+                    </div>
+                  </Field>
+                </div>
+
+                <div className="twoCol" style={styles.twoCol}>
+                  <Field label="Minimum prize value">
+                    <input
+                      name="prize_value_range_min"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      defaultValue={moneyFromCents(
+                        addOn.prizeValueRangeMinCents || 0,
+                      )}
+                      className="input"
+                      style={styles.input}
+                    />
+                  </Field>
+
+                  <Field label="Maximum prize value">
+                    <input
+                      name="prize_value_range_max"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      defaultValue={moneyFromCents(
+                        addOn.prizeValueRangeMaxCents || 0,
+                      )}
+                      className="input"
+                      style={styles.input}
+                    />
+                  </Field>
+                </div>
+
+                <Field label="Optional public value range note">
+                  <textarea
+                    name="prize_value_range_note"
+                    rows={3}
+                    defaultValue={addOn.prizeValueRangeNote || ""}
+                    placeholder="Example: Prize values are shown to help supporters make a judgement during the game."
+                    className="textarea"
+                    style={styles.textarea}
+                  />
+                </Field>
+              </div>
             </div>
           </details>
         ) : null}
@@ -2713,6 +2897,54 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.45,
     fontWeight: 850,
+  },
+
+  valueRangePanel: {
+    display: "grid",
+    gap: 14,
+    padding: 14,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #dbeafe",
+  },
+
+  valueRangeEyebrow: {
+    color: "#1d4ed8",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 5,
+  },
+
+  valueRangeTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 18,
+    lineHeight: 1.1,
+    letterSpacing: "-0.035em",
+  },
+
+  valueRangeText: {
+    margin: "7px 0 0",
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.5,
+    fontWeight: 750,
+  },
+
+  valueRangePreview: {
+    display: "flex",
+    alignItems: "center",
+    minHeight: 44,
+    padding: "10px 12px",
+    borderRadius: 13,
+    border: "1px solid #cbd5e1",
+    background: "#f8fafc",
+    color: "#0f172a",
+    fontSize: 15,
+    fontWeight: 950,
+    boxSizing: "border-box",
   },
 
   prizeRevealPanel: {
