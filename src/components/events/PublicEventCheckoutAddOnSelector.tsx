@@ -10,11 +10,19 @@ export type PublicEventCheckoutAddOn = {
   description?: string;
   entryPriceCents: number;
   maxEntriesPerBooking?: number | null;
+  legalQuestionEnabled?: boolean;
+  legalQuestionText?: string;
+  legalQuestionHelperText?: string;
+  prizeValueRangeEnabled?: boolean;
+  prizeValueRangeMinCents?: number;
+  prizeValueRangeMaxCents?: number;
+  prizeValueRangeNote?: string;
 };
 
 export type PublicEventCheckoutAddOnSelection = {
   type: PublicEventCheckoutAddOnType;
   quantity: number;
+  buyerAnswer?: string;
 };
 
 function moneyFromCents(cents: number | null | undefined) {
@@ -51,24 +59,58 @@ function cleanQuantity(value: unknown, maxEntriesPerBooking?: number | null) {
   return quantity;
 }
 
+function cleanText(value: unknown) {
+  return String(value || "").trim();
+}
+
+function hasValidPrizeValueRange(addOn: PublicEventCheckoutAddOn) {
+  const min = Number(addOn.prizeValueRangeMinCents || 0);
+  const max = Number(addOn.prizeValueRangeMaxCents || 0);
+
+  return Boolean(
+    addOn.type === "higher_or_lower" &&
+      addOn.prizeValueRangeEnabled &&
+      Number.isFinite(min) &&
+      Number.isFinite(max) &&
+      min > 0 &&
+      max > 0 &&
+      max >= min,
+  );
+}
+
+function shouldShowHigherOrLowerAnswer(addOn: PublicEventCheckoutAddOn) {
+  return Boolean(
+    addOn.type === "higher_or_lower" &&
+      addOn.legalQuestionEnabled &&
+      cleanText(addOn.legalQuestionText),
+  );
+}
+
 export default function PublicEventCheckoutAddOnSelector({
   addOn,
   currency,
   quantity,
   disabled = false,
+  buyerAnswer = "",
   onQuantityChange,
+  onBuyerAnswerChange,
 }: {
   addOn: PublicEventCheckoutAddOn;
   currency: string;
   quantity: number;
   disabled?: boolean;
+  buyerAnswer?: string;
   onQuantityChange: (quantity: number) => void;
+  onBuyerAnswerChange?: (answer: string) => void;
 }) {
   const safeQuantity = cleanQuantity(quantity, addOn.maxEntriesPerBooking);
   const maxEntriesPerBooking =
     Number(addOn.maxEntriesPerBooking || 0) > 0
       ? Math.floor(Number(addOn.maxEntriesPerBooking || 0))
       : null;
+
+  const showAnswerField = shouldShowHigherOrLowerAnswer(addOn);
+  const showPrizeRange = hasValidPrizeValueRange(addOn);
 
   function updateQuantity(nextQuantity: number) {
     onQuantityChange(cleanQuantity(nextQuantity, addOn.maxEntriesPerBooking));
@@ -107,7 +149,21 @@ export default function PublicEventCheckoutAddOnSelector({
         </div>
       </div>
 
-      <div style={styles.quantityRow}>
+      {showPrizeRange ? (
+        <div style={styles.rangeBox}>
+          <span style={styles.rangeLabel}>Prize value range</span>
+          <strong style={styles.rangeValue}>
+            {currency} {moneyFromCents(addOn.prizeValueRangeMinCents)} –{" "}
+            {currency} {moneyFromCents(addOn.prizeValueRangeMaxCents)}
+          </strong>
+          <span style={styles.rangeHelp}>
+            {cleanText(addOn.prizeValueRangeNote) ||
+              "Prize values are shown to help supporters make a judgement before entering."}
+          </span>
+        </div>
+      ) : null}
+
+      <div style={styles.controls}>
         <button
           type="button"
           onClick={() => updateQuantity(safeQuantity - 1)}
@@ -130,7 +186,7 @@ export default function PublicEventCheckoutAddOnSelector({
           onChange={(event) => updateQuantity(Number(event.target.value))}
           style={{
             ...styles.quantityInput,
-            opacity: disabled ? 0.6 : 1,
+            opacity: disabled ? 0.55 : 1,
           }}
         />
 
@@ -139,21 +195,18 @@ export default function PublicEventCheckoutAddOnSelector({
           onClick={() => updateQuantity(safeQuantity + 1)}
           disabled={
             disabled ||
-            (maxEntriesPerBooking !== null &&
-              safeQuantity >= maxEntriesPerBooking)
+            Boolean(maxEntriesPerBooking && safeQuantity >= maxEntriesPerBooking)
           }
           style={{
             ...styles.quantityButton,
             opacity:
               disabled ||
-              (maxEntriesPerBooking !== null &&
-                safeQuantity >= maxEntriesPerBooking)
+              Boolean(maxEntriesPerBooking && safeQuantity >= maxEntriesPerBooking)
                 ? 0.45
                 : 1,
             cursor:
               disabled ||
-              (maxEntriesPerBooking !== null &&
-                safeQuantity >= maxEntriesPerBooking)
+              Boolean(maxEntriesPerBooking && safeQuantity >= maxEntriesPerBooking)
                 ? "not-allowed"
                 : "pointer",
           }}
@@ -162,10 +215,44 @@ export default function PublicEventCheckoutAddOnSelector({
         </button>
       </div>
 
+      {showAnswerField ? (
+        <label style={styles.answerBox}>
+          <span style={styles.answerLabel}>Skill question</span>
+
+          <strong style={styles.answerQuestion}>
+            {cleanText(addOn.legalQuestionText)}
+          </strong>
+
+          {cleanText(addOn.legalQuestionHelperText) ? (
+            <span style={styles.answerHelp}>
+              {cleanText(addOn.legalQuestionHelperText)}
+            </span>
+          ) : (
+            <span style={styles.answerHelp}>
+              Your answer will be recorded with your Higher or Lower entry.
+            </span>
+          )}
+
+          <input
+            value={buyerAnswer}
+            disabled={disabled || safeQuantity <= 0}
+            onChange={(event) => onBuyerAnswerChange?.(event.target.value)}
+            placeholder={
+              safeQuantity > 0
+                ? "Enter your answer"
+                : "Choose entries before answering"
+            }
+            style={{
+              ...styles.answerInput,
+              opacity: disabled || safeQuantity <= 0 ? 0.6 : 1,
+            }}
+          />
+        </label>
+      ) : null}
+
       {disabled ? (
-        <p style={styles.disabledNotice}>
-          Add-on entries cannot be added when using a complimentary/VIP access
-          code.
+        <p style={styles.disabledText}>
+          Add-ons are disabled when a VIP or complimentary access code is used.
         </p>
       ) : null}
     </section>
@@ -178,9 +265,10 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
     padding: 14,
     borderRadius: 18,
-    background: "rgba(250,204,21,0.12)",
-    border: "1px solid rgba(250,204,21,0.32)",
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.14)",
     color: "#ffffff",
+    minWidth: 0,
   },
 
   header: {
@@ -188,6 +276,7 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "minmax(0, 1fr) auto",
     gap: 12,
     alignItems: "start",
+    minWidth: 0,
   },
 
   copy: {
@@ -195,20 +284,21 @@ const styles: Record<string, CSSProperties> = {
   },
 
   eyebrow: {
-    margin: 0,
+    margin: "0 0 5px",
     color: "#facc15",
     fontSize: 11,
     fontWeight: 950,
     textTransform: "uppercase",
-    letterSpacing: "0.12em",
+    letterSpacing: "0.11em",
   },
 
   title: {
-    margin: "5px 0 0",
+    margin: 0,
     color: "#ffffff",
-    fontSize: 17,
+    fontSize: 18,
+    lineHeight: 1.1,
     fontWeight: 950,
-    letterSpacing: "-0.02em",
+    letterSpacing: "-0.03em",
     overflowWrap: "anywhere",
   },
 
@@ -216,13 +306,13 @@ const styles: Record<string, CSSProperties> = {
     margin: "6px 0 0",
     color: "#cbd5e1",
     fontSize: 13,
-    lineHeight: 1.42,
+    lineHeight: 1.45,
     fontWeight: 750,
     overflowWrap: "anywhere",
   },
 
   limitText: {
-    margin: "6px 0 0",
+    margin: "7px 0 0",
     color: "#fde68a",
     fontSize: 12,
     lineHeight: 1.35,
@@ -233,15 +323,16 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gap: 3,
     justifyItems: "end",
-    padding: "8px 10px",
+    alignContent: "start",
+    padding: "9px 10px",
     borderRadius: 14,
-    background: "rgba(255,255,255,0.08)",
-    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(250,204,21,0.14)",
+    border: "1px solid rgba(250,204,21,0.2)",
     minWidth: 92,
   },
 
   priceLabel: {
-    color: "#cbd5e1",
+    color: "#fde68a",
     fontSize: 10,
     fontWeight: 950,
     textTransform: "uppercase",
@@ -249,15 +340,50 @@ const styles: Record<string, CSSProperties> = {
   },
 
   priceValue: {
-    color: "#fef3c7",
+    color: "#ffffff",
     fontSize: 15,
+    lineHeight: 1.1,
     fontWeight: 950,
     whiteSpace: "nowrap",
   },
 
-  quantityRow: {
+  rangeBox: {
     display: "grid",
-    gridTemplateColumns: "42px minmax(64px, 1fr) 42px",
+    gap: 4,
+    padding: 12,
+    borderRadius: 16,
+    background: "rgba(250,204,21,0.12)",
+    border: "1px solid rgba(250,204,21,0.2)",
+    minWidth: 0,
+  },
+
+  rangeLabel: {
+    color: "#fde68a",
+    fontSize: 10,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  rangeValue: {
+    color: "#ffffff",
+    fontSize: 15,
+    lineHeight: 1.25,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
+  rangeHelp: {
+    color: "#e2e8f0",
+    fontSize: 12,
+    lineHeight: 1.4,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  controls: {
+    display: "grid",
+    gridTemplateColumns: "42px minmax(60px, 1fr) 42px",
     gap: 8,
     alignItems: "center",
   },
@@ -276,7 +402,7 @@ const styles: Record<string, CSSProperties> = {
   quantityInput: {
     width: "100%",
     height: 42,
-    borderRadius: 13,
+    borderRadius: 12,
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
@@ -286,11 +412,58 @@ const styles: Record<string, CSSProperties> = {
     boxSizing: "border-box",
   },
 
-  disabledNotice: {
-    margin: 0,
-    color: "#fecaca",
-    fontSize: 12,
+  answerBox: {
+    display: "grid",
+    gap: 7,
+    padding: 13,
+    borderRadius: 16,
+    background: "rgba(96,165,250,0.14)",
+    border: "1px solid rgba(147,197,253,0.22)",
+    minWidth: 0,
+  },
+
+  answerLabel: {
+    color: "#bfdbfe",
+    fontSize: 10,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  answerQuestion: {
+    color: "#ffffff",
+    fontSize: 14,
     lineHeight: 1.35,
-    fontWeight: 850,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
+  answerHelp: {
+    color: "#dbeafe",
+    fontSize: 12,
+    lineHeight: 1.4,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  answerInput: {
+    width: "100%",
+    minHeight: 42,
+    padding: "10px 11px",
+    borderRadius: 13,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 15,
+    boxSizing: "border-box",
+    minWidth: 0,
+  },
+
+  disabledText: {
+    margin: 0,
+    color: "#cbd5e1",
+    fontSize: 12,
+    lineHeight: 1.4,
+    fontWeight: 750,
   },
 };
