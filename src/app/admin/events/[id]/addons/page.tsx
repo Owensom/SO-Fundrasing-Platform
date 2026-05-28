@@ -397,7 +397,6 @@ function revealStatusLabel(prize: EventPrizeRevealPrize | null) {
 
   return prize.isRevealed ? "Revealed publicly" : "Hidden from reveal";
 }
-
 function normaliseAddOnForAdmin(
   addOn: EventFundraisingAddOnLike | null | undefined,
   definition: AddOnDefinition,
@@ -530,6 +529,7 @@ function normaliseAddOnForAdmin(
     ),
   };
 }
+
 function getAddOn(
   addOns: EventFundraisingAddOn[],
   definition: AddOnDefinition,
@@ -864,6 +864,23 @@ function getVisibleConfiguredAddOnsForTier(
   }
 
   return [];
+}
+
+function getAddOnPanelDefaultOpen(input: {
+  savedParam?: string;
+  definition: AddOnDefinition;
+  addOn: AdminEventFundraisingAddOn;
+  warnings: number;
+}) {
+  if (input.savedParam === input.definition.savedParam) {
+    return true;
+  }
+
+  if (input.addOn.enabled && input.warnings > 0) {
+    return true;
+  }
+
+  return false;
 }
 
 async function requireEventAccess(eventId: string) {
@@ -1331,6 +1348,12 @@ export default async function EventFundraisingAddOnsPage({
               subscriptionTier={tier}
               customImagesAllowed={customImagesCapability.allowed}
               currency={event.currency || "GBP"}
+              defaultOpen={getAddOnPanelDefaultOpen({
+                savedParam: searchParams?.saved,
+                definition: item.definition,
+                addOn: item.addOn,
+                warnings: item.warnings,
+              })}
             />
           ))}
         </div>
@@ -1350,6 +1373,7 @@ function AddOnSettingsPanel({
   subscriptionTier,
   customImagesAllowed,
   currency,
+  defaultOpen,
 }: {
   eventId: string;
   addOn: AdminEventFundraisingAddOn;
@@ -1361,6 +1385,7 @@ function AddOnSettingsPanel({
   subscriptionTier: string;
   customImagesAllowed: boolean;
   currency: string;
+  defaultOpen: boolean;
 }) {
   const isHigherOrLower = definition.type === "higher_or_lower";
   const prizeRevealPrizes = (addOn.prizeRevealPrizes || []).slice(
@@ -1386,664 +1411,703 @@ function AddOnSettingsPanel({
     valueRangeMaxCents >= valueRangeMinCents;
 
   return (
-    <section className="panel" style={styles.panel}>
-      <div className="panelHeader" style={styles.panelHeader}>
-        <div>
+    <details
+      open={defaultOpen}
+      className="addOnAccordion"
+      style={styles.addOnAccordion}
+    >
+      <summary className="addOnAccordionSummary" style={styles.addOnAccordionSummary}>
+        <div style={styles.addOnSummaryMain}>
           <div style={styles.innerEyebrow}>{definition.eyebrow}</div>
-          <h2 style={styles.panelTitle}>{definition.panelTitle}</h2>
+
+          <h2 style={styles.panelTitle}>{definition.shortName}</h2>
+
           <p style={styles.sectionText}>
-            Configure the public wording and whether entries should be collected
-            during event checkout. Existing event tickets, seating, VIP access,
-            menus, checkout, receipts and reporting are preserved.
+            {addOn.enabled
+              ? readyForCheckout
+                ? "Enabled and ready for checkout collection."
+                : "Enabled for public display. Review any warning items before using checkout collection."
+              : "Currently disabled for this event."}
           </p>
         </div>
 
-        <span
-          style={{
-            ...styles.statusPill,
-            ...(readyForCheckout
-              ? styles.statusGood
-              : addOn.enabled
-                ? styles.statusWarning
-                : styles.statusNeutral),
-          }}
-        >
-          {readyForCheckout
-            ? "Checkout-ready"
-            : addOn.enabled
-              ? "Display-ready"
-              : "Disabled"}
-        </span>
-      </div>
-
-      <div className="readinessGrid" style={styles.readinessGridLight}>
-        {readinessItems.map((item) => {
-          const toneStyles = readinessToneStyle(item.tone);
-
-          return (
-            <article
-              key={`${definition.type}-${item.label}`}
-              style={{
-                ...styles.readinessItemLight,
-                ...toneStyles.card,
-              }}
-            >
-              <span
-                style={{
-                  ...styles.readinessToneDot,
-                  ...toneStyles.dot,
-                }}
-              />
-              <div style={styles.readinessContent}>
-                <span style={styles.readinessLabelLight}>{item.label}</span>
-                <strong style={styles.readinessValueLight}>{item.value}</strong>
-                <p style={styles.readinessDetailLight}>{item.detail}</p>
-              </div>
-            </article>
-          );
-        })}
-      </div>
-
-      {addOn.enabled && readinessWarnings > 0 ? (
-        <div style={styles.warningNotice}>
-          <strong>
-            {definition.shortName} has {readinessWarnings} warning
-            {readinessWarnings === 1 ? "" : "s"}
-          </strong>
-          <span>
-            The add-on can be saved, but completing the missing fields will make
-            the public page and checkout experience clearer.
-          </span>
-        </div>
-      ) : null}
-
-      <form action={saveEventAddOnAction} style={styles.form}>
-        <input type="hidden" name="event_id" value={eventId} />
-        <input type="hidden" name="addon_type" value={definition.type} />
-
-        <div className="twoCol" style={styles.twoCol}>
-          <Field label={`Enable ${definition.shortName}`}>
-            <select
-              name="enabled"
-              defaultValue={addOn.enabled ? "true" : "false"}
-              className="input"
-              style={styles.input}
-            >
-              <option value="false">No, keep disabled</option>
-              <option value="true">Yes, enable for this event</option>
-            </select>
-          </Field>
-
-          <Field label="Collect entries at checkout">
-            <select
-              name="collect_at_checkout"
-              defaultValue={addOn.collectAtCheckout ? "true" : "false"}
-              className="input"
-              style={styles.input}
-            >
-              <option value="false">No, collect on the night</option>
-              <option value="true">Yes, collect during checkout</option>
-            </select>
-          </Field>
-        </div>
-
-        <Field label="Display title">
-          <input
-            name="title"
-            defaultValue={addOn.title || definition.defaultTitle}
-            className="input"
-            style={styles.input}
-          />
-        </Field>
-
-        <Field label="Short description">
-          <textarea
-            name="description"
-            rows={3}
-            defaultValue={addOn.description || ""}
-            placeholder={definition.defaultDescription}
-            className="textarea"
-            style={styles.textarea}
-          />
-        </Field>
-
-        <Field label="How it works / instructions">
-          <textarea
-            name="instructions"
-            rows={4}
-            defaultValue={addOn.instructions || ""}
-            placeholder={definition.defaultInstructions}
-            className="textarea"
-            style={styles.textarea}
-          />
-        </Field>
-
-        <div className="threeCol" style={styles.threeCol}>
-          <Field label="Entry price">
-            <input
-              name="entry_price"
-              type="number"
-              step="0.01"
-              min="0"
-              defaultValue={moneyFromCents(addOn.entryPriceCents)}
-              className="input"
-              style={styles.input}
-            />
-          </Field>
-
-          <Field label="Max entries per booking">
-            <input
-              name="max_entries_per_booking"
-              type="number"
-              min="1"
-              defaultValue={addOn.maxEntriesPerBooking || 1}
-              className="input"
-              style={styles.input}
-            />
-          </Field>
-
-          <Field label="Prize title / note">
-            <input
-              name="prize_title"
-              defaultValue={addOn.prizeTitle || ""}
-              placeholder={definition.defaultPrizePlaceholder}
-              className="input"
-              style={styles.input}
-            />
-          </Field>
-        </div>
-                {isHigherOrLower ? (
-          <details
-            open={legalQuestionDefaultOpen}
-            className="legalQuestionPanel"
-            style={styles.legalQuestionPanel}
+        <div style={styles.addOnSummaryMeta}>
+          <span
+            style={{
+              ...styles.statusPill,
+              ...(readyForCheckout
+                ? styles.statusGood
+                : addOn.enabled
+                  ? styles.statusWarning
+                  : styles.statusNeutral),
+            }}
           >
-            <summary
-              className="legalQuestionSummary"
-              style={styles.legalQuestionSummary}
-            >
-              <div>
-                <div style={styles.legalQuestionEyebrow}>
-                  Legal / skill question
+            {readyForCheckout
+              ? "Checkout-ready"
+              : addOn.enabled
+                ? "Display-ready"
+                : "Disabled"}
+          </span>
+
+          <span
+            style={{
+              ...styles.warningCountPill,
+              ...(readinessWarnings > 0
+                ? styles.warningCountPillActive
+                : styles.warningCountPillQuiet),
+            }}
+          >
+            {readinessWarnings > 0
+              ? `${readinessWarnings} warning${
+                  readinessWarnings === 1 ? "" : "s"
+                }`
+              : "No warnings"}
+          </span>
+
+          <span style={styles.prizeRevealToggle}>Open / close</span>
+        </div>
+      </summary>
+
+      <div style={styles.addOnAccordionBody}>
+        <div className="readinessGrid" style={styles.readinessGridLight}>
+          {readinessItems.map((item) => {
+            const toneStyles = readinessToneStyle(item.tone);
+
+            return (
+              <article
+                key={`${definition.type}-${item.label}`}
+                style={{
+                  ...styles.readinessItemLight,
+                  ...toneStyles.card,
+                }}
+              >
+                <span
+                  style={{
+                    ...styles.readinessToneDot,
+                    ...toneStyles.dot,
+                  }}
+                />
+                <div style={styles.readinessContent}>
+                  <span style={styles.readinessLabelLight}>{item.label}</span>
+                  <strong style={styles.readinessValueLight}>{item.value}</strong>
+                  <p style={styles.readinessDetailLight}>{item.detail}</p>
                 </div>
-                <h3 style={styles.legalQuestionTitle}>
-                  Higher or Lower entry safeguards
-                </h3>
-                <p style={styles.legalQuestionText}>
-                  Optional storage for a genuine skill, knowledge or judgement
-                  question, plus a public prize value range to help supporters
-                  make an informed judgement. This step saves the settings only
-                  and does not enforce checkout yet.
-                </p>
-              </div>
+              </article>
+            );
+          })}
+        </div>
 
-              <div style={styles.legalQuestionSummaryActions}>
-                <span
-                  style={{
-                    ...styles.legalQuestionBadge,
-                    ...(addOn.legalQuestionEnabled
-                      ? styles.legalQuestionBadgeEnabled
-                      : styles.legalQuestionBadgeNeutral),
-                  }}
-                >
-                  {addOn.legalQuestionEnabled ? "Question enabled" : "Optional"}
-                </span>
+        {addOn.enabled && readinessWarnings > 0 ? (
+          <div style={styles.warningNotice}>
+            <strong>
+              {definition.shortName} has {readinessWarnings} warning
+              {readinessWarnings === 1 ? "" : "s"}
+            </strong>
+            <span>
+              The add-on can be saved, but completing the missing fields will make
+              the public page and checkout experience clearer.
+            </span>
+          </div>
+        ) : null}
 
-                <span
-                  style={{
-                    ...styles.legalQuestionBadge,
-                    ...(addOn.prizeValueRangeEnabled && hasValidValueRange
-                      ? styles.legalQuestionBadgeEnabled
-                      : styles.legalQuestionBadgeNeutral),
-                  }}
-                >
-                  {addOn.prizeValueRangeEnabled && hasValidValueRange
-                    ? `${formatMoney(valueRangeMinCents, currency)} – ${formatMoney(
-                        valueRangeMaxCents,
-                        currency,
-                      )}`
-                    : "Value range optional"}
-                </span>
+        <form action={saveEventAddOnAction} style={styles.form}>
+          <input type="hidden" name="event_id" value={eventId} />
+          <input type="hidden" name="addon_type" value={definition.type} />
 
-                <span style={styles.prizeRevealToggle}>Open / close</span>
-              </div>
-            </summary>
+          <div className="twoCol" style={styles.twoCol}>
+            <Field label={`Enable ${definition.shortName}`}>
+              <select
+                name="enabled"
+                defaultValue={addOn.enabled ? "true" : "false"}
+                className="input"
+                style={styles.input}
+              >
+                <option value="false">No, keep disabled</option>
+                <option value="true">Yes, enable for this event</option>
+              </select>
+            </Field>
 
-            <div style={styles.legalQuestionBody}>
-              <div style={styles.legalQuestionNotice}>
-                <strong>Organiser responsibility</strong>
-                <span>
-                  For paid online entries, organisers should use a genuine
-                  skill, knowledge or judgement question where appropriate and
-                  make sure their promotion is lawful for their event. Prize
-                  value ranges can help transparency, but they do not replace
-                  legal compliance. This is a configuration aid, not legal
-                  advice.
-                </span>
-              </div>
+            <Field label="Collect entries at checkout">
+              <select
+                name="collect_at_checkout"
+                defaultValue={addOn.collectAtCheckout ? "true" : "false"}
+                className="input"
+                style={styles.input}
+              >
+                <option value="false">No, collect on the night</option>
+                <option value="true">Yes, collect during checkout</option>
+              </select>
+            </Field>
+          </div>
 
-              <div className="twoCol" style={styles.twoCol}>
-                <Field label="Enable legal / skill question">
-                  <select
-                    name="legal_question_enabled"
-                    defaultValue={
-                      addOn.legalQuestionEnabled ? "true" : "false"
-                    }
-                    className="input"
-                    style={styles.input}
-                  >
-                    <option value="false">No, do not use a question</option>
-                    <option value="true">Yes, save a question</option>
-                  </select>
-                </Field>
+          <Field label="Display title">
+            <input
+              name="title"
+              defaultValue={addOn.title || definition.defaultTitle}
+              className="input"
+              style={styles.input}
+            />
+          </Field>
 
-                <Field label="Correct answer">
-                  <input
-                    name="legal_question_answer"
-                    defaultValue={addOn.legalQuestionAnswer || ""}
-                    placeholder="Correct answer"
-                    className="input"
-                    style={styles.input}
-                  />
-                </Field>
-              </div>
+          <Field label="Short description">
+            <textarea
+              name="description"
+              rows={3}
+              defaultValue={addOn.description || ""}
+              placeholder={definition.defaultDescription}
+              className="textarea"
+              style={styles.textarea}
+            />
+          </Field>
 
-              <Field label="Question shown to supporters">
-                <textarea
-                  name="legal_question_text"
-                  rows={3}
-                  defaultValue={addOn.legalQuestionText || ""}
-                  placeholder="Example: Which city is the capital of Scotland?"
-                  className="textarea"
-                  style={styles.textarea}
-                />
-              </Field>
+          <Field label="How it works / instructions">
+            <textarea
+              name="instructions"
+              rows={4}
+              defaultValue={addOn.instructions || ""}
+              placeholder={definition.defaultInstructions}
+              className="textarea"
+              style={styles.textarea}
+            />
+          </Field>
 
-              <Field label="Helper text shown near the question">
-                <textarea
-                  name="legal_question_helper_text"
-                  rows={3}
-                  defaultValue={addOn.legalQuestionHelperText || ""}
-                  placeholder="Example: Answer the question correctly before adding Higher or Lower entries at checkout."
-                  className="textarea"
-                  style={styles.textarea}
-                />
-              </Field>
+          <div className="threeCol" style={styles.threeCol}>
+            <Field label="Entry price">
+              <input
+                name="entry_price"
+                type="number"
+                step="0.01"
+                min="0"
+                defaultValue={moneyFromCents(addOn.entryPriceCents)}
+                className="input"
+                style={styles.input}
+              />
+            </Field>
 
-              <div style={styles.valueRangePanel}>
+            <Field label="Max entries per booking">
+              <input
+                name="max_entries_per_booking"
+                type="number"
+                min="1"
+                defaultValue={addOn.maxEntriesPerBooking || 1}
+                className="input"
+                style={styles.input}
+              />
+            </Field>
+
+            <Field label="Prize title / note">
+              <input
+                name="prize_title"
+                defaultValue={addOn.prizeTitle || ""}
+                placeholder={definition.defaultPrizePlaceholder}
+                className="input"
+                style={styles.input}
+              />
+            </Field>
+          </div>
+                    {isHigherOrLower ? (
+            <details
+              open={legalQuestionDefaultOpen}
+              className="legalQuestionPanel"
+              style={styles.legalQuestionPanel}
+            >
+              <summary
+                className="legalQuestionSummary"
+                style={styles.legalQuestionSummary}
+              >
                 <div>
-                  <div style={styles.valueRangeEyebrow}>
-                    Prize value range
+                  <div style={styles.legalQuestionEyebrow}>
+                    Legal / skill question
                   </div>
-                  <h4 style={styles.valueRangeTitle}>
-                    Public value range transparency
-                  </h4>
-                  <p style={styles.valueRangeText}>
-                    Use this to show supporters the approximate value range of
-                    the prizes, for example “Prizes range from £20 to £250”.
-                    This can support informed judgement during the game.
+                  <h3 style={styles.legalQuestionTitle}>
+                    Higher or Lower entry safeguards
+                  </h3>
+                  <p style={styles.legalQuestionText}>
+                    Optional storage for a genuine skill, knowledge or judgement
+                    question, plus a public prize value range to help supporters
+                    make an informed judgement. This step saves the settings only
+                    and does not enforce checkout yet.
                   </p>
                 </div>
 
+                <div style={styles.legalQuestionSummaryActions}>
+                  <span
+                    style={{
+                      ...styles.legalQuestionBadge,
+                      ...(addOn.legalQuestionEnabled
+                        ? styles.legalQuestionBadgeEnabled
+                        : styles.legalQuestionBadgeNeutral),
+                    }}
+                  >
+                    {addOn.legalQuestionEnabled
+                      ? "Question enabled"
+                      : "Optional"}
+                  </span>
+
+                  <span
+                    style={{
+                      ...styles.legalQuestionBadge,
+                      ...(addOn.prizeValueRangeEnabled && hasValidValueRange
+                        ? styles.legalQuestionBadgeEnabled
+                        : styles.legalQuestionBadgeNeutral),
+                    }}
+                  >
+                    {addOn.prizeValueRangeEnabled && hasValidValueRange
+                      ? `${formatMoney(
+                          valueRangeMinCents,
+                          currency,
+                        )} – ${formatMoney(valueRangeMaxCents, currency)}`
+                      : "Value range optional"}
+                  </span>
+
+                  <span style={styles.prizeRevealToggle}>Open / close</span>
+                </div>
+              </summary>
+
+              <div style={styles.legalQuestionBody}>
+                <div style={styles.legalQuestionNotice}>
+                  <strong>Organiser responsibility</strong>
+                  <span>
+                    For paid online entries, organisers should use a genuine
+                    skill, knowledge or judgement question where appropriate and
+                    make sure their promotion is lawful for their event. Prize
+                    value ranges can help transparency, but they do not replace
+                    legal compliance. This is a configuration aid, not legal
+                    advice.
+                  </span>
+                </div>
+
                 <div className="twoCol" style={styles.twoCol}>
-                  <Field label="Show prize value range publicly">
+                  <Field label="Enable legal / skill question">
                     <select
-                      name="prize_value_range_enabled"
+                      name="legal_question_enabled"
                       defaultValue={
-                        addOn.prizeValueRangeEnabled ? "true" : "false"
+                        addOn.legalQuestionEnabled ? "true" : "false"
                       }
                       className="input"
                       style={styles.input}
                     >
-                      <option value="false">No, keep hidden</option>
-                      <option value="true">Yes, save public value range</option>
+                      <option value="false">No, do not use a question</option>
+                      <option value="true">Yes, save a question</option>
                     </select>
                   </Field>
 
-                  <Field label="Current range">
-                    <div style={styles.valueRangePreview}>
-                      {hasValidValueRange
-                        ? `${formatMoney(valueRangeMinCents, currency)} – ${formatMoney(
-                            valueRangeMaxCents,
-                            currency,
-                          )}`
-                        : "No valid range saved yet"}
-                    </div>
-                  </Field>
-                </div>
-
-                <div className="twoCol" style={styles.twoCol}>
-                  <Field label="Minimum prize value">
+                  <Field label="Correct answer">
                     <input
-                      name="prize_value_range_min"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      defaultValue={moneyFromCents(
-                        addOn.prizeValueRangeMinCents || 0,
-                      )}
-                      className="input"
-                      style={styles.input}
-                    />
-                  </Field>
-
-                  <Field label="Maximum prize value">
-                    <input
-                      name="prize_value_range_max"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      defaultValue={moneyFromCents(
-                        addOn.prizeValueRangeMaxCents || 0,
-                      )}
+                      name="legal_question_answer"
+                      defaultValue={addOn.legalQuestionAnswer || ""}
+                      placeholder="Correct answer"
                       className="input"
                       style={styles.input}
                     />
                   </Field>
                 </div>
 
-                <Field label="Optional public value range note">
+                <Field label="Question shown to supporters">
                   <textarea
-                    name="prize_value_range_note"
+                    name="legal_question_text"
                     rows={3}
-                    defaultValue={addOn.prizeValueRangeNote || ""}
-                    placeholder="Example: Prize values are shown to help supporters make a judgement during the game."
+                    defaultValue={addOn.legalQuestionText || ""}
+                    placeholder="Example: Which city is the capital of Scotland?"
                     className="textarea"
                     style={styles.textarea}
                   />
                 </Field>
-              </div>
-            </div>
-          </details>
-        ) : null}
 
-        {isHigherOrLower ? (
-          <details
-            open={prizeRevealDefaultOpen}
-            className="prizeRevealPanel"
-            style={styles.prizeRevealPanel}
-          >
-            <summary
-              className="prizeRevealSummary"
-              style={styles.prizeRevealSummary}
-            >
-              <div>
-                <div style={styles.prizeRevealEyebrow}>
-                  Higher or Lower prize reveal mode
-                </div>
-                <h3 style={styles.prizeRevealTitle}>Prize reveal controls</h3>
-                <p style={styles.prizeRevealText}>
-                  Set up the prizes, then use each prize row’s hidden/revealed
-                  control during the campaign or event night. Save the Higher or
-                  Lower settings to update the public preview.
-                </p>
-              </div>
-
-              <div style={styles.prizeRevealSummaryActions}>
-                <span style={styles.prizeRevealBadge}>{revealProgress}</span>
-                <span style={styles.prizeRevealToggle}>Open / close</span>
-              </div>
-            </summary>
-
-            <div style={styles.prizeRevealBody}>
-              <div style={styles.revealControlNotice}>
-                <strong>Event-night reveal control</strong>
-                <span>
-                  Mark a prize as revealed when you are ready for it to appear as
-                  revealed on the public event page. Hidden prizes still show as
-                  hidden in the preview.
-                </span>
-              </div>
-
-              <div className="twoCol" style={styles.twoCol}>
-                <Field label="Enable prize reveal mode">
-                  <select
-                    name="prize_reveal_mode_enabled"
-                    defaultValue={
-                      addOn.prizeRevealModeEnabled ? "true" : "false"
-                    }
-                    className="input"
-                    style={styles.input}
-                  >
-                    <option value="false">No, keep prize reveal mode off</option>
-                    <option value="true">Yes, show prize reveal preview</option>
-                  </select>
+                <Field label="Helper text shown near the question">
+                  <textarea
+                    name="legal_question_helper_text"
+                    rows={3}
+                    defaultValue={addOn.legalQuestionHelperText || ""}
+                    placeholder="Example: Answer the question correctly before adding Higher or Lower entries at checkout."
+                    className="textarea"
+                    style={styles.textarea}
+                  />
                 </Field>
 
-                <Field label="Reveal order">
-                  <select
-                    name="prize_reveal_randomise_order"
-                    defaultValue={
-                      addOn.prizeRevealRandomiseOrder ? "true" : "false"
-                    }
-                    className="input"
-                    style={styles.input}
-                  >
-                    <option value="false">Use the order below</option>
-                    <option value="true">Randomise before the game</option>
-                  </select>
-                </Field>
-              </div>
+                <div style={styles.valueRangePanel}>
+                  <div>
+                    <div style={styles.valueRangeEyebrow}>
+                      Prize value range
+                    </div>
+                    <h4 style={styles.valueRangeTitle}>
+                      Public value range transparency
+                    </h4>
+                    <p style={styles.valueRangeText}>
+                      Use this to show supporters the approximate value range of
+                      the prizes, for example “Prizes range from £20 to £250”.
+                      This can support informed judgement during the game.
+                    </p>
+                  </div>
 
-              <Field label="Prize reveal title">
-                <input
-                  name="prize_reveal_title"
-                  defaultValue={addOn.prizeRevealTitle || ""}
-                  placeholder="Higher or Lower Prize Reveal"
-                  className="input"
-                  style={styles.input}
-                />
-              </Field>
+                  <div className="twoCol" style={styles.twoCol}>
+                    <Field label="Show prize value range publicly">
+                      <select
+                        name="prize_value_range_enabled"
+                        defaultValue={
+                          addOn.prizeValueRangeEnabled ? "true" : "false"
+                        }
+                        className="input"
+                        style={styles.input}
+                      >
+                        <option value="false">No, keep hidden</option>
+                        <option value="true">
+                          Yes, save public value range
+                        </option>
+                      </select>
+                    </Field>
 
-              <Field label="Prize reveal description">
-                <textarea
-                  name="prize_reveal_description"
-                  rows={3}
-                  defaultValue={addOn.prizeRevealDescription || ""}
-                  placeholder="Add the prizes, reveal one at a time, and ask players whether the next value will be higher or lower."
-                  className="textarea"
-                  style={styles.textarea}
-                />
-              </Field>
-
-              <input
-                type="hidden"
-                name="prize_reveal_prize_count"
-                value={MAX_PRIZE_REVEAL_PRIZES}
-              />
-
-              <div style={styles.prizeRevealRows}>
-                {prizeRevealRows.map((prize, index) => (
-                  <details
-                    key={prize?.id || `new-reveal-prize-${index + 1}`}
-                    open={Boolean(prize?.title)}
-                    style={styles.prizeRevealRow}
-                  >
-                    <summary
-                      className="prizeRevealRowHeader"
-                      style={styles.prizeRevealRowHeader}
-                    >
-                      <div>
-                        <span style={styles.prizeRevealRowEyebrow}>
-                          Prize {index + 1}
-                        </span>
-                        <strong style={styles.prizeRevealRowTitle}>
-                          {prize?.title || "Empty prize row"}
-                        </strong>
+                    <Field label="Current range">
+                      <div style={styles.valueRangePreview}>
+                        {hasValidValueRange
+                          ? `${formatMoney(
+                              valueRangeMinCents,
+                              currency,
+                            )} – ${formatMoney(valueRangeMaxCents, currency)}`
+                          : "No valid range saved yet"}
                       </div>
+                    </Field>
+                  </div>
 
-                      <div style={styles.prizeRevealRowActions}>
-                        <span
-                          style={{
-                            ...styles.prizeRevealRowStatus,
-                            ...(prize?.isRevealed
-                              ? styles.prizeRevealRowStatusRevealed
-                              : styles.prizeRevealRowStatusHidden),
-                          }}
-                        >
-                          {revealStatusLabel(prize)}
-                        </span>
-                        <span style={styles.prizeRevealToggle}>Open</span>
-                      </div>
-                    </summary>
-
-                    <div style={styles.prizeRevealRowBody}>
+                  <div className="twoCol" style={styles.twoCol}>
+                    <Field label="Minimum prize value">
                       <input
-                        type="hidden"
-                        name={`prize_reveal_prize_${index}_id`}
-                        defaultValue={prize?.id || ""}
+                        name="prize_value_range_min"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        defaultValue={moneyFromCents(
+                          addOn.prizeValueRangeMinCents || 0,
+                        )}
+                        className="input"
+                        style={styles.input}
                       />
+                    </Field>
 
-                      <div style={styles.revealControlBox}>
+                    <Field label="Maximum prize value">
+                      <input
+                        name="prize_value_range_max"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        defaultValue={moneyFromCents(
+                          addOn.prizeValueRangeMaxCents || 0,
+                        )}
+                        className="input"
+                        style={styles.input}
+                      />
+                    </Field>
+                  </div>
+
+                  <Field label="Optional public value range note">
+                    <textarea
+                      name="prize_value_range_note"
+                      rows={3}
+                      defaultValue={addOn.prizeValueRangeNote || ""}
+                      placeholder="Example: Prize values are shown to help supporters make a judgement during the game."
+                      className="textarea"
+                      style={styles.textarea}
+                    />
+                  </Field>
+                </div>
+              </div>
+            </details>
+          ) : null}
+
+          {isHigherOrLower ? (
+            <details
+              open={prizeRevealDefaultOpen}
+              className="prizeRevealPanel"
+              style={styles.prizeRevealPanel}
+            >
+              <summary
+                className="prizeRevealSummary"
+                style={styles.prizeRevealSummary}
+              >
+                <div>
+                  <div style={styles.prizeRevealEyebrow}>
+                    Higher or Lower prize reveal mode
+                  </div>
+                  <h3 style={styles.prizeRevealTitle}>
+                    Prize reveal controls
+                  </h3>
+                  <p style={styles.prizeRevealText}>
+                    Set up the prizes, then use each prize row’s hidden/revealed
+                    control during the campaign or event night. Save the Higher
+                    or Lower settings to update the public preview.
+                  </p>
+                </div>
+
+                <div style={styles.prizeRevealSummaryActions}>
+                  <span style={styles.prizeRevealBadge}>{revealProgress}</span>
+                  <span style={styles.prizeRevealToggle}>Open / close</span>
+                </div>
+              </summary>
+
+              <div style={styles.prizeRevealBody}>
+                <div style={styles.revealControlNotice}>
+                  <strong>Event-night reveal control</strong>
+                  <span>
+                    Mark a prize as revealed when you are ready for it to appear
+                    as revealed on the public event page. Hidden prizes still
+                    show as hidden in the preview.
+                  </span>
+                </div>
+
+                <div className="twoCol" style={styles.twoCol}>
+                  <Field label="Enable prize reveal mode">
+                    <select
+                      name="prize_reveal_mode_enabled"
+                      defaultValue={
+                        addOn.prizeRevealModeEnabled ? "true" : "false"
+                      }
+                      className="input"
+                      style={styles.input}
+                    >
+                      <option value="false">
+                        No, keep prize reveal mode off
+                      </option>
+                      <option value="true">Yes, show prize reveal preview</option>
+                    </select>
+                  </Field>
+
+                  <Field label="Reveal order">
+                    <select
+                      name="prize_reveal_randomise_order"
+                      defaultValue={
+                        addOn.prizeRevealRandomiseOrder ? "true" : "false"
+                      }
+                      className="input"
+                      style={styles.input}
+                    >
+                      <option value="false">Use the order below</option>
+                      <option value="true">Randomise before the game</option>
+                    </select>
+                  </Field>
+                </div>
+
+                <Field label="Prize reveal title">
+                  <input
+                    name="prize_reveal_title"
+                    defaultValue={addOn.prizeRevealTitle || ""}
+                    placeholder="Higher or Lower Prize Reveal"
+                    className="input"
+                    style={styles.input}
+                  />
+                </Field>
+
+                <Field label="Prize reveal description">
+                  <textarea
+                    name="prize_reveal_description"
+                    rows={3}
+                    defaultValue={addOn.prizeRevealDescription || ""}
+                    placeholder="Add the prizes, reveal one at a time, and ask players whether the next value will be higher or lower."
+                    className="textarea"
+                    style={styles.textarea}
+                  />
+                </Field>
+
+                <input
+                  type="hidden"
+                  name="prize_reveal_prize_count"
+                  value={MAX_PRIZE_REVEAL_PRIZES}
+                />
+
+                <div style={styles.prizeRevealRows}>
+                  {prizeRevealRows.map((prize, index) => (
+                    <details
+                      key={prize?.id || `new-reveal-prize-${index + 1}`}
+                      open={Boolean(prize?.title)}
+                      style={styles.prizeRevealRow}
+                    >
+                      <summary
+                        className="prizeRevealRowHeader"
+                        style={styles.prizeRevealRowHeader}
+                      >
                         <div>
-                          <strong style={styles.revealControlTitle}>
-                            Public reveal status
+                          <span style={styles.prizeRevealRowEyebrow}>
+                            Prize {index + 1}
+                          </span>
+                          <strong style={styles.prizeRevealRowTitle}>
+                            {prize?.title || "Empty prize row"}
                           </strong>
-                          <p style={styles.revealControlText}>
-                            Use this during the event or campaign build-up.
-                            Change the status, save the Higher or Lower
-                            settings, then refresh the public page.
-                          </p>
                         </div>
 
-                        <Field label="Reveal status">
-                          <select
-                            name={`prize_reveal_prize_${index}_is_revealed`}
-                            defaultValue={prize?.isRevealed ? "true" : "false"}
-                            className="input"
-                            style={styles.input}
+                        <div style={styles.prizeRevealRowActions}>
+                          <span
+                            style={{
+                              ...styles.prizeRevealRowStatus,
+                              ...(prize?.isRevealed
+                                ? styles.prizeRevealRowStatusRevealed
+                                : styles.prizeRevealRowStatusHidden),
+                            }}
                           >
-                            <option value="false">
-                              Hidden — not revealed yet
-                            </option>
-                            <option value="true">
-                              Revealed — show as revealed publicly
-                            </option>
-                          </select>
-                        </Field>
-                      </div>
+                            {revealStatusLabel(prize)}
+                          </span>
+                          <span style={styles.prizeRevealToggle}>Open</span>
+                        </div>
+                      </summary>
 
-                      <div className="twoCol" style={styles.twoCol}>
-                        <Field label="Prize name">
-                          <input
-                            name={`prize_reveal_prize_${index}_title`}
-                            defaultValue={prize?.title || ""}
-                            placeholder="Spa day, signed shirt, mystery hamper..."
-                            className="input"
-                            style={styles.input}
-                          />
-                        </Field>
-
-                        <Field label="Sponsor / donor">
-                          <input
-                            name={`prize_reveal_prize_${index}_sponsor_name`}
-                            defaultValue={prize?.sponsorName || ""}
-                            placeholder="Business, donor or sponsor name"
-                            className="input"
-                            style={styles.input}
-                          />
-                        </Field>
-                      </div>
-
-                      <div className="twoCol" style={styles.twoCol}>
-                        <Field label="Estimated value">
-                          <input
-                            name={`prize_reveal_prize_${index}_estimated_value`}
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            defaultValue={moneyFromCents(
-                              prize?.estimatedValueCents || 0,
-                            )}
-                            className="input"
-                            style={styles.input}
-                          />
-                        </Field>
-
-                        <Field label="Reveal order">
-                          <input
-                            name={`prize_reveal_prize_${index}_reveal_order`}
-                            type="number"
-                            min="1"
-                            defaultValue={prize?.revealOrder || index + 1}
-                            className="input"
-                            style={styles.input}
-                          />
-                        </Field>
-                      </div>
-
-                      <Field label="Prize description">
-                        <textarea
-                          name={`prize_reveal_prize_${index}_description`}
-                          rows={2}
-                          defaultValue={prize?.description || ""}
-                          placeholder="Short description for this prize."
-                          className="textarea"
-                          style={styles.textarea}
+                      <div style={styles.prizeRevealRowBody}>
+                        <input
+                          type="hidden"
+                          name={`prize_reveal_prize_${index}_id`}
+                          defaultValue={prize?.id || ""}
                         />
-                      </Field>
 
-                      <div style={styles.prizeImageUploadShell}>
-                        <ImageFocusUploadField
-                          currentImageUrl={prize?.imageUrl || ""}
-                          currentFocusX={50}
-                          currentFocusY={50}
-                          imageFieldName={`prize_reveal_prize_${index}_image_url`}
-                          focusXFieldName={`prize_reveal_prize_${index}_image_focus_x`}
-                          focusYFieldName={`prize_reveal_prize_${index}_image_focus_y`}
-                          label={`Prize ${index + 1} image upload`}
-                          previewAlt={prize?.title || `Prize ${index + 1}`}
-                          subscriptionTier={subscriptionTier}
-                          customImagesAllowed={customImagesAllowed}
-                        />
+                        <div style={styles.revealControlBox}>
+                          <div>
+                            <strong style={styles.revealControlTitle}>
+                              Public reveal status
+                            </strong>
+                            <p style={styles.revealControlText}>
+                              Use this during the event or campaign build-up.
+                              Change the status, save the Higher or Lower
+                              settings, then refresh the public page.
+                            </p>
+                          </div>
+
+                          <Field label="Reveal status">
+                            <select
+                              name={`prize_reveal_prize_${index}_is_revealed`}
+                              defaultValue={
+                                prize?.isRevealed ? "true" : "false"
+                              }
+                              className="input"
+                              style={styles.input}
+                            >
+                              <option value="false">
+                                Hidden — not revealed yet
+                              </option>
+                              <option value="true">
+                                Revealed — show as revealed publicly
+                              </option>
+                            </select>
+                          </Field>
+                        </div>
+
+                        <div className="twoCol" style={styles.twoCol}>
+                          <Field label="Prize name">
+                            <input
+                              name={`prize_reveal_prize_${index}_title`}
+                              defaultValue={prize?.title || ""}
+                              placeholder="Spa day, signed shirt, mystery hamper..."
+                              className="input"
+                              style={styles.input}
+                            />
+                          </Field>
+
+                          <Field label="Sponsor / donor">
+                            <input
+                              name={`prize_reveal_prize_${index}_sponsor_name`}
+                              defaultValue={prize?.sponsorName || ""}
+                              placeholder="Business, donor or sponsor name"
+                              className="input"
+                              style={styles.input}
+                            />
+                          </Field>
+                        </div>
+
+                        <div className="twoCol" style={styles.twoCol}>
+                          <Field label="Estimated value">
+                            <input
+                              name={`prize_reveal_prize_${index}_estimated_value`}
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              defaultValue={moneyFromCents(
+                                prize?.estimatedValueCents || 0,
+                              )}
+                              className="input"
+                              style={styles.input}
+                            />
+                          </Field>
+
+                          <Field label="Reveal order">
+                            <input
+                              name={`prize_reveal_prize_${index}_reveal_order`}
+                              type="number"
+                              min="1"
+                              defaultValue={prize?.revealOrder || index + 1}
+                              className="input"
+                              style={styles.input}
+                            />
+                          </Field>
+                        </div>
+
+                        <Field label="Prize description">
+                          <textarea
+                            name={`prize_reveal_prize_${index}_description`}
+                            rows={2}
+                            defaultValue={prize?.description || ""}
+                            placeholder="Short description for this prize."
+                            className="textarea"
+                            style={styles.textarea}
+                          />
+                        </Field>
+
+                        <div style={styles.prizeImageUploadShell}>
+                          <ImageFocusUploadField
+                            currentImageUrl={prize?.imageUrl || ""}
+                            currentFocusX={50}
+                            currentFocusY={50}
+                            imageFieldName={`prize_reveal_prize_${index}_image_url`}
+                            focusXFieldName={`prize_reveal_prize_${index}_image_focus_x`}
+                            focusYFieldName={`prize_reveal_prize_${index}_image_focus_y`}
+                            label={`Prize ${index + 1} image upload`}
+                            previewAlt={prize?.title || `Prize ${index + 1}`}
+                            subscriptionTier={subscriptionTier}
+                            customImagesAllowed={customImagesAllowed}
+                          />
+                        </div>
                       </div>
-                    </div>
-                  </details>
-                ))}
+                    </details>
+                  ))}
+                </div>
+              </div>
+            </details>
+          ) : null}
+
+          {!canUseMultipleAddOns ? (
+            <div style={styles.professionalNotice}>
+              <strong>Professional add-on limit</strong>
+              <span>
+                This tenant can manage one event fundraising add-on per event.
+                Upgrade to Foundation for multiple add-ons together.
+              </span>
+            </div>
+          ) : (
+            <div style={styles.foundationNotice}>
+              <strong>Foundation add-ons enabled</strong>
+              <span>
+                This tenant can support multiple event fundraising add-ons per
+                event, including Heads or Tails and Higher or Lower together.
+              </span>
+            </div>
+          )}
+
+          <section className="submitBar" style={styles.submitBar}>
+            <div>
+              <strong style={{ color: "#0f172a" }}>
+                Save {definition.shortName} settings
+              </strong>
+              <div style={styles.mutedSmall}>
+                Updates this event only. Public display, checkout collection and
+                admin reporting use these saved settings.
               </div>
             </div>
-          </details>
-        ) : null}
 
-        {!canUseMultipleAddOns ? (
-          <div style={styles.professionalNotice}>
-            <strong>Professional add-on limit</strong>
-            <span>
-              This tenant can manage one event fundraising add-on per event.
-              Upgrade to Foundation for multiple add-ons together.
-            </span>
-          </div>
-        ) : (
-          <div style={styles.foundationNotice}>
-            <strong>Foundation add-ons enabled</strong>
-            <span>
-              This tenant can support multiple event fundraising add-ons per
-              event, including Heads or Tails and Higher or Lower together.
-            </span>
-          </div>
-        )}
-
-        <section className="submitBar" style={styles.submitBar}>
-          <div>
-            <strong style={{ color: "#0f172a" }}>
-              Save {definition.shortName} settings
-            </strong>
-            <div style={styles.mutedSmall}>
-              Updates this event only. Public display, checkout collection and
-              admin reporting use these saved settings.
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            className="primaryButton"
-            style={styles.primaryButton}
-          >
-            Save {definition.shortName}
-          </button>
-        </section>
-      </form>
-    </section>
+            <button
+              type="submit"
+              className="primaryButton"
+              style={styles.primaryButton}
+            >
+              Save {definition.shortName}
+            </button>
+          </section>
+        </form>
+      </div>
+    </details>
   );
 }
 
@@ -2120,7 +2184,7 @@ const responsiveStyles = `
 
   .event-addons-page .hero,
   .event-addons-page .topActions,
-  .event-addons-page .panelHeader,
+  .event-addons-page .addOnAccordionSummary,
   .event-addons-page .submitBar,
   .event-addons-page .readinessHeader,
   .event-addons-page .readinessActions,
@@ -2133,7 +2197,8 @@ const responsiveStyles = `
     align-items: stretch !important;
   }
 
-  .event-addons-page .topActionsRight {
+  .event-addons-page .topActionsRight,
+  .event-addons-page .addOnSummaryMeta {
     display: grid !important;
     grid-template-columns: 1fr !important;
     gap: 10px !important;
@@ -2156,7 +2221,7 @@ const responsiveStyles = `
   }
 
   .event-addons-page .hero,
-  .event-addons-page .panel,
+  .event-addons-page .addOnAccordion,
   .event-addons-page .lockedPanel,
   .event-addons-page .upgradeBanner,
   .event-addons-page .readinessPanel,
@@ -2423,6 +2488,9 @@ const styles: Record<string, CSSProperties> = {
   },
 
   summaryCard: {
+    display: "grid",
+    alignContent: "start",
+    minHeight: 136,
     padding: 16,
     borderRadius: 20,
     background: "#ffffff",
@@ -2524,6 +2592,7 @@ const styles: Record<string, CSSProperties> = {
   },
 
   readinessOverviewCard: {
+    minHeight: 118,
     padding: 14,
     borderRadius: 18,
     background: "rgba(255,255,255,0.08)",
@@ -2676,11 +2745,11 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 10,
   },
 
-  addOnPanels: { display: "grid", gap: 16 },
+  addOnPanels: { display: "grid", gap: 14 },
 
-  panel: {
+  addOnAccordion: {
     display: "grid",
-    gap: 16,
+    gap: 0,
     padding: 18,
     borderRadius: 24,
     background:
@@ -2688,14 +2757,36 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #dbeafe",
     boxShadow: "0 8px 28px rgba(15,23,42,0.055)",
     minWidth: 0,
+    overflow: "hidden",
   },
 
-  panelHeader: {
-    display: "flex",
-    justifyContent: "space-between",
+  addOnAccordionSummary: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
     gap: 14,
-    alignItems: "flex-start",
+    alignItems: "center",
+    cursor: "pointer",
+    listStyle: "none",
+  },
+
+  addOnSummaryMain: {
+    minWidth: 0,
+  },
+
+  addOnSummaryMeta: {
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
+    justifyContent: "flex-end",
     flexWrap: "wrap",
+  },
+
+  addOnAccordionBody: {
+    display: "grid",
+    gap: 16,
+    paddingTop: 16,
+    marginTop: 16,
+    borderTop: "1px solid #e2e8f0",
   },
 
   innerEyebrow: {
@@ -2732,6 +2823,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.05em",
+    whiteSpace: "nowrap",
   },
 
   statusGood: {
@@ -2747,6 +2839,31 @@ const styles: Record<string, CSSProperties> = {
   },
 
   statusNeutral: {
+    background: "#f8fafc",
+    color: "#64748b",
+    borderColor: "#cbd5e1",
+  },
+
+  warningCountPill: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "8px 12px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    whiteSpace: "nowrap",
+  },
+
+  warningCountPillActive: {
+    background: "#fffbeb",
+    color: "#92400e",
+    borderColor: "#fde68a",
+  },
+
+  warningCountPillQuiet: {
     background: "#f8fafc",
     color: "#64748b",
     borderColor: "#cbd5e1",
@@ -3035,6 +3152,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.04em",
+    whiteSpace: "nowrap",
   },
 
   revealControlNotice: {
