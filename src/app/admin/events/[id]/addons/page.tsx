@@ -244,7 +244,7 @@ function getAddOnDefinition(type: string | null | undefined) {
 }
 
 function normalisePrizeRevealPrize(
-  value: Partial<EventPrizeRevealPrize> | Record<string, unknown>,
+  value: Record<string, unknown>,
   index: number,
 ): EventPrizeRevealPrize | null {
   const title = String(value.title || "").trim();
@@ -294,10 +294,7 @@ function normalisePrizeRevealPrizes(value: unknown): EventPrizeRevealPrize[] {
         return null;
       }
 
-      return normalisePrizeRevealPrize(
-        item as Partial<EventPrizeRevealPrize> & Record<string, unknown>,
-        index,
-      );
+      return normalisePrizeRevealPrize(item as Record<string, unknown>, index);
     })
     .filter(Boolean)
     .sort(
@@ -984,8 +981,8 @@ export default async function EventFundraisingAddOnsPage({
           <h2 style={styles.upgradeTitle}>One add-on is active for this event</h2>
           <p style={styles.upgradeText}>
             This event still has multiple saved add-ons from a previous plan,
-            but Professional shows and uses only the first enabled add-on. Upgrade
-            to Foundation to manage multiple add-ons together again.
+            but Professional shows and uses only the first enabled add-on.
+            Upgrade to Foundation to manage multiple add-ons together again.
           </p>
           <Link href="/admin/settings/billing" style={styles.primaryLink}>
             View billing
