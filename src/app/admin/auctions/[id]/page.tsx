@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { headers, cookies } from "next/headers";
 import { auth } from "@/auth";
+import ImageFocusUploadField from "@/components/ImageFocusUploadField";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { getTenantSettings } from "@/lib/tenant-settings";
 import {
@@ -294,6 +295,7 @@ function formatDate(value: string | null | undefined) {
     timeStyle: "short",
   }).format(date);
 }
+
 function getStatusStyle(status: string | null | undefined): CSSProperties {
   const clean = String(status || "draft").toLowerCase();
 
@@ -514,6 +516,7 @@ async function getActiveCampaignCountForTenant(tenantSlug: string) {
     auctions.filter((item) => item.status === "published").length
   );
 }
+
 function buildHighestBidMap(bids: SilentAuctionBid[]) {
   const winnerByItemId = new Map<string, WinningBidSummary>();
 
@@ -542,7 +545,6 @@ function buildHighestBidMap(bids: SilentAuctionBid[]) {
 
   return winnerByItemId;
 }
-
 async function updateAuctionAction(formData: FormData) {
   "use server";
 
@@ -697,6 +699,7 @@ async function deleteClosedAuctionAction(formData: FormData) {
 
   redirect("/admin/auctions");
 }
+
 async function createAuctionItemAction(formData: FormData) {
   "use server";
 
@@ -789,6 +792,10 @@ export default async function AdminAuctionPage({
   const auctionCapability = checkSubscriptionCapability(
     tenantSettings,
     "auctions",
+  );
+  const customImagesCapability = checkSubscriptionCapability(
+    tenantSettings,
+    "custom_campaign_images",
   );
   const isReadOnly = !auctionCapability.allowed;
 
@@ -928,7 +935,8 @@ export default async function AdminAuctionPage({
             {auction.description?.trim() ||
               "Configure your auction details, items, bidding and closing workflow."}
           </p>
-                    <div className="auction-hero-stats" style={styles.heroStats}>
+
+          <div className="auction-hero-stats" style={styles.heroStats}>
             <div style={styles.statCard}>
               <div style={styles.statLabel}>Currency</div>
               <div style={styles.statValue}>
@@ -1029,8 +1037,7 @@ export default async function AdminAuctionPage({
           ))}
         </div>
       </section>
-
-      {errorMessage ? (
+            {errorMessage ? (
         <section style={styles.errorBanner}>{errorMessage}</section>
       ) : null}
 
@@ -1116,7 +1123,8 @@ export default async function AdminAuctionPage({
                 style={styles.input}
               />
             </label>
-                        <label style={styles.field}>
+
+            <label style={styles.field}>
               <span style={styles.label}>Slug</span>
 
               <input
@@ -1219,28 +1227,20 @@ export default async function AdminAuctionPage({
               />
             </label>
 
-            <label style={{ ...styles.field, gridColumn: "1 / -1" }}>
-              <span style={styles.label}>Main auction image URL</span>
-
-              <input
-                type="text"
-                name="image_url"
-                defaultValue={auction.image_url || DEFAULT_AUCTION_IMAGE}
-                style={styles.input}
+            <div style={{ ...styles.uploadPanel, gridColumn: "1 / -1" }}>
+              <ImageFocusUploadField
+                currentImageUrl={auction.image_url || DEFAULT_AUCTION_IMAGE}
+                currentFocusX={focusValue(auction.image_focus_x)}
+                currentFocusY={focusValue(auction.image_focus_y)}
+                imageFieldName="image_url"
+                focusXFieldName="image_focus_x"
+                focusYFieldName="image_focus_y"
+                label="Main auction image"
+                previewAlt={auction.title || "Auction image"}
+                subscriptionTier={subscriptionTier}
+                customImagesAllowed={customImagesCapability.allowed}
               />
-            </label>
-
-            <input
-              type="hidden"
-              name="image_focus_x"
-              defaultValue={focusValue(auction.image_focus_x)}
-            />
-
-            <input
-              type="hidden"
-              name="image_focus_y"
-              defaultValue={focusValue(auction.image_focus_y)}
-            />
+            </div>
 
             <label style={{ ...styles.field, gridColumn: "1 / -1" }}>
               <span style={styles.label}>Terms / auction rules</span>
@@ -1334,7 +1334,8 @@ export default async function AdminAuctionPage({
                 style={styles.input}
               />
             </label>
-                        <label style={styles.field}>
+
+            <label style={styles.field}>
               <span style={styles.label}>Sort order</span>
 
               <input
@@ -1361,8 +1362,20 @@ export default async function AdminAuctionPage({
               <textarea name="description" rows={4} style={styles.textarea} />
             </label>
 
-            <input type="hidden" name="image_focus_x" defaultValue="50" />
-            <input type="hidden" name="image_focus_y" defaultValue="50" />
+            <div style={{ ...styles.uploadPanel, gridColumn: "1 / -1" }}>
+              <ImageFocusUploadField
+                currentImageUrl=""
+                currentFocusX={50}
+                currentFocusY={50}
+                imageFieldName="image_url"
+                focusXFieldName="image_focus_x"
+                focusYFieldName="image_focus_y"
+                label="Auction item image"
+                previewAlt="Auction item image"
+                subscriptionTier={subscriptionTier}
+                customImagesAllowed={customImagesCapability.allowed}
+              />
+            </div>
 
             <div style={styles.submitRow}>
               <button type="submit" style={styles.primaryButton}>
@@ -1402,6 +1415,24 @@ export default async function AdminAuctionPage({
 
                     <span style={styles.chevron}>Open</span>
                   </summary>
+
+                  {item.image_url ? (
+                    <div style={styles.itemImagePreviewWrap}>
+                      <img
+                        src={item.image_url || DEFAULT_AUCTION_IMAGE}
+                        alt={item.title}
+                        style={
+                          item.image_url &&
+                          item.image_url !== DEFAULT_AUCTION_IMAGE
+                            ? focusedImageStyle(
+                                item.image_focus_x,
+                                item.image_focus_y,
+                              )
+                            : defaultAuctionImageStyle(22)
+                        }
+                      />
+                    </div>
+                  ) : null}
 
                   {highest ? (
                     <div style={styles.winnerPaymentCard}>
@@ -1534,7 +1565,8 @@ export default async function AdminAuctionPage({
                             style={styles.input}
                           />
                         </label>
-                                                <label style={styles.field}>
+
+                        <label style={styles.field}>
                           <span style={styles.label}>Donor / sponsor</span>
 
                           <input
@@ -1622,23 +1654,22 @@ export default async function AdminAuctionPage({
                           />
                         </label>
 
-                        <input
-                          type="hidden"
-                          name="image_url"
-                          defaultValue={item.image_url || ""}
-                        />
-
-                        <input
-                          type="hidden"
-                          name="image_focus_x"
-                          defaultValue={focusValue(item.image_focus_x)}
-                        />
-
-                        <input
-                          type="hidden"
-                          name="image_focus_y"
-                          defaultValue={focusValue(item.image_focus_y)}
-                        />
+                        <div
+                          style={{ ...styles.uploadPanel, gridColumn: "1 / -1" }}
+                        >
+                          <ImageFocusUploadField
+                            currentImageUrl={item.image_url || ""}
+                            currentFocusX={focusValue(item.image_focus_x)}
+                            currentFocusY={focusValue(item.image_focus_y)}
+                            imageFieldName="image_url"
+                            focusXFieldName="image_focus_x"
+                            focusYFieldName="image_focus_y"
+                            label="Auction item image"
+                            previewAlt={item.title || "Auction item image"}
+                            subscriptionTier={subscriptionTier}
+                            customImagesAllowed={customImagesCapability.allowed}
+                          />
+                        </div>
 
                         <div style={styles.submitRow}>
                           <button type="submit" style={styles.primaryButton}>
@@ -1671,8 +1702,7 @@ export default async function AdminAuctionPage({
           )}
         </div>
       </section>
-
-      <section id="winner-tools" style={styles.sectionCard}>
+            <section id="winner-tools" style={styles.sectionCard}>
         <div style={styles.sectionHeader}>
           <div>
             <div style={styles.sectionEyebrow}>Winner tools</div>
@@ -1764,7 +1794,8 @@ export default async function AdminAuctionPage({
                       }
                     />
                   </div>
-                                    {highest &&
+
+                  {highest &&
                   highest.payment_status !== "paid" &&
                   highest.payment_token &&
                   reserveMet ? (
@@ -1903,6 +1934,25 @@ const responsiveStyles = `
     .auction-readiness-grid {
       grid-template-columns: 1fr !important;
     }
+
+    .auction-admin-page .formGrid,
+    .auction-admin-page .readOnlyGrid {
+      grid-template-columns: 1fr !important;
+    }
+
+    .auction-admin-page .upgradeBanner {
+      grid-template-columns: 1fr !important;
+      align-items: stretch !important;
+    }
+
+    .auction-admin-page .upgradeActions {
+      justify-content: stretch !important;
+    }
+
+    .auction-admin-page .upgradeButton,
+    .auction-admin-page .upgradeSecondaryButton {
+      width: 100% !important;
+    }
   }
 
   @media (max-width: 640px) {
@@ -2009,7 +2059,8 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 700,
     overflowWrap: "anywhere",
   },
-    heroStats: {
+
+  heroStats: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
     gap: 10,
@@ -2458,6 +2509,29 @@ const styles: Record<string, CSSProperties> = {
     fontFamily: "inherit",
     boxSizing: "border-box",
     minWidth: 0,
+  },
+
+  uploadPanel: {
+    display: "grid",
+    gap: 10,
+    padding: 14,
+    borderRadius: 20,
+    background:
+      "linear-gradient(135deg, #f8fafc 0%, #ffffff 62%, #eff6ff 100%)",
+    border: "1px solid #dbeafe",
+    minWidth: 0,
+    overflow: "hidden",
+  },
+
+  itemImagePreviewWrap: {
+    width: "100%",
+    height: 240,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    overflow: "hidden",
+    marginTop: 14,
+    marginBottom: 14,
   },
 
   submitRow: {
