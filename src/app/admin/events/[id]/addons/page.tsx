@@ -11,7 +11,7 @@ import {
   getTenantEventFundraisingAddOnLimits,
   normaliseSubscriptionTier,
 } from "@/lib/subscription-capabilities";
-import HigherOrLowerPrizeRevealEditor from "@/components/admin/HigherOrLowerPrizeRevealEditor";
+import HigherOrLowerRevealEditor from "@/components/admin/HigherOrLowerRevealEditor";
 import {
   getEventById,
   updateEvent,
@@ -121,7 +121,7 @@ const ADD_ON_DEFINITIONS: AddOnDefinition[] = [
   },
 ];
 
-const MAX_PRIZE_REVEAL_PRIZES = 8;
+const MAX_PRIZE_REVEAL_PRIZES = 20;
 
 function cleanText(value: FormDataEntryValue | string | null | undefined) {
   return String(value || "").trim();
@@ -331,9 +331,10 @@ function getPrizeRevealPrizes(addOn: EventFundraisingAddOnLike) {
 }
 
 function buildPrizeRevealPrizesFromForm(formData: FormData) {
+  const rawPrizeCount = Number(formData.get("prize_reveal_prize_count") || 0);
   const prizeCount = Math.min(
     MAX_PRIZE_REVEAL_PRIZES,
-    Math.max(0, Number(formData.get("prize_reveal_prize_count") || 0)),
+    Math.max(0, Number.isFinite(rawPrizeCount) ? Math.floor(rawPrizeCount) : 0),
   );
 
   const prizes: EventPrizeRevealPrize[] = [];
@@ -619,7 +620,6 @@ function readinessToneStyle(tone: ReadinessItem["tone"]) {
     card: styles.readinessItemNeutral,
   };
 }
-
 function buildAddOnReadiness(input: {
   addOn: AdminEventFundraisingAddOn;
   currency: string;
@@ -835,6 +835,7 @@ function addOnReadyForCheckout(addOn: AdminEventFundraisingAddOn) {
     Number(addOn.entryPriceCents || 0) > 0
   );
 }
+
 function getVisibleConfiguredAddOnsForTier(
   configuredAddOns: ConfiguredAddOn[],
   tier: string,
@@ -1126,7 +1127,7 @@ export default async function EventFundraisingAddOnsPage({
           ← Back to event editor
         </Link>
 
-        <div className="topActionsRight" style={styles.topActionsRight}>
+        <div className="topActionGroup" style={styles.topActionGroup}>
           <Link
             href={`/e/${encodeURIComponent(event.slug)}`}
             target="_blank"
@@ -1138,8 +1139,8 @@ export default async function EventFundraisingAddOnsPage({
 
           <Link
             href={`/admin/events/${encodeURIComponent(event.id)}/higher-or-lower`}
-            className="secondaryButton"
-            style={styles.secondaryButton}
+            className="primaryActionButton"
+            style={styles.primaryActionButton}
           >
             Higher or Lower live game
           </Link>
@@ -1149,7 +1150,7 @@ export default async function EventFundraisingAddOnsPage({
             className="secondaryButton"
             style={styles.secondaryButton}
           >
-            View orders & add-on reporting
+            View orders & reporting
           </Link>
 
           <Link
@@ -1219,8 +1220,7 @@ export default async function EventFundraisingAddOnsPage({
           detail="Foundation can sell and report several live fundraising add-ons on the same event."
         />
       </section>
-
-      {canManageAddOns ? (
+            {canManageAddOns ? (
         <section className="readinessPanel" style={styles.readinessPanel}>
           <div style={styles.readinessHeader}>
             <div>
@@ -1602,8 +1602,9 @@ function AddOnSettingsPanel({
               />
             </Field>
           </div>
-                    {isHigherOrLower ? (
-            <HigherOrLowerPrizeRevealEditor
+
+          {isHigherOrLower ? (
+            <HigherOrLowerRevealEditor
               prizeRevealModeEnabled={Boolean(addOn.prizeRevealModeEnabled)}
               prizeRevealRandomiseOrder={Boolean(
                 addOn.prizeRevealRandomiseOrder,
@@ -1892,11 +1893,12 @@ const responsiveStyles = `
     grid-template-columns: 1fr !important;
   }
 
-  .topActionsRight {
+  .topActionGroup {
     justify-content: stretch !important;
+    grid-template-columns: 1fr !important;
   }
 
-  .topActionsRight a,
+  .topActionGroup a,
   .topActions > a {
     width: 100% !important;
   }
@@ -1923,7 +1925,16 @@ const responsiveStyles = `
 
   .addOnAccordionSummary,
   .legalSummary,
-  .prizeRevealSummary {
+  .higher-lower-reveal-summary {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  .higher-lower-reveal-two-col {
+    grid-template-columns: 1fr !important;
+  }
+
+  .higher-lower-reveal-row-summary {
     display: grid !important;
     grid-template-columns: 1fr !important;
   }
@@ -2063,16 +2074,22 @@ const styles: Record<string, CSSProperties> = {
   topActions: {
     display: "grid",
     gridTemplateColumns: "auto minmax(0, 1fr)",
-    gap: 10,
+    gap: 12,
     alignItems: "center",
     marginBottom: 18,
+    padding: 12,
+    borderRadius: 24,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 8px 24px rgba(15,23,42,0.04)",
   },
 
-  topActionsRight: {
-    display: "flex",
+  topActionGroup: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, auto))",
     gap: 10,
-    flexWrap: "wrap",
-    justifyContent: "flex-end",
+    justifyContent: "end",
+    alignItems: "center",
   },
 
   secondaryButton: {
@@ -2089,6 +2106,24 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     textAlign: "center",
     boxShadow: "0 2px 8px rgba(15,23,42,0.04)",
+    whiteSpace: "nowrap",
+  },
+
+  primaryActionButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "10px 15px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    border: "1px solid #0f172a",
+    textDecoration: "none",
+    fontWeight: 950,
+    textAlign: "center",
+    boxShadow: "0 12px 24px rgba(15,23,42,0.14)",
+    whiteSpace: "nowrap",
   },
 
   secondaryButtonDark: {
@@ -2132,603 +2167,3 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     marginBottom: 18,
   },
-
-  upgradeBanner: {
-    display: "grid",
-    gap: 10,
-    padding: 22,
-    borderRadius: 26,
-    background: "#fffbeb",
-    border: "1px solid #fde68a",
-    color: "#92400e",
-    marginBottom: 18,
-  },
-
-  upgradeEyebrow: {
-    color: "#92400e",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-
-  upgradeTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 28,
-    lineHeight: 1.05,
-    letterSpacing: "-0.05em",
-  },
-
-  upgradeText: {
-    margin: 0,
-    color: "#92400e",
-    lineHeight: 1.55,
-    fontWeight: 800,
-  },
-
-  summaryGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 12,
-    marginBottom: 18,
-  },
-
-  summaryCard: {
-    padding: 16,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    borderTop: "4px solid #1683f8",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-  },
-
-  summaryLabel: {
-    display: "block",
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-    marginBottom: 6,
-  },
-
-  summaryValue: {
-    display: "block",
-    color: "#0f172a",
-    fontSize: 24,
-    fontWeight: 950,
-    letterSpacing: "-0.04em",
-  },
-
-  summaryDetail: {
-    margin: "7px 0 0",
-    color: "#64748b",
-    fontSize: 13,
-    lineHeight: 1.45,
-    fontWeight: 750,
-  },
-
-  readinessPanel: {
-    display: "grid",
-    gap: 16,
-    padding: 22,
-    borderRadius: 28,
-    background:
-      "radial-gradient(circle at top left, rgba(250,204,21,0.16), transparent 34%), linear-gradient(135deg, #0f172a 0%, #1e293b 58%, #020617 100%)",
-    color: "#ffffff",
-    border: "1px solid rgba(250,204,21,0.26)",
-    boxShadow: "0 18px 48px rgba(15,23,42,0.16)",
-    marginBottom: 18,
-  },
-
-  readinessHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 14,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-  },
-
-  readinessEyebrow: {
-    color: "#facc15",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 6,
-  },
-
-  readinessTitle: {
-    margin: 0,
-    color: "#ffffff",
-    fontSize: 30,
-    lineHeight: 1.05,
-    letterSpacing: "-0.05em",
-  },
-
-  readinessIntro: {
-    margin: "8px 0 0",
-    color: "#cbd5e1",
-    lineHeight: 1.55,
-    fontWeight: 750,
-    maxWidth: 780,
-  },
-
-  readinessStatusPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "9px 12px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontSize: 13,
-    fontWeight: 950,
-  },
-
-  statusGood: {
-    background: "#dcfce7",
-    color: "#166534",
-    borderColor: "#bbf7d0",
-  },
-
-  statusWarning: {
-    background: "#fef3c7",
-    color: "#92400e",
-    borderColor: "#fde68a",
-  },
-
-  statusNeutral: {
-    background: "#f8fafc",
-    color: "#475569",
-    borderColor: "#e2e8f0",
-  },
-
-  readinessOverviewGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 12,
-  },
-
-  readinessOverviewCard: {
-    padding: 14,
-    borderRadius: 18,
-    background: "rgba(255,255,255,0.08)",
-    border: "1px solid rgba(255,255,255,0.12)",
-  },
-
-  readinessOverviewHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 10,
-    alignItems: "center",
-    flexWrap: "wrap",
-  },
-
-  readinessOverviewLabel: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: 950,
-  },
-
-  miniStatusPill: {
-    display: "inline-flex",
-    padding: "7px 10px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontSize: 12,
-    fontWeight: 950,
-  },
-
-  readinessOverviewText: {
-    margin: "8px 0 0",
-    color: "#cbd5e1",
-    fontSize: 13,
-    lineHeight: 1.45,
-    fontWeight: 750,
-  },
-
-  professionalNoticeDark: {
-    display: "grid",
-    gap: 4,
-    padding: 14,
-    borderRadius: 18,
-    background: "rgba(250,204,21,0.12)",
-    color: "#fef3c7",
-    border: "1px solid rgba(250,204,21,0.28)",
-    fontSize: 13,
-    lineHeight: 1.45,
-    fontWeight: 800,
-  },
-
-  professionalNoticeLight: {
-    display: "grid",
-    gap: 4,
-    padding: 14,
-    borderRadius: 18,
-    background: "#eff6ff",
-    color: "#1e3a8a",
-    border: "1px solid #bfdbfe",
-    fontSize: 13,
-    lineHeight: 1.45,
-    fontWeight: 850,
-  },
-
-  readinessActions: {
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-  },
-
-  lockedPanel: {
-    display: "grid",
-    gap: 12,
-    padding: 22,
-    borderRadius: 26,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-  },
-
-  lockedEyebrow: {
-    color: "#2563eb",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-
-  addOnPanels: {
-    display: "grid",
-    gap: 16,
-  },
-
-  addOnAccordion: {
-    display: "grid",
-    gap: 0,
-    padding: 22,
-    borderRadius: 28,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    overflow: "hidden",
-  },
-
-  addOnAccordionSummary: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 14,
-    alignItems: "flex-start",
-    cursor: "pointer",
-    listStyle: "none",
-  },
-
-  addOnSummaryMain: {
-    minWidth: 0,
-  },
-
-  innerEyebrow: {
-    color: "#2563eb",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 6,
-  },
-
-  panelTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 30,
-    lineHeight: 1.05,
-    letterSpacing: "-0.05em",
-    overflowWrap: "anywhere",
-  },
-
-  sectionText: {
-    margin: "8px 0 0",
-    color: "#64748b",
-    lineHeight: 1.55,
-    fontWeight: 750,
-  },
-
-  addOnSummaryMeta: {
-    display: "flex",
-    gap: 8,
-    alignItems: "center",
-    justifyContent: "flex-end",
-    flexWrap: "wrap",
-  },
-
-  statusPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "8px 12px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontSize: 12,
-    fontWeight: 950,
-    whiteSpace: "nowrap",
-  },
-
-  warningCountPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "8px 12px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontSize: 12,
-    fontWeight: 950,
-    whiteSpace: "nowrap",
-  },
-
-  warningCountPillActive: {
-    background: "#fef3c7",
-    color: "#92400e",
-    borderColor: "#fde68a",
-  },
-
-  warningCountPillQuiet: {
-    background: "#f8fafc",
-    color: "#64748b",
-    borderColor: "#e2e8f0",
-  },
-
-  prizeRevealToggle: {
-    display: "inline-flex",
-    width: "fit-content",
-    padding: "8px 12px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#334155",
-    border: "1px solid #e2e8f0",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-    whiteSpace: "nowrap",
-  },
-
-  addOnAccordionBody: {
-    display: "grid",
-    gap: 16,
-    marginTop: 18,
-  },
-
-  readinessGridLight: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 10,
-  },
-
-  readinessItemLight: {
-    display: "grid",
-    gridTemplateColumns: "auto minmax(0, 1fr)",
-    gap: 10,
-    padding: 13,
-    borderRadius: 16,
-    border: "1px solid",
-  },
-
-  readinessItemGood: {
-    background: "#f0fdf4",
-    borderColor: "#bbf7d0",
-  },
-
-  readinessItemWarning: {
-    background: "#fffbeb",
-    borderColor: "#fde68a",
-  },
-
-  readinessItemNeutral: {
-    background: "#f8fafc",
-    borderColor: "#e2e8f0",
-  },
-
-  readinessToneDot: {
-    width: 11,
-    height: 11,
-    borderRadius: 999,
-    marginTop: 4,
-  },
-
-  readinessDotGood: {
-    background: "#22c55e",
-  },
-
-  readinessDotWarning: {
-    background: "#f59e0b",
-  },
-
-  readinessDotNeutral: {
-    background: "#94a3b8",
-  },
-
-  readinessContent: {
-    minWidth: 0,
-  },
-
-  readinessLabelLight: {
-    display: "block",
-    color: "#64748b",
-    fontSize: 11,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-    marginBottom: 4,
-  },
-
-  readinessValueLight: {
-    display: "block",
-    color: "#0f172a",
-    fontSize: 15,
-    fontWeight: 950,
-  },
-
-  readinessDetailLight: {
-    margin: "5px 0 0",
-    color: "#64748b",
-    fontSize: 12,
-    lineHeight: 1.4,
-    fontWeight: 750,
-  },
-
-  warningNotice: {
-    display: "grid",
-    gap: 4,
-    padding: 14,
-    borderRadius: 18,
-    background: "#fffbeb",
-    color: "#92400e",
-    border: "1px solid #fde68a",
-    fontSize: 13,
-    lineHeight: 1.45,
-    fontWeight: 850,
-  },
-
-  form: {
-    display: "grid",
-    gap: 14,
-  },
-
-  twoCol: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 12,
-  },
-
-  threeCol: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 12,
-  },
-
-  field: {
-    display: "grid",
-    gap: 6,
-    minWidth: 0,
-  },
-
-  label: {
-    color: "#334155",
-    fontSize: 13,
-    fontWeight: 950,
-  },
-
-  input: {
-    width: "100%",
-    minHeight: 44,
-    padding: "10px 12px",
-    borderRadius: 13,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
-    fontSize: 15,
-    boxSizing: "border-box",
-    minWidth: 0,
-  },
-
-  textarea: {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: 13,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
-    fontSize: 15,
-    resize: "vertical",
-    boxSizing: "border-box",
-    minWidth: 0,
-    fontFamily: "inherit",
-  },
-
-  legalPanel: {
-    display: "grid",
-    gap: 0,
-    padding: 16,
-    borderRadius: 22,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    overflow: "hidden",
-  },
-
-  legalSummary: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 14,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-    cursor: "pointer",
-    listStyle: "none",
-  },
-
-  legalBody: {
-    display: "grid",
-    gap: 14,
-    marginTop: 16,
-  },
-
-  legalEyebrow: {
-    color: "#2563eb",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 5,
-  },
-
-  legalTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 24,
-    lineHeight: 1.05,
-    letterSpacing: "-0.04em",
-  },
-
-  legalText: {
-    margin: "7px 0 0",
-    color: "#64748b",
-    fontSize: 13,
-    lineHeight: 1.5,
-    fontWeight: 750,
-    maxWidth: 760,
-  },
-
-  valueRangePanel: {
-    display: "grid",
-    gap: 14,
-    padding: 14,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-  },
-
-  valueRangeTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 18,
-    lineHeight: 1.1,
-    letterSpacing: "-0.035em",
-  },
-
-  submitRow: {
-    display: "flex",
-    justifyContent: "flex-end",
-    gap: 10,
-    flexWrap: "wrap",
-  },
-
-  primaryButton: {
-    minHeight: 46,
-    padding: "12px 18px",
-    borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
-    border: "none",
-    fontWeight: 950,
-    cursor: "pointer",
-    boxShadow: "0 12px 22px rgba(22,131,248,0.2)",
-  },
-};
