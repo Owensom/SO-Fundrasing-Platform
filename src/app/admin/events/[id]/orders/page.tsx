@@ -37,6 +37,7 @@ type EventOrderDashboardRow = {
   guest_name: string | null;
   dietary_requirements: string | null;
   menu_choice: string | null;
+  metadata: Record<string, unknown> | null;
 
   seat_id: string | null;
   table_number: string | null;
@@ -153,10 +154,40 @@ function fallbackText(value: unknown, fallback = "Not provided") {
   return clean || fallback;
 }
 
+function itemMetadata(row: EventOrderDashboardRow) {
+  if (
+    row.metadata &&
+    typeof row.metadata === "object" &&
+    !Array.isArray(row.metadata)
+  ) {
+    return row.metadata;
+  }
+
+  return {};
+}
+
+function metadataText(row: EventOrderDashboardRow, key: string) {
+  return String(itemMetadata(row)[key] || "").trim();
+}
+
+function addOnBuyerAnswer(row: EventOrderDashboardRow) {
+  return metadataText(row, "buyerAnswer");
+}
+
+function addOnLegalQuestion(row: EventOrderDashboardRow) {
+  return metadataText(row, "legalQuestionText");
+}
+
 function isEventAddOnItem(row: EventOrderDashboardRow) {
+  const metadata = itemMetadata(row);
+  const kind = String(metadata.kind || "").trim().toLowerCase();
+  const addOnType = String(metadata.addOnType || "").trim().toLowerCase();
   const label = String(row.item_label || "").trim().toLowerCase();
 
   return (
+    kind === "event_addon" ||
+    addOnType === "heads_or_tails" ||
+    addOnType === "higher_or_lower" ||
     label.startsWith("event add-on") ||
     label.includes("heads or tails") ||
     label.includes("higher or lower") ||
@@ -173,6 +204,12 @@ function ticketLabel(row: EventOrderDashboardRow) {
 }
 
 function cleanAddOnLabel(row: EventOrderDashboardRow) {
+  const metadataTitle = metadataText(row, "addOnTitle");
+
+  if (metadataTitle) {
+    return metadataTitle;
+  }
+
   const label = ticketLabel(row);
 
   return label
@@ -186,15 +223,31 @@ function addOnDisplayLabel(row: EventOrderDashboardRow) {
 
   if (label) return label;
 
+  const metadataType = metadataText(row, "addOnType");
   const rawLabel = String(row.item_label || "").toLowerCase();
 
-  if (rawLabel.includes("higher or lower")) return "Higher or Lower";
-  if (rawLabel.includes("heads or tails")) return "Heads or Tails";
+  if (metadataType === "higher_or_lower" || rawLabel.includes("higher or lower")) {
+    return "Higher or Lower";
+  }
+
+  if (metadataType === "heads_or_tails" || rawLabel.includes("heads or tails")) {
+    return "Heads or Tails";
+  }
 
   return "Event add-on";
 }
 
 function addOnKey(row: EventOrderDashboardRow) {
+  const metadataType = metadataText(row, "addOnType");
+
+  if (metadataType) {
+    return metadataType
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+  }
+
   return addOnDisplayLabel(row)
     .trim()
     .toLowerCase()
@@ -445,6 +498,7 @@ async function listEventOrderDashboardRows(eventId: string) {
         eoi.guest_name,
         eoi.dietary_requirements,
         eoi.menu_choice,
+        eoi.metadata,
 
         eoi.seat_id::text,
         es.table_number,
@@ -585,7 +639,8 @@ export default async function AdminEventOrdersPage({
       href: `/admin/events/${event.id}/orders?status=other`,
     },
   ];
-    return (
+
+  return (
     <main className="event-orders-page" style={styles.page}>
       <style>{responsiveStyles}</style>
 
@@ -913,6 +968,24 @@ export default async function AdminEventOrdersPage({
                                 {formatMoney(rowTotal(item), order.currency)}
                               </div>
                             </div>
+
+                            {addOnBuyerAnswer(item) ? (
+                              <div style={styles.addOnAnswerBox}>
+                                <div style={styles.addOnAnswerLabel}>
+                                  Higher or Lower answer
+                                </div>
+
+                                {addOnLegalQuestion(item) ? (
+                                  <div style={styles.addOnAnswerQuestion}>
+                                    {addOnLegalQuestion(item)}
+                                  </div>
+                                ) : null}
+
+                                <div style={styles.addOnAnswerValue}>
+                                  {addOnBuyerAnswer(item)}
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
                         ))}
                       </div>
@@ -993,6 +1066,7 @@ function SummaryCard({ label, value }: { label: string; value: ReactNode }) {
     </div>
   );
 }
+
 const responsiveStyles = `
 .event-orders-page,
 .event-orders-page * {
@@ -1595,6 +1669,41 @@ const styles: Record<string, CSSProperties> = {
     background:
       "linear-gradient(135deg, #fffbeb 0%, #ffffff 56%, #eff6ff 100%)",
     border: "1px solid #fde68a",
+  },
+
+  addOnAnswerBox: {
+    gridColumn: "1 / -1",
+    display: "grid",
+    gap: 6,
+    padding: 13,
+    borderRadius: 16,
+    background: "#eff6ff",
+    border: "1px solid #bfdbfe",
+    minWidth: 0,
+  },
+
+  addOnAnswerLabel: {
+    color: "#1d4ed8",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.07em",
+  },
+
+  addOnAnswerQuestion: {
+    color: "#334155",
+    fontSize: 13,
+    lineHeight: 1.4,
+    fontWeight: 850,
+    overflowWrap: "anywhere",
+  },
+
+  addOnAnswerValue: {
+    color: "#0f172a",
+    fontSize: 15,
+    lineHeight: 1.45,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
   },
 
   dietaryCell: {
