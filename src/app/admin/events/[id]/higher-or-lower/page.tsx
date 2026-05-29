@@ -576,7 +576,6 @@ async function listGameRounds(input: {
     [input.tenantSlug, input.eventId, input.sessionId],
   );
 }
-
 async function listGameAnswers(input: {
   tenantSlug: string;
   eventId: string;
@@ -765,6 +764,7 @@ async function replacePrizeChainRounds(input: {
     [input.tenantSlug, input.eventId, input.sessionId],
   );
 }
+
 async function createSessionAction(formData: FormData) {
   "use server";
 
@@ -1451,6 +1451,7 @@ async function markWinnerAction(formData: FormData) {
 
   redirect(`/admin/events/${event.id}/higher-or-lower?success=winner-marked`);
 }
+
 function getSuccessMessage(value: string | undefined) {
   if (value === "session-created") {
     return "Higher or Lower prize-chain game created from the saved prize list.";
@@ -1484,7 +1485,6 @@ function getErrorMessage(value: string | undefined) {
 
   return cleanText(value);
 }
-
 function answersByEntryAndRound(answers: GameAnswer[]) {
   const map = new Map<string, GameAnswer>();
 
@@ -1683,8 +1683,8 @@ export default async function AdminHigherOrLowerGamePage({
       </section>
 
       {!session ? (
-        <section style={styles.sectionCard}>
-          <div style={styles.sectionHeader}>
+        <section className="higher-lower-section-card" style={styles.sectionCard}>
+          <div className="higher-lower-section-header" style={styles.sectionHeader}>
             <div>
               <div style={styles.sectionEyebrow}>Setup</div>
               <h2 style={styles.sectionTitle}>Create prize-chain game</h2>
@@ -1722,7 +1722,7 @@ export default async function AdminHigherOrLowerGamePage({
             </div>
           ) : null}
 
-          <form action={createSessionAction} style={styles.formGrid}>
+          <form action={createSessionAction} className="higher-lower-form-grid" style={styles.formGrid}>
             <input type="hidden" name="event_id" value={event.id} />
 
             <label style={styles.field}>
@@ -1756,7 +1756,7 @@ export default async function AdminHigherOrLowerGamePage({
               </select>
             </label>
 
-            <label style={{ ...styles.field, gridColumn: "1 / -1" }}>
+            <label className="higher-lower-wide-field" style={{ ...styles.field, gridColumn: "1 / -1" }}>
               <span style={styles.label}>Internal notes</span>
               <textarea
                 name="notes"
@@ -1766,7 +1766,7 @@ export default async function AdminHigherOrLowerGamePage({
               />
             </label>
 
-            <div style={styles.submitRow}>
+            <div className="higher-lower-submit-row" style={styles.submitRow}>
               <button
                 type="submit"
                 disabled={configuredPrizes.length < 2}
@@ -1791,6 +1791,7 @@ export default async function AdminHigherOrLowerGamePage({
               configuredPrizes.map((prize, index) => (
                 <div
                   key={prize.id || `${prize.title}-${index}`}
+                  className="higher-lower-prize-preview-card"
                   style={styles.prizePreviewCard}
                 >
                   {renderPrizeImage(prize.imageUrl, prize.title, true)}
@@ -1812,8 +1813,8 @@ export default async function AdminHigherOrLowerGamePage({
         </section>
       ) : (
         <>
-          <section style={styles.sectionCard}>
-            <div style={styles.sectionHeader}>
+          <section className="higher-lower-section-card" style={styles.sectionCard}>
+            <div className="higher-lower-section-header" style={styles.sectionHeader}>
               <div>
                 <div style={styles.sectionEyebrow}>Game control</div>
                 <h2 style={styles.sectionTitle}>{session.title}</h2>
@@ -1833,7 +1834,7 @@ export default async function AdminHigherOrLowerGamePage({
               </span>
             </div>
 
-            <form action={updateSessionAction} style={styles.formGrid}>
+            <form action={updateSessionAction} className="higher-lower-form-grid" style={styles.formGrid}>
               <input type="hidden" name="event_id" value={event.id} />
               <input type="hidden" name="session_id" value={session.id} />
 
@@ -1860,7 +1861,7 @@ export default async function AdminHigherOrLowerGamePage({
                 </select>
               </label>
 
-              <label style={{ ...styles.field, gridColumn: "1 / -1" }}>
+              <label className="higher-lower-wide-field" style={{ ...styles.field, gridColumn: "1 / -1" }}>
                 <span style={styles.label}>Internal notes</span>
                 <textarea
                   name="notes"
@@ -1870,7 +1871,7 @@ export default async function AdminHigherOrLowerGamePage({
                 />
               </label>
 
-              <div style={styles.submitRow}>
+              <div className="higher-lower-submit-row" style={styles.submitRow}>
                 <button type="submit" style={styles.primaryButton}>
                   Save game settings
                 </button>
@@ -1879,8 +1880,8 @@ export default async function AdminHigherOrLowerGamePage({
           </section>
 
           {winners.length > 0 ? (
-            <section style={styles.winnerPanel}>
-              <div style={styles.sectionHeader}>
+            <section className="higher-lower-winner-panel" style={styles.winnerPanel}>
+              <div className="higher-lower-section-header" style={styles.sectionHeader}>
                 <div>
                   <div style={styles.winnerEyebrow}>Winner declared</div>
                   <h2 style={styles.winnerTitle}>
@@ -1903,8 +1904,8 @@ export default async function AdminHigherOrLowerGamePage({
               </div>
             </section>
           ) : session.status !== "closed" && active.length === 1 ? (
-            <section style={styles.winnerPanel}>
-              <div style={styles.sectionHeader}>
+            <section className="higher-lower-winner-panel" style={styles.winnerPanel}>
+              <div className="higher-lower-section-header" style={styles.sectionHeader}>
                 <div>
                   <div style={styles.winnerEyebrow}>Last player standing</div>
                   <h2 style={styles.winnerTitle}>
@@ -1917,7 +1918,7 @@ export default async function AdminHigherOrLowerGamePage({
                   </p>
                 </div>
 
-                <form action={markWinnerAction}>
+                <form action={markWinnerAction} className="higher-lower-action-form">
                   <input type="hidden" name="event_id" value={event.id} />
                   <input type="hidden" name="session_id" value={session.id} />
                   <input type="hidden" name="entry_id" value={active[0]?.id || ""} />
@@ -1928,8 +1929,8 @@ export default async function AdminHigherOrLowerGamePage({
               </div>
             </section>
           ) : session.status !== "closed" && entries.length > 0 && active.length === 0 ? (
-            <section style={styles.noPlayersPanel}>
-              <div style={styles.sectionHeader}>
+            <section className="higher-lower-no-players-panel" style={styles.noPlayersPanel}>
+              <div className="higher-lower-section-header" style={styles.sectionHeader}>
                 <div>
                   <div style={styles.noPlayersEyebrow}>No active players remain</div>
                   <h2 style={styles.noPlayersTitle}>Tie-break or recovery needed</h2>
@@ -1951,7 +1952,11 @@ export default async function AdminHigherOrLowerGamePage({
               </div>
 
               {lastRevealedRound && lastRoundEliminatedEntries.length > 0 ? (
-                <form action={reviveLastRoundEliminatedAction} style={styles.recoveryBox}>
+                <form
+                  action={reviveLastRoundEliminatedAction}
+                  className="higher-lower-recovery-box"
+                  style={styles.recoveryBox}
+                >
                   <input type="hidden" name="event_id" value={event.id} />
                   <input type="hidden" name="session_id" value={session.id} />
                   <input
@@ -1987,6 +1992,7 @@ export default async function AdminHigherOrLowerGamePage({
                     <form
                       key={`manual-winner-${entry.id}`}
                       action={markWinnerAction}
+                      className="higher-lower-manual-winner-row"
                       style={styles.manualWinnerRow}
                     >
                       <input type="hidden" name="event_id" value={event.id} />
@@ -2015,8 +2021,8 @@ export default async function AdminHigherOrLowerGamePage({
             </section>
           ) : null}
 
-          <section style={styles.sectionCard}>
-            <div style={styles.sectionHeader}>
+          <section className="higher-lower-section-card" style={styles.sectionCard}>
+            <div className="higher-lower-section-header" style={styles.sectionHeader}>
               <div>
                 <div style={styles.sectionEyebrow}>Prize chain repair</div>
                 <h2 style={styles.sectionTitle}>Rebuild from saved prize list</h2>
@@ -2049,7 +2055,7 @@ export default async function AdminHigherOrLowerGamePage({
               </span>
             </div>
 
-            <form action={rebuildPrizeChainAction} style={styles.formGrid}>
+            <form action={rebuildPrizeChainAction} className="higher-lower-form-grid" style={styles.formGrid}>
               <input type="hidden" name="event_id" value={event.id} />
               <input type="hidden" name="session_id" value={session.id} />
 
@@ -2090,7 +2096,7 @@ export default async function AdminHigherOrLowerGamePage({
                 </div>
               </div>
 
-              <div style={styles.submitRow}>
+              <div className="higher-lower-submit-row" style={styles.submitRow}>
                 <button
                   type="submit"
                   disabled={configuredPrizes.length < 2}
@@ -2107,8 +2113,8 @@ export default async function AdminHigherOrLowerGamePage({
             </form>
           </section>
 
-          <section style={styles.sectionCard}>
-            <div style={styles.sectionHeader}>
+          <section className="higher-lower-section-card" style={styles.sectionCard}>
+            <div className="higher-lower-section-header" style={styles.sectionHeader}>
               <div>
                 <div style={styles.sectionEyebrow}>Starting prize</div>
                 <h2 style={styles.sectionTitle}>
@@ -2151,8 +2157,8 @@ export default async function AdminHigherOrLowerGamePage({
             ) : null}
           </section>
 
-          <section style={styles.sectionCard}>
-            <div style={styles.sectionHeader}>
+          <section className="higher-lower-section-card" style={styles.sectionCard}>
+            <div className="higher-lower-section-header" style={styles.sectionHeader}>
               <div>
                 <div style={styles.sectionEyebrow}>Entries</div>
                 <h2 style={styles.sectionTitle}>Generate player entries</h2>
@@ -2172,7 +2178,7 @@ export default async function AdminHigherOrLowerGamePage({
               <InfoCard label="Game entries created" value={entries.length} />
             </div>
 
-            <form action={generateEntriesAction} style={styles.submitRow}>
+            <form action={generateEntriesAction} className="higher-lower-submit-row" style={styles.submitRow}>
               <input type="hidden" name="event_id" value={event.id} />
               <input type="hidden" name="session_id" value={session.id} />
 
@@ -2182,8 +2188,8 @@ export default async function AdminHigherOrLowerGamePage({
             </form>
           </section>
 
-          <section style={styles.sectionCard}>
-            <div style={styles.sectionHeader}>
+          <section className="higher-lower-section-card" style={styles.sectionCard}>
+            <div className="higher-lower-section-header" style={styles.sectionHeader}>
               <div>
                 <div style={styles.sectionEyebrow}>Round control</div>
                 <h2 style={styles.sectionTitle}>Prize-chain rounds</h2>
@@ -2211,7 +2217,7 @@ export default async function AdminHigherOrLowerGamePage({
                       open={isOpen || isRevealed}
                       style={styles.roundCard}
                     >
-                      <summary style={styles.roundSummary}>
+                      <summary className="higher-lower-round-summary" style={styles.roundSummary}>
                         <div>
                           <strong>
                             Round {round.round_number}:{" "}
@@ -2315,7 +2321,11 @@ export default async function AdminHigherOrLowerGamePage({
                             })
                           )}
 
-                          <form action={revealRoundAction} style={styles.revealActionBox}>
+                          <form
+                            action={revealRoundAction}
+                            className="higher-lower-reveal-action-box"
+                            style={styles.revealActionBox}
+                          >
                             <input type="hidden" name="event_id" value={event.id} />
                             <input type="hidden" name="session_id" value={session.id} />
                             <input type="hidden" name="round_id" value={round.id} />
@@ -2356,14 +2366,14 @@ export default async function AdminHigherOrLowerGamePage({
             )}
           </section>
 
-          <section style={styles.sectionCard}>
-            <div style={styles.sectionHeader}>
+          <section className="higher-lower-section-card" style={styles.sectionCard}>
+            <div className="higher-lower-section-header" style={styles.sectionHeader}>
               <div>
                 <div style={styles.sectionEyebrow}>Players</div>
                 <h2 style={styles.sectionTitle}>Player status</h2>
               </div>
 
-              <form action={resetActiveEntriesAction}>
+              <form action={resetActiveEntriesAction} className="higher-lower-action-form">
                 <input type="hidden" name="event_id" value={event.id} />
                 <input type="hidden" name="session_id" value={session.id} />
                 <button type="submit" style={styles.secondaryLightButton}>
@@ -2404,7 +2414,7 @@ export default async function AdminHigherOrLowerGamePage({
                     </span>
 
                     {entry.status === "active" && active.length <= 3 ? (
-                      <form action={markWinnerAction}>
+                      <form action={markWinnerAction} className="higher-lower-action-form">
                         <input type="hidden" name="event_id" value={event.id} />
                         <input type="hidden" name="session_id" value={session.id} />
                         <input type="hidden" name="entry_id" value={entry.id} />
@@ -2461,17 +2471,30 @@ const responsiveStyles = `
 .higher-lower-page select,
 .higher-lower-page button,
 .higher-lower-page a,
-.higher-lower-page img {
+.higher-lower-page img,
+.higher-lower-page summary,
+.higher-lower-page details {
   min-width: 0;
   max-width: 100%;
 }
 
-@media (max-width: 860px) {
+.higher-lower-page button,
+.higher-lower-page a,
+.higher-lower-page select,
+.higher-lower-page input,
+.higher-lower-page textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (max-width: 980px) {
   .higher-lower-hero {
     grid-template-columns: 1fr !important;
   }
 
   .higher-lower-hero-actions {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    width: 100% !important;
     justify-content: stretch !important;
   }
 
@@ -2483,33 +2506,123 @@ const responsiveStyles = `
   .higher-lower-mini-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
-}
 
-@media (max-width: 720px) {
-  .higher-lower-answer-row,
-  .higher-lower-player-card {
+  .higher-lower-recovery-box,
+  .higher-lower-manual-winner-row,
+  .higher-lower-reveal-action-box {
     grid-template-columns: 1fr !important;
+  }
+
+  .higher-lower-recovery-box button,
+  .higher-lower-manual-winner-row button,
+  .higher-lower-reveal-action-box button {
+    width: 100% !important;
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 760px) {
   .higher-lower-page {
-    padding: 18px 12px 44px !important;
+    padding: 16px 10px 44px !important;
   }
 
   .higher-lower-hero {
-    padding: 20px !important;
-    border-radius: 26px !important;
+    padding: 18px !important;
+    border-radius: 24px !important;
+    gap: 14px !important;
   }
 
   .higher-lower-title {
-    font-size: clamp(38px, 12vw, 54px) !important;
+    font-size: clamp(36px, 13vw, 56px) !important;
     line-height: 0.98 !important;
+    letter-spacing: -0.06em !important;
+  }
+
+  .higher-lower-hero-actions {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  .higher-lower-section-card,
+  .higher-lower-winner-panel,
+  .higher-lower-no-players-panel {
+    padding: 16px !important;
+    border-radius: 22px !important;
+  }
+
+  .higher-lower-section-header {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .higher-lower-form-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .higher-lower-wide-field,
+  .higher-lower-submit-row {
+    grid-column: auto !important;
+  }
+
+  .higher-lower-submit-row {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    justify-content: stretch !important;
+  }
+
+  .higher-lower-submit-row button,
+  .higher-lower-action-form,
+  .higher-lower-action-form button {
+    width: 100% !important;
   }
 
   .higher-lower-summary-grid,
   .higher-lower-mini-grid {
     grid-template-columns: 1fr !important;
+  }
+
+  .higher-lower-prize-preview-card {
+    grid-template-columns: 76px minmax(0, 1fr) !important;
+    padding: 12px !important;
+  }
+
+  .higher-lower-answer-row,
+  .higher-lower-player-card {
+    grid-template-columns: 1fr !important;
+    align-items: stretch !important;
+  }
+
+  .higher-lower-answer-row select,
+  .higher-lower-answer-row button,
+  .higher-lower-player-card button {
+    width: 100% !important;
+  }
+
+  .higher-lower-round-summary {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    align-items: start !important;
+  }
+
+  .higher-lower-round-summary > span {
+    width: fit-content !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .higher-lower-page {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  .higher-lower-section-card,
+  .higher-lower-winner-panel,
+  .higher-lower-no-players-panel {
+    padding: 14px !important;
+  }
+
+  .higher-lower-title {
+    font-size: clamp(34px, 14vw, 48px) !important;
   }
 }
 `;
