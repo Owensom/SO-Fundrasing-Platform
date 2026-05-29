@@ -32,6 +32,7 @@ type EventOrderExportRow = {
   guest_name: string | null;
   dietary_requirements: string | null;
   menu_choice: string | null;
+  metadata: Record<string, unknown> | null;
 
   seat_id: string | null;
   table_number: string | null;
@@ -75,7 +76,89 @@ function fallbackText(value: unknown) {
   return String(value || "").trim();
 }
 
+function rowMetadata(row: EventOrderExportRow) {
+  if (
+    row.metadata &&
+    typeof row.metadata === "object" &&
+    !Array.isArray(row.metadata)
+  ) {
+    return row.metadata;
+  }
+
+  return {};
+}
+
+function metadataText(row: EventOrderExportRow, key: string) {
+  return String(rowMetadata(row)[key] || "").trim();
+}
+
+function addOnType(row: EventOrderExportRow) {
+  const metadataType = metadataText(row, "addOnType");
+
+  if (metadataType) {
+    return metadataType;
+  }
+
+  const label = String(row.item_label || "").trim().toLowerCase();
+
+  if (label.includes("higher or lower")) return "higher_or_lower";
+  if (label.includes("heads or tails")) return "heads_or_tails";
+
+  if (
+    label.startsWith("event add-on") ||
+    (!row.ticket_type_id && !row.seat_id && label.includes("add-on"))
+  ) {
+    return "event_addon";
+  }
+
+  return "";
+}
+
+function addOnTitle(row: EventOrderExportRow) {
+  const metadataTitle = metadataText(row, "addOnTitle");
+
+  if (metadataTitle) {
+    return metadataTitle;
+  }
+
+  const label = ticketLabel(row)
+    .replace(/^event add-on\s*[—-]\s*/i, "")
+    .replace(/^add-on\s*[—-]\s*/i, "")
+    .trim();
+
+  return isEventAddOnItem(row) ? label || "Event add-on" : "";
+}
+
+function addOnQuestion(row: EventOrderExportRow) {
+  return metadataText(row, "legalQuestionText");
+}
+
+function addOnAnswer(row: EventOrderExportRow) {
+  return metadataText(row, "buyerAnswer");
+}
+
+function isEventAddOnItem(row: EventOrderExportRow) {
+  const metadata = rowMetadata(row);
+  const kind = String(metadata.kind || "").trim().toLowerCase();
+  const type = addOnType(row);
+  const label = String(row.item_label || "").trim().toLowerCase();
+
+  return (
+    kind === "event_addon" ||
+    type === "heads_or_tails" ||
+    type === "higher_or_lower" ||
+    label.startsWith("event add-on") ||
+    label.includes("heads or tails") ||
+    label.includes("higher or lower") ||
+    (!row.ticket_type_id && !row.seat_id && label.includes("add-on"))
+  );
+}
+
 function seatLabel(row: EventOrderExportRow) {
+  if (isEventAddOnItem(row)) {
+    return "Event add-on";
+  }
+
   if (row.table_number) {
     return `Table ${row.table_number}, Seat ${row.seat_number || "?"}`;
   }
@@ -180,6 +263,7 @@ async function listEventOrderExportRows(eventId: string) {
         eoi.guest_name,
         eoi.dietary_requirements,
         eoi.menu_choice,
+        eoi.metadata,
 
         eoi.seat_id::text,
         es.table_number,
@@ -235,12 +319,18 @@ export async function GET(request: NextRequest, context: RouteContext) {
     "Seat purpose",
     "Menu choice",
     "Dietary requirements",
+    "Is event add-on",
+    "Add-on type",
+    "Add-on title",
+    "Higher or Lower question",
+    "Higher or Lower answer",
   ];
 
   const csvRows = [
     headers.map(csvEscape).join(","),
     ...rows.map((row) => {
       const currency = row.currency || access.event.currency || "GBP";
+      const isAddOn = isEventAddOnItem(row);
 
       return [
         row.order_id,
@@ -262,6 +352,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
         row.seat_purpose,
         fallbackText(row.menu_choice),
         fallbackText(row.dietary_requirements),
+        isAddOn ? "Yes" : "No",
+        isAddOn ? addOnType(row) : "",
+        isAddOn ? addOnTitle(row) : "",
+        addOnQuestion(row),
+        addOnAnswer(row),
       ]
         .map(csvEscape)
         .join(",");
