@@ -256,8 +256,11 @@ export default function HigherOrLowerRevealEditor({
                   defaultValue={prize?.id || ""}
                 />
 
-                <div style={styles.publicRevealBox}>
-                  <div>
+                <div
+                  className="higher-lower-reveal-public-box"
+                  style={styles.publicRevealBox}
+                >
+                  <div style={styles.publicRevealCopy}>
                     <strong style={styles.publicRevealTitle}>
                       Public preview status
                     </strong>
@@ -268,17 +271,19 @@ export default function HigherOrLowerRevealEditor({
                     </p>
                   </div>
 
-                  <Field label="Reveal status">
-                    <select
-                      name={`prize_reveal_prize_${index}_is_revealed`}
-                      defaultValue={prize?.isRevealed ? "true" : "false"}
-                      className="input"
-                      style={styles.input}
-                    >
-                      <option value="false">Hidden from public preview</option>
-                      <option value="true">Shown in public preview</option>
-                    </select>
-                  </Field>
+                  <div style={styles.publicRevealFieldWrap}>
+                    <Field label="Reveal status">
+                      <select
+                        name={`prize_reveal_prize_${index}_is_revealed`}
+                        defaultValue={prize?.isRevealed ? "true" : "false"}
+                        className="input"
+                        style={styles.input}
+                      >
+                        <option value="false">Hidden from public preview</option>
+                        <option value="true">Shown in public preview</option>
+                      </select>
+                    </Field>
+                  </div>
                 </div>
 
                 <div className="higher-lower-reveal-two-col" style={styles.twoCol}>
@@ -388,21 +393,22 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #fde68a",
     boxShadow: "0 10px 26px rgba(15,23,42,0.06)",
     overflow: "hidden",
+    minWidth: 0,
+    maxWidth: "100%",
   },
 
   summary: {
-    display: "flex",
-    justifyContent: "space-between",
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
     gap: 14,
     alignItems: "flex-start",
-    flexWrap: "wrap",
     cursor: "pointer",
     listStyle: "none",
+    minWidth: 0,
   },
 
   summaryCopy: {
     minWidth: 0,
-    flex: "1 1 420px",
   },
 
   summaryActions: {
@@ -411,12 +417,14 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "flex-end",
+    minWidth: 0,
   },
 
   body: {
     display: "grid",
     gap: 14,
     marginTop: 16,
+    minWidth: 0,
   },
 
   eyebrow: {
@@ -434,6 +442,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 24,
     lineHeight: 1.05,
     letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
   },
 
   text: {
@@ -443,11 +452,13 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.5,
     fontWeight: 750,
     maxWidth: 780,
+    overflowWrap: "anywhere",
   },
 
   badge: {
     display: "inline-flex",
     width: "fit-content",
+    maxWidth: "100%",
     padding: "8px 12px",
     borderRadius: 999,
     background: "#fef3c7",
@@ -457,11 +468,14 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.04em",
+    textAlign: "center",
+    whiteSpace: "normal",
   },
 
   toggle: {
     display: "inline-flex",
     width: "fit-content",
+    maxWidth: "100%",
     padding: "8px 12px",
     borderRadius: 999,
     background: "#ffffff",
@@ -471,7 +485,8 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.04em",
-    whiteSpace: "nowrap",
+    whiteSpace: "normal",
+    textAlign: "center",
   },
 
   notice: {
@@ -485,12 +500,14 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.45,
     fontWeight: 850,
+    overflowWrap: "anywhere",
   },
 
   twoCol: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 12,
+    minWidth: 0,
   },
 
   gameLengthPanel: {
@@ -500,6 +517,8 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 18,
     background: "#ffffff",
     border: "1px solid #fde68a",
+    minWidth: 0,
+    overflow: "hidden",
   },
 
   gameLengthEyebrow: {
@@ -517,6 +536,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 18,
     lineHeight: 1.1,
     letterSpacing: "-0.035em",
+    overflowWrap: "anywhere",
   },
 
   gameLengthText: {
@@ -525,6 +545,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.5,
     fontWeight: 750,
+    overflowWrap: "anywhere",
   },
 
   roundPreview: {
@@ -539,22 +560,27 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 15,
     fontWeight: 950,
     boxSizing: "border-box",
+    minWidth: 0,
+    overflowWrap: "anywhere",
   },
 
   field: {
     display: "grid",
     gap: 6,
     minWidth: 0,
+    width: "100%",
   },
 
   label: {
     color: "#334155",
     fontSize: 13,
     fontWeight: 950,
+    overflowWrap: "anywhere",
   },
 
   input: {
     width: "100%",
+    maxWidth: "100%",
     minHeight: 44,
     padding: "10px 12px",
     borderRadius: 13,
@@ -568,6 +594,7 @@ const styles: Record<string, CSSProperties> = {
 
   textarea: {
     width: "100%",
+    maxWidth: "100%",
     padding: "10px 12px",
     borderRadius: 13,
     border: "1px solid #cbd5e1",
@@ -577,11 +604,13 @@ const styles: Record<string, CSSProperties> = {
     resize: "vertical",
     boxSizing: "border-box",
     minWidth: 0,
+    fontFamily: "inherit",
   },
 
   rows: {
     display: "grid",
     gap: 12,
+    minWidth: 0,
   },
 
   row: {
@@ -593,21 +622,21 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 10px rgba(15,23,42,0.035)",
     overflow: "hidden",
+    minWidth: 0,
   },
 
   rowSummary: {
-    display: "flex",
-    justifyContent: "space-between",
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
     gap: 12,
     alignItems: "flex-start",
-    flexWrap: "wrap",
     cursor: "pointer",
     listStyle: "none",
+    minWidth: 0,
   },
 
   rowCopy: {
     minWidth: 0,
-    flex: "1 1 360px",
   },
 
   rowActions: {
@@ -616,12 +645,14 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "flex-end",
+    minWidth: 0,
   },
 
   rowBody: {
     display: "grid",
     gap: 12,
     marginTop: 14,
+    minWidth: 0,
   },
 
   rowEyebrow: {
@@ -649,16 +680,20 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     lineHeight: 1.4,
     fontWeight: 750,
+    overflowWrap: "anywhere",
   },
 
   rowStatus: {
     display: "inline-flex",
     width: "fit-content",
+    maxWidth: "100%",
     padding: "8px 12px",
     borderRadius: 999,
     border: "1px solid",
     fontSize: 12,
     fontWeight: 950,
+    whiteSpace: "normal",
+    textAlign: "center",
   },
 
   rowStatusRevealed: {
@@ -675,13 +710,25 @@ const styles: Record<string, CSSProperties> = {
 
   publicRevealBox: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(220px, 0.35fr)",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(0, 300px)",
     gap: 12,
-    alignItems: "center",
+    alignItems: "stretch",
     padding: 14,
     borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
+    minWidth: 0,
+    overflow: "hidden",
+  },
+
+  publicRevealCopy: {
+    minWidth: 0,
+    overflowWrap: "anywhere",
+  },
+
+  publicRevealFieldWrap: {
+    minWidth: 0,
+    width: "100%",
   },
 
   publicRevealTitle: {
@@ -690,6 +737,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 15,
     fontWeight: 950,
     marginBottom: 4,
+    overflowWrap: "anywhere",
   },
 
   publicRevealText: {
@@ -698,6 +746,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.45,
     fontWeight: 750,
+    overflowWrap: "anywhere",
   },
 
   imageUploadShell: {
