@@ -177,6 +177,8 @@ function statusLabel(value: string | null | undefined) {
   if (clean === "eliminated") return "Eliminated";
   if (clean === "winner") return "Winner";
   if (clean === "withdrawn") return "Withdrawn";
+  if (clean === "higher") return "Higher";
+  if (clean === "lower") return "Lower";
 
   return clean || "Unknown";
 }
@@ -1171,6 +1173,51 @@ async function revealRoundAction(formData: FormData) {
   redirect(`/admin/events/${event.id}/higher-or-lower?success=round-revealed`);
 }
 
+async function reviveLastRoundEliminatedAction(formData: FormData) {
+  "use server";
+
+  const eventId = cleanText(formData.get("event_id"));
+  const sessionId = cleanText(formData.get("session_id"));
+  const roundNumber = positiveInteger(formData.get("round_number"), 0);
+
+  if (!eventId || !sessionId || roundNumber <= 0) {
+    redirect("/admin/events");
+  }
+
+  const { event, tenantSlug } = await requireEventAccess(eventId);
+
+  await query(
+    `
+      update event_addon_game_entries
+      set
+        status = 'active',
+        eliminated_round_number = null,
+        updated_at = now()
+      where tenant_slug = $1
+        and event_id = $2
+        and session_id = $3
+        and status = 'eliminated'
+        and eliminated_round_number = $4
+    `,
+    [tenantSlug, event.id, sessionId, roundNumber],
+  );
+
+  await query(
+    `
+      update event_addon_game_sessions
+      set
+        status = 'draft',
+        updated_at = now()
+      where tenant_slug = $1
+        and event_id = $2
+        and id = $3
+    `,
+    [tenantSlug, event.id, sessionId],
+  );
+
+  redirect(`/admin/events/${event.id}/higher-or-lower?success=players-revived`);
+}
+
 async function resetActiveEntriesAction(formData: FormData) {
   "use server";
 
@@ -1307,6 +1354,9 @@ function getSuccessMessage(value: string | undefined) {
   }
   if (value === "winner-marked") return "Winner marked and game closed.";
   if (value === "game-reset") return "Game entries and rounds have been reset.";
+  if (value === "players-revived") {
+    return "Players eliminated in the last revealed round have been reopened.";
+  }
 
   return "";
 }
@@ -1358,6 +1408,24 @@ function previousRoundFor(rounds: GameRound[], round: GameRound) {
       (currentRound) =>
         Number(currentRound.round_number || 0) === previousRoundNumber,
     ) || null
+  );
+}
+
+function lastRevealedPlayableRound(rounds: GameRound[]) {
+  return (
+    playableRounds(rounds)
+      .filter((round) => round.status === "revealed")
+      .sort((a, b) => Number(b.round_number || 0) - Number(a.round_number || 0))[0] ||
+    null
+  );
+}
+
+function nextOpenRound(rounds: GameRound[]) {
+  return (
+    playableRounds(rounds)
+      .filter((round) => round.status === "open")
+      .sort((a, b) => Number(a.round_number || 0) - Number(b.round_number || 0))[0] ||
+    null
   );
 }
 
@@ -1414,6 +1482,15 @@ export default async function AdminHigherOrLowerGamePage({
   const eliminated = eliminatedEntries(entries);
   const gameRounds = playableRounds(rounds);
   const baseline = startingRound(rounds);
+  const lastRevealedRound = lastRevealedPlayableRound(rounds);
+  const openRound = nextOpenRound(rounds);
+  const lastRoundEliminatedEntries = lastRevealedRound
+    ? eliminated.filter(
+        (entry) =>
+          Number(entry.eliminated_round_number || 0) ===
+          Number(lastRevealedRound.round_number || 0),
+      )
+    : [];
 
   const paidEntryCount = paidHigherOrLowerItems.reduce(
     (sum, item) => sum + Math.max(1, positiveInteger(item.quantity, 1)),
@@ -1511,10 +1588,7 @@ export default async function AdminHigherOrLowerGamePage({
               label="Prize order"
               value={prizeRevealRandomiseOrder ? "Randomise once" : "Saved order"}
             />
-            <InfoCard
-              label="Eligible players"
-              value="Paid Higher or Lower only"
-            />
+            <InfoCard label="Eligible players" value="Paid Higher or Lower only" />
             <InfoCard label="Minimum required" value="2 valued prizes" />
           </div>
 
@@ -1680,6 +1754,143 @@ export default async function AdminHigherOrLowerGamePage({
               </div>
             </form>
           </section>
+
+          {winners.length > 0 ? (
+            <section style={styles.winnerPanel}>
+              <div style={styles.sectionHeader}>
+                <div>
+                  <div style={styles.winnerEyebrow}>Winner declared</div>
+                  <h2 style={styles.winnerTitle}>
+                    {winners[0]?.player_name || "Unnamed player"} #{winners[0]?.entry_number}
+                  </h2>
+                  <p style={styles.winnerText}>
+                    The game is closed. This winner can be shown on the public
+                    display once the display route is added.
+                  </p>
+                </div>
+
+                <span
+                  style={{
+                    ...styles.statusPill,
+                    ...statusStyle("winner"),
+                  }}
+                >
+                  Winner
+                </span>
+              </div>
+            </section>
+          ) : session.status !== "closed" && active.length === 1 ? (
+            <section style={styles.winnerPanel}>
+              <div style={styles.sectionHeader}>
+                <div>
+                  <div style={styles.winnerEyebrow}>Last player standing</div>
+                  <h2 style={styles.winnerTitle}>
+                    {active[0]?.player_name || "Unnamed player"} #{active[0]?.entry_number}
+                  </h2>
+                  <p style={styles.winnerText}>
+                    Only one active player remains. You can declare them as the
+                    winner now, even if not every planned prize round has been
+                    played.
+                  </p>
+                </div>
+
+                <form action={markWinnerAction}>
+                  <input type="hidden" name="event_id" value={event.id} />
+                  <input type="hidden" name="session_id" value={session.id} />
+                  <input type="hidden" name="entry_id" value={active[0]?.id || ""} />
+                  <button type="submit" style={styles.winnerButtonLarge}>
+                    Declare winner
+                  </button>
+                </form>
+              </div>
+            </section>
+          ) : session.status !== "closed" && entries.length > 0 && active.length === 0 ? (
+            <section style={styles.noPlayersPanel}>
+              <div style={styles.sectionHeader}>
+                <div>
+                  <div style={styles.noPlayersEyebrow}>No active players remain</div>
+                  <h2 style={styles.noPlayersTitle}>Tie-break or recovery needed</h2>
+                  <p style={styles.noPlayersText}>
+                    Everyone has been eliminated. Reopen the players eliminated
+                    in the last revealed round, or manually choose a winner from
+                    the eliminated entries.
+                  </p>
+                </div>
+
+                <span
+                  style={{
+                    ...styles.statusPill,
+                    ...statusStyle("closed"),
+                  }}
+                >
+                  No active players
+                </span>
+              </div>
+
+              {lastRevealedRound && lastRoundEliminatedEntries.length > 0 ? (
+                <form action={reviveLastRoundEliminatedAction} style={styles.recoveryBox}>
+                  <input type="hidden" name="event_id" value={event.id} />
+                  <input type="hidden" name="session_id" value={session.id} />
+                  <input
+                    type="hidden"
+                    name="round_number"
+                    value={lastRevealedRound.round_number}
+                  />
+
+                  <div>
+                    <strong style={styles.recoveryTitle}>
+                      Reopen round {lastRevealedRound.round_number} eliminations
+                    </strong>
+                    <p style={styles.recoveryText}>
+                      This will reactivate {lastRoundEliminatedEntries.length} player
+                      {lastRoundEliminatedEntries.length === 1 ? "" : "s"} who were
+                      eliminated in the last revealed round.
+                    </p>
+                  </div>
+
+                  <button type="submit" style={styles.primaryButton}>
+                    Reopen last-round players
+                  </button>
+                </form>
+              ) : null}
+
+              <div style={styles.manualWinnerList}>
+                {eliminated.length === 0 ? (
+                  <div style={styles.emptyState}>
+                    No eliminated players are available to select manually.
+                  </div>
+                ) : (
+                  eliminated.map((entry) => (
+                    <form
+                      key={`manual-winner-${entry.id}`}
+                      action={markWinnerAction}
+                      style={styles.manualWinnerRow}
+                    >
+                      <input type="hidden" name="event_id" value={event.id} />
+                      <input type="hidden" name="session_id" value={session.id} />
+                      <input type="hidden" name="entry_id" value={entry.id} />
+
+                      <div>
+                        <div style={styles.playerName}>
+                          {entry.player_name || "Unnamed player"} #{entry.entry_number}
+                        </div>
+                        <div style={styles.metaText}>
+                          {entry.player_email || "No email"}
+                          {entry.eliminated_round_number
+                            ? ` · Eliminated round ${entry.eliminated_round_number}`
+                            : ""}
+                        </div>
+                      </div>
+
+                      <button type="submit" style={styles.winnerButton}>
+                        Mark as winner
+                      </button>
+                    </form>
+                  ))
+                )}
+              </div>
+            </section>
+          ) : null}
 
           <section style={styles.sectionCard}>
             <div style={styles.sectionHeader}>
@@ -1853,6 +2064,12 @@ export default async function AdminHigherOrLowerGamePage({
               <div>
                 <div style={styles.sectionEyebrow}>Round control</div>
                 <h2 style={styles.sectionTitle}>Prize-chain rounds</h2>
+                {openRound ? (
+                  <p style={styles.sectionText}>
+                    Current public question will be: Higher or lower than the
+                    previous revealed prize?
+                  </p>
+                ) : null}
               </div>
             </div>
 
@@ -2469,6 +2686,18 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
   },
 
+  winnerButtonLarge: {
+    minHeight: 48,
+    padding: "13px 18px",
+    borderRadius: 999,
+    background: "#facc15",
+    color: "#422006",
+    border: "none",
+    fontWeight: 950,
+    cursor: "pointer",
+    boxShadow: "0 14px 26px rgba(250,204,21,0.24)",
+  },
+
   secondaryLightButton: {
     minHeight: 40,
     padding: "9px 13px",
@@ -2491,6 +2720,122 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     fontWeight: 950,
     textTransform: "capitalize",
+  },
+
+  winnerPanel: {
+    display: "grid",
+    gap: 14,
+    padding: 22,
+    borderRadius: 26,
+    background:
+      "radial-gradient(circle at top left, rgba(250,204,21,0.22), transparent 35%), linear-gradient(135deg, #fffbeb 0%, #ffffff 65%)",
+    border: "1px solid #fde68a",
+    boxShadow: "0 14px 32px rgba(146,64,14,0.08)",
+    marginBottom: 18,
+  },
+
+  winnerEyebrow: {
+    color: "#92400e",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 6,
+  },
+
+  winnerTitle: {
+    margin: 0,
+    color: "#422006",
+    fontSize: 32,
+    lineHeight: 1.05,
+    letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
+  },
+
+  winnerText: {
+    margin: "8px 0 0",
+    color: "#92400e",
+    lineHeight: 1.55,
+    fontWeight: 850,
+  },
+
+  noPlayersPanel: {
+    display: "grid",
+    gap: 14,
+    padding: 22,
+    borderRadius: 26,
+    background:
+      "radial-gradient(circle at top left, rgba(239,68,68,0.12), transparent 34%), linear-gradient(135deg, #fff7ed 0%, #ffffff 68%)",
+    border: "1px solid #fed7aa",
+    boxShadow: "0 14px 32px rgba(154,52,18,0.08)",
+    marginBottom: 18,
+  },
+
+  noPlayersEyebrow: {
+    color: "#c2410c",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 6,
+  },
+
+  noPlayersTitle: {
+    margin: 0,
+    color: "#7c2d12",
+    fontSize: 30,
+    lineHeight: 1.05,
+    letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
+  },
+
+  noPlayersText: {
+    margin: "8px 0 0",
+    color: "#9a3412",
+    lineHeight: 1.55,
+    fontWeight: 850,
+  },
+
+  recoveryBox: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 12,
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #fed7aa",
+  },
+
+  recoveryTitle: {
+    display: "block",
+    color: "#0f172a",
+    fontSize: 16,
+    fontWeight: 950,
+  },
+
+  recoveryText: {
+    margin: "4px 0 0",
+    color: "#9a3412",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 800,
+  },
+
+  manualWinnerList: {
+    display: "grid",
+    gap: 10,
+  },
+
+  manualWinnerRow: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 10,
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #fed7aa",
   },
 
   miniGrid: {
