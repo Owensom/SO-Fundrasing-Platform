@@ -125,6 +125,7 @@ function statusLabel(value: string | null | undefined) {
   if (clean === "active") return "Active";
   if (clean === "winner") return "Winner";
   if (clean === "eliminated") return "Eliminated";
+  if (clean === "paid") return "Paid";
   if (clean === "higher") return "Higher";
   if (clean === "lower") return "Lower";
 
@@ -134,7 +135,7 @@ function statusLabel(value: string | null | undefined) {
 function statusStyle(value: string | null | undefined): CSSProperties {
   const clean = cleanText(value).toLowerCase();
 
-  if (clean === "live" || clean === "open" || clean === "active") {
+  if (clean === "live" || clean === "open" || clean === "active" || clean === "paid") {
     return {
       background: "#dcfce7",
       color: "#166534",
@@ -593,7 +594,7 @@ export default async function PublicHigherOrLowerPlayPage({
         </div>
       </section>
 
-      <section style={heroStyle}>
+      <section className="hero" style={heroStyle}>
         <div style={styles.heroContent}>
           <Link href={`/e/${encodeURIComponent(event.slug)}`} style={styles.backLink}>
             ← Back to event
@@ -615,15 +616,17 @@ export default async function PublicHigherOrLowerPlayPage({
             </span>
           </div>
 
-          <h1 style={styles.heroTitle}>{entry.session_title || "Higher or Lower"}</h1>
+          <h1 className="heroTitle" style={styles.heroTitle}>
+            {entry.session_title || "Higher or Lower"}
+          </h1>
           <p style={styles.heroText}>
-            Choose Higher or Lower for the current open round. The next prize is
-            hidden until the organiser reveals it.
+            Choose Higher or Lower while the current round is open. The next
+            prize stays hidden until the organiser reveals it.
           </p>
         </div>
       </section>
 
-      <div style={styles.contentWrap}>
+      <div className="contentWrap" style={styles.contentWrap}>
         {successMessage ? <section style={styles.successBanner}>{successMessage}</section> : null}
         {errorMessage ? <section style={styles.errorBanner}>{errorMessage}</section> : null}
 
@@ -704,20 +707,20 @@ export default async function PublicHigherOrLowerPlayPage({
                 .
               </p>
 
-              <div style={styles.hiddenNextPrize}>
+              <div className="hiddenNextPrize" style={styles.hiddenNextPrize}>
                 <div style={styles.hiddenPrizeImageSmall}>
                   <div style={styles.hiddenPrizeIcon}>?</div>
                   <span>Next prize hidden</span>
                 </div>
                 <p style={styles.hiddenText}>
                   The next prize title, image, value and correct answer stay hidden
-                  until the organiser reveals this round on the live screen.
+                  until the organiser reveals this round.
                 </p>
               </div>
 
               {existingAnswer ? (
                 <div style={styles.currentAnswerBox}>
-                  Current saved answer: <strong>{statusLabel(existingAnswer.answer)}</strong>
+                  <strong>Current saved answer: {statusLabel(existingAnswer.answer)}</strong>
                   <span>Saved {formatDate(existingAnswer.submitted_at)}</span>
                 </div>
               ) : null}
@@ -756,7 +759,7 @@ export default async function PublicHigherOrLowerPlayPage({
           )}
         </section>
 
-        <section style={styles.roomLinkPanel}>
+        <section className="roomLinkPanel" style={styles.roomLinkPanel}>
           <div>
             <strong style={styles.roomLinkTitle}>Watching the live screen?</strong>
             <p style={styles.roomLinkText}>
@@ -795,60 +798,125 @@ const responsiveStyles = `
 .public-higher-lower-play-page article,
 .public-higher-lower-play-page img,
 .public-higher-lower-play-page a,
-.public-higher-lower-play-page button {
+.public-higher-lower-play-page button,
+.public-higher-lower-play-page form {
   min-width: 0;
   max-width: 100%;
 }
 
 @media (max-width: 980px) {
   .public-higher-lower-play-page .brandHeader,
-  .public-higher-lower-play-page .answerGrid {
-    grid-template-columns: 1fr !important;
+  .public-higher-lower-play-page .answerGrid,
+  .public-higher-lower-play-page .hiddenNextPrize,
+  .public-higher-lower-play-page .roomLinkPanel {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
   }
 }
 
-@media (max-width: 680px) {
+@media (max-width: 760px) {
   .public-higher-lower-play-page .brandHeader {
+    margin: 10px 10px 12px !important;
     padding: 12px !important;
     border-radius: 22px !important;
-    margin: 10px 10px 12px !important;
   }
 
   .public-higher-lower-play-page .brandIdentity {
-    grid-template-columns: 56px minmax(0, 1fr) !important;
+    grid-template-columns: 54px minmax(0, 1fr) !important;
   }
 
   .public-higher-lower-play-page .brandLogoWrap,
   .public-higher-lower-play-page .brandLogoFallback {
-    width: 56px !important;
-    height: 56px !important;
+    width: 54px !important;
+    height: 54px !important;
     border-radius: 16px !important;
   }
 
   .public-higher-lower-play-page .brandTitle {
-    font-size: clamp(24px, 8vw, 36px) !important;
-    letter-spacing: -0.06em !important;
+    font-size: clamp(24px, 8vw, 34px) !important;
+    line-height: 0.98 !important;
+    letter-spacing: -0.055em !important;
   }
 
-  .public-higher-lower-play-page .hero {
-    padding: 22px 14px !important;
+  .public-higher-lower-play-page .brandTagline {
+    font-size: 12px !important;
+  }
+
+  .public-higher-lower-play-page .heroContent {
+    padding: 24px 12px 26px !important;
   }
 
   .public-higher-lower-play-page .heroTitle {
-    font-size: clamp(42px, 14vw, 64px) !important;
-    line-height: 0.95 !important;
+    font-size: clamp(40px, 12vw, 56px) !important;
+    line-height: 0.96 !important;
+    letter-spacing: -0.06em !important;
+  }
+
+  .public-higher-lower-play-page .heroText {
+    font-size: 15px !important;
+    line-height: 1.45 !important;
+    margin-top: 12px !important;
+  }
+
+  .public-higher-lower-play-page .contentWrap {
+    padding: 12px 10px 0 !important;
+  }
+
+  .public-higher-lower-play-page .answerGrid {
+    gap: 12px !important;
+  }
+
+  .public-higher-lower-play-page .playerCard,
+  .public-higher-lower-play-page .baselineCard,
+  .public-higher-lower-play-page .questionCard,
+  .public-higher-lower-play-page .roomLinkPanel {
+    padding: 16px !important;
+    border-radius: 22px !important;
+  }
+
+  .public-higher-lower-play-page .playerName,
+  .public-higher-lower-play-page .baselineTitle,
+  .public-higher-lower-play-page .questionTitle {
+    font-size: clamp(32px, 9vw, 46px) !important;
+    line-height: 0.98 !important;
+    letter-spacing: -0.06em !important;
+  }
+
+  .public-higher-lower-play-page .questionText,
+  .public-higher-lower-play-page .hiddenText,
+  .public-higher-lower-play-page .roomLinkText {
+    font-size: 15px !important;
+    line-height: 1.5 !important;
+  }
+
+  .public-higher-lower-play-page .prizeImage {
+    max-height: 260px !important;
+  }
+
+  .public-higher-lower-play-page .hiddenPrizeImage,
+  .public-higher-lower-play-page .hiddenPrizeImageSmall {
+    min-height: 150px !important;
+    border-radius: 18px !important;
+  }
+
+  .public-higher-lower-play-page .hiddenPrizeIcon {
+    width: 58px !important;
+    height: 58px !important;
+    font-size: 34px !important;
   }
 
   .public-higher-lower-play-page .choiceForm {
     grid-template-columns: 1fr !important;
   }
 
-  .public-higher-lower-play-page .hiddenNextPrize {
-    grid-template-columns: 1fr !important;
+  .public-higher-lower-play-page .choiceButton {
+    min-height: 78px !important;
+    border-radius: 20px !important;
+    font-size: clamp(30px, 10vw, 44px) !important;
   }
 
-  .public-higher-lower-play-page .roomLinkPanel {
-    grid-template-columns: 1fr !important;
+  .public-higher-lower-play-page .roomLinkButton {
+    width: 100% !important;
   }
 }
 `;
@@ -1033,6 +1101,7 @@ const styles: Record<string, CSSProperties> = {
 
   statusPill: {
     display: "inline-flex",
+    width: "fit-content",
     padding: "8px 12px",
     borderRadius: 999,
     border: "1px solid",
@@ -1121,7 +1190,8 @@ const styles: Record<string, CSSProperties> = {
     fontSize: "clamp(34px, 7vw, 58px)",
     lineHeight: 0.94,
     letterSpacing: "-0.07em",
-    overflowWrap: "anywhere",
+    overflowWrap: "normal",
+    wordBreak: "normal",
   },
 
   playerMeta: {
@@ -1230,7 +1300,8 @@ const styles: Record<string, CSSProperties> = {
     fontSize: "clamp(30px, 6vw, 54px)",
     lineHeight: 0.98,
     letterSpacing: "-0.06em",
-    overflowWrap: "anywhere",
+    overflowWrap: "normal",
+    wordBreak: "normal",
   },
 
   baselineValue: {
@@ -1267,7 +1338,8 @@ const styles: Record<string, CSSProperties> = {
     fontSize: "clamp(42px, 8vw, 82px)",
     lineHeight: 0.9,
     letterSpacing: "-0.075em",
-    overflowWrap: "anywhere",
+    overflowWrap: "normal",
+    wordBreak: "normal",
   },
 
   questionText: {
@@ -1276,6 +1348,8 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 18,
     lineHeight: 1.5,
     fontWeight: 800,
+    overflowWrap: "normal",
+    wordBreak: "normal",
   },
 
   hiddenNextPrize: {
@@ -1295,6 +1369,8 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 15,
     lineHeight: 1.5,
     fontWeight: 800,
+    overflowWrap: "normal",
+    wordBreak: "normal",
   },
 
   currentAnswerBox: {
@@ -1362,7 +1438,8 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     fontSize: 18,
     lineHeight: 1.15,
-    overflowWrap: "anywhere",
+    overflowWrap: "normal",
+    wordBreak: "normal",
   },
 
   roomLinkText: {
@@ -1370,6 +1447,8 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     lineHeight: 1.5,
     fontWeight: 750,
+    overflowWrap: "normal",
+    wordBreak: "normal",
   },
 
   roomLinkButton: {
@@ -1383,7 +1462,8 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
-    whiteSpace: "nowrap",
+    whiteSpace: "normal",
+    textAlign: "center",
   },
 
   footer: {
