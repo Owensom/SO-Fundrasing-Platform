@@ -379,24 +379,6 @@ function buildPrizeRevealPrizesFromForm(formData: FormData) {
   );
 }
 
-function revealProgressText(prizes: EventPrizeRevealPrize[]) {
-  const total = prizes.length;
-  const revealed = prizes.filter((prize) => prize.isRevealed).length;
-
-  if (total === 0) {
-    return "No prizes saved yet";
-  }
-
-  return `${revealed} of ${total} revealed`;
-}
-
-function revealStatusLabel(prize: EventPrizeRevealPrize | null) {
-  if (!prize?.title) {
-    return "Empty row";
-  }
-
-  return prize.isRevealed ? "Revealed publicly" : "Hidden from reveal";
-}
 function normaliseAddOnForAdmin(
   addOn: EventFundraisingAddOnLike | null | undefined,
   definition: AddOnDefinition,
@@ -785,26 +767,40 @@ function buildAddOnReadiness(input: {
       label: "Prize reveal mode",
       value: prizeRevealEnabled ? "Configured" : "Off",
       detail: prizeRevealEnabled
-        ? "Prize reveal settings are saved and can be controlled by marking each prize hidden or revealed."
+        ? "Prize reveal settings are saved and can be controlled by the live Higher or Lower game page."
         : "Optional premium mode for prize-by-prize Higher or Lower reveals.",
       tone: prizeRevealEnabled ? "good" : "neutral",
     },
     {
-      label: "Reveal prizes",
+      label: "Game prizes",
       value:
         prizeRevealPrizeCount === 1
           ? "1 prize"
           : `${prizeRevealPrizeCount} prizes`,
       detail:
         prizeRevealPrizeCount > 0
-          ? "Prize reveal rows are stored inside this Higher or Lower add-on."
-          : "Add prize rows before using prize reveal mode publicly.",
+          ? "Saved prize rows are used to create the Higher or Lower live game chain."
+          : "Add prize rows before using prize reveal mode or live game mode.",
       tone:
-        prizeRevealEnabled && prizeRevealPrizeCount === 0
+        prizeRevealEnabled && prizeRevealPrizeCount < 2
           ? "warning"
-          : prizeRevealPrizeCount > 0
+          : prizeRevealPrizeCount >= 2
             ? "good"
             : "neutral",
+    },
+    {
+      label: "Playable rounds",
+      value:
+        prizeRevealPrizeCount >= 2
+          ? `${prizeRevealPrizeCount - 1} round${
+              prizeRevealPrizeCount - 1 === 1 ? "" : "s"
+            }`
+          : "No rounds",
+      detail:
+        prizeRevealPrizeCount >= 2
+          ? "Prize 1 is the starting value. Each later prize creates one Higher or Lower round."
+          : "At least two prizes are required for one playable round.",
+      tone: prizeRevealPrizeCount >= 2 ? "good" : "warning",
     },
     {
       label: "Prize images",
@@ -817,17 +813,17 @@ function buildAddOnReadiness(input: {
       tone: prizeRevealImages > 0 ? "good" : "neutral",
     },
     {
-      label: "Live reveal control",
+      label: "Public reveal control",
       value:
         prizeRevealPrizeCount > 0
           ? `${prizeRevealRevealed} / ${prizeRevealPrizeCount} revealed`
           : "No prizes",
       detail:
         prizeRevealPrizeCount > 0
-          ? "Use each prize row’s hidden/revealed control, then save the Higher or Lower settings."
-          : "Add at least one prize before using event-night reveal controls.",
+          ? "This controls the public preview only. The live game fixes its own order when created."
+          : "Add at least two prizes before using event-night reveal controls.",
       tone:
-        prizeRevealEnabled && prizeRevealPrizeCount > 0 ? "good" : "neutral",
+        prizeRevealEnabled && prizeRevealPrizeCount >= 2 ? "good" : "neutral",
     },
   ];
 }
@@ -839,7 +835,6 @@ function addOnReadyForCheckout(addOn: AdminEventFundraisingAddOn) {
     Number(addOn.entryPriceCents || 0) > 0
   );
 }
-
 function getVisibleConfiguredAddOnsForTier(
   configuredAddOns: ConfiguredAddOn[],
   tier: string,
@@ -976,6 +971,7 @@ async function saveEventAddOnAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}/addons?saved=${definition.savedParam}`);
 }
+
 export default async function EventFundraisingAddOnsPage({
   params,
   searchParams,
@@ -1138,6 +1134,14 @@ export default async function EventFundraisingAddOnsPage({
             style={styles.secondaryButton}
           >
             View public event page
+          </Link>
+
+          <Link
+            href={`/admin/events/${encodeURIComponent(event.id)}/higher-or-lower`}
+            className="secondaryButton"
+            style={styles.secondaryButton}
+          >
+            Higher or Lower live game
           </Link>
 
           <Link
@@ -1387,7 +1391,7 @@ function AddOnSettingsPanel({
   currency: string;
   defaultOpen: boolean;
 }) {
-    const isHigherOrLower = definition.type === "higher_or_lower";
+  const isHigherOrLower = definition.type === "higher_or_lower";
   const prizeRevealPrizes = (addOn.prizeRevealPrizes || []).slice(
     0,
     MAX_PRIZE_REVEAL_PRIZES,
@@ -1599,79 +1603,50 @@ function AddOnSettingsPanel({
             </Field>
           </div>
                     {isHigherOrLower ? (
+            <HigherOrLowerPrizeRevealEditor
+              prizeRevealModeEnabled={Boolean(addOn.prizeRevealModeEnabled)}
+              prizeRevealRandomiseOrder={Boolean(
+                addOn.prizeRevealRandomiseOrder,
+              )}
+              prizeRevealTitle={addOn.prizeRevealTitle || ""}
+              prizeRevealDescription={addOn.prizeRevealDescription || ""}
+              prizeRevealPrizes={prizeRevealPrizes}
+              maxPrizes={MAX_PRIZE_REVEAL_PRIZES}
+              subscriptionTier={subscriptionTier}
+              customImagesAllowed={customImagesAllowed}
+            />
+          ) : null}
+
+          {isHigherOrLower ? (
             <details
               open={legalQuestionDefaultOpen}
-              className="legalQuestionPanel"
-              style={styles.legalQuestionPanel}
+              className="legalPanel"
+              style={styles.legalPanel}
             >
-              <summary
-                className="legalQuestionSummary"
-                style={styles.legalQuestionSummary}
-              >
+              <summary className="legalSummary" style={styles.legalSummary}>
                 <div>
-                  <div style={styles.legalQuestionEyebrow}>
-                    Legal / skill question
+                  <div style={styles.legalEyebrow}>
+                    Higher or Lower compliance helpers
                   </div>
-                  <h3 style={styles.legalQuestionTitle}>
-                    Higher or Lower entry safeguards
+
+                  <h3 style={styles.legalTitle}>
+                    Legal question and prize value range
                   </h3>
-                  <p style={styles.legalQuestionText}>
-                    Optional storage for a genuine skill, knowledge or judgement
-                    question, plus a public prize value range to help supporters
-                    make an informed judgement. This step saves the settings only
-                    and does not enforce checkout yet.
+
+                  <p style={styles.legalText}>
+                    Optional safeguards for paid Higher or Lower checkout
+                    entries. These settings preserve the current checkout flow
+                    while letting the organiser add a skill, knowledge or
+                    judgement question and clear value range wording.
                   </p>
                 </div>
 
-                <div style={styles.legalQuestionSummaryActions}>
-                  <span
-                    style={{
-                      ...styles.legalQuestionBadge,
-                      ...(addOn.legalQuestionEnabled
-                        ? styles.legalQuestionBadgeEnabled
-                        : styles.legalQuestionBadgeNeutral),
-                    }}
-                  >
-                    {addOn.legalQuestionEnabled
-                      ? "Question enabled"
-                      : "Optional"}
-                  </span>
-
-                  <span
-                    style={{
-                      ...styles.legalQuestionBadge,
-                      ...(addOn.prizeValueRangeEnabled && hasValidValueRange
-                        ? styles.legalQuestionBadgeEnabled
-                        : styles.legalQuestionBadgeNeutral),
-                    }}
-                  >
-                    {addOn.prizeValueRangeEnabled && hasValidValueRange
-                      ? `${formatMoney(
-                          valueRangeMinCents,
-                          currency,
-                        )} – ${formatMoney(valueRangeMaxCents, currency)}`
-                      : "Value range optional"}
-                  </span>
-
-                  <span style={styles.prizeRevealToggle}>Open / close</span>
-                </div>
+                <span style={styles.prizeRevealToggle}>Open / close</span>
               </summary>
 
-              <div style={styles.legalQuestionBody}>
-                <div style={styles.legalQuestionNotice}>
-                  <strong>Organiser responsibility</strong>
-                  <span>
-                    For paid online entries, organisers should use a genuine
-                    skill, knowledge or judgement question where appropriate and
-                    make sure their promotion is lawful for their event. Prize
-                    value ranges can help transparency, but they do not replace
-                    legal compliance. This is a configuration aid, not legal
-                    advice.
-                  </span>
-                </div>
-
+              <div style={styles.legalBody}>
                 <div className="twoCol" style={styles.twoCol}>
-                  <Field label="Enable legal / skill question">
+                  <Field label="Enable checkout question">
                     <select
                       name="legal_question_enabled"
                       defaultValue={
@@ -1680,8 +1655,10 @@ function AddOnSettingsPanel({
                       className="input"
                       style={styles.input}
                     >
-                      <option value="false">No, do not use a question</option>
-                      <option value="true">Yes, save a question</option>
+                      <option value="false">No, do not ask a question</option>
+                      <option value="true">
+                        Yes, require an answer at checkout
+                      </option>
                     </select>
                   </Field>
 
@@ -1696,23 +1673,22 @@ function AddOnSettingsPanel({
                   </Field>
                 </div>
 
-                <Field label="Question shown to supporters">
-                  <textarea
+                <Field label="Question text">
+                  <input
                     name="legal_question_text"
-                    rows={3}
                     defaultValue={addOn.legalQuestionText || ""}
-                    placeholder="Example: Which city is the capital of Scotland?"
-                    className="textarea"
-                    style={styles.textarea}
+                    placeholder="Example: What comes after A in the alphabet?"
+                    className="input"
+                    style={styles.input}
                   />
                 </Field>
 
-                <Field label="Helper text shown near the question">
+                <Field label="Helper text">
                   <textarea
                     name="legal_question_helper_text"
-                    rows={3}
+                    rows={2}
                     defaultValue={addOn.legalQuestionHelperText || ""}
-                    placeholder="Example: Answer the question correctly before adding Higher or Lower entries at checkout."
+                    placeholder="Optional helper text shown near the question."
                     className="textarea"
                     style={styles.textarea}
                   />
@@ -1720,21 +1696,18 @@ function AddOnSettingsPanel({
 
                 <div style={styles.valueRangePanel}>
                   <div>
-                    <div style={styles.valueRangeEyebrow}>
-                      Prize value range
-                    </div>
+                    <div style={styles.legalEyebrow}>Prize value range</div>
                     <h4 style={styles.valueRangeTitle}>
-                      Public value range transparency
+                      Optional prize range wording
                     </h4>
-                    <p style={styles.valueRangeText}>
-                      Use this to show supporters the approximate value range of
-                      the prizes, for example “Prizes range from £20 to £250”.
-                      This can support informed judgement during the game.
+                    <p style={styles.legalText}>
+                      Use this to make the Higher or Lower judgement clearer for
+                      supporters before checkout.
                     </p>
                   </div>
 
-                  <div className="twoCol" style={styles.twoCol}>
-                    <Field label="Show prize value range publicly">
+                  <div className="threeCol" style={styles.threeCol}>
+                    <Field label="Enable value range">
                       <select
                         name="prize_value_range_enabled"
                         defaultValue={
@@ -1743,368 +1716,89 @@ function AddOnSettingsPanel({
                         className="input"
                         style={styles.input}
                       >
-                        <option value="false">No, keep hidden</option>
-                        <option value="true">
-                          Yes, save public value range
-                        </option>
+                        <option value="false">No</option>
+                        <option value="true">Yes</option>
                       </select>
                     </Field>
 
-                    <Field label="Current range">
-                      <div style={styles.valueRangePreview}>
-                        {hasValidValueRange
-                          ? `${formatMoney(
-                              valueRangeMinCents,
-                              currency,
-                            )} – ${formatMoney(valueRangeMaxCents, currency)}`
-                          : "No valid range saved yet"}
-                      </div>
-                    </Field>
-                  </div>
-
-                  <div className="twoCol" style={styles.twoCol}>
-                    <Field label="Minimum prize value">
+                    <Field label="Minimum value">
                       <input
                         name="prize_value_range_min"
                         type="number"
                         step="0.01"
                         min="0"
-                        defaultValue={moneyFromCents(
-                          addOn.prizeValueRangeMinCents || 0,
-                        )}
+                        defaultValue={moneyFromCents(valueRangeMinCents)}
                         className="input"
                         style={styles.input}
                       />
                     </Field>
 
-                    <Field label="Maximum prize value">
+                    <Field label="Maximum value">
                       <input
                         name="prize_value_range_max"
                         type="number"
                         step="0.01"
                         min="0"
-                        defaultValue={moneyFromCents(
-                          addOn.prizeValueRangeMaxCents || 0,
-                        )}
+                        defaultValue={moneyFromCents(valueRangeMaxCents)}
                         className="input"
                         style={styles.input}
                       />
                     </Field>
                   </div>
 
-                  <Field label="Optional public value range note">
+                  <Field label="Value range note">
                     <textarea
                       name="prize_value_range_note"
-                      rows={3}
+                      rows={2}
                       defaultValue={addOn.prizeValueRangeNote || ""}
-                      placeholder="Example: Prize values are shown to help supporters make a judgement during the game."
+                      placeholder="Example: Prizes in this game range from £10 to £100."
                       className="textarea"
                       style={styles.textarea}
                     />
                   </Field>
+
+                  {addOn.prizeValueRangeEnabled && !hasValidValueRange ? (
+                    <div style={styles.warningNotice}>
+                      <strong>Prize value range needs attention</strong>
+                      <span>
+                        Add a valid minimum and maximum value before relying on
+                        this wording publicly.
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </details>
           ) : null}
 
-          {isHigherOrLower ? (
-            <details
-              open={prizeRevealDefaultOpen}
-              className="prizeRevealPanel"
-              style={styles.prizeRevealPanel}
-            >
-              <summary
-                className="prizeRevealSummary"
-                style={styles.prizeRevealSummary}
-              >
-                <div>
-                  <div style={styles.prizeRevealEyebrow}>
-                    Higher or Lower prize reveal mode
-                  </div>
-                  <h3 style={styles.prizeRevealTitle}>
-                    Prize reveal controls
-                  </h3>
-                  <p style={styles.prizeRevealText}>
-                    Set up the prizes, then use each prize row’s hidden/revealed
-                    control during the campaign or event night. Save the Higher
-                    or Lower settings to update the public preview.
-                  </p>
-                </div>
-
-                <div style={styles.prizeRevealSummaryActions}>
-                  <span style={styles.prizeRevealBadge}>{revealProgress}</span>
-                  <span style={styles.prizeRevealToggle}>Open / close</span>
-                </div>
-              </summary>
-
-              <div style={styles.prizeRevealBody}>
-                <div style={styles.revealControlNotice}>
-                  <strong>Event-night reveal control</strong>
-                  <span>
-                    Mark a prize as revealed when you are ready for it to appear
-                    as revealed on the public event page. Hidden prizes still
-                    show as hidden in the preview.
-                  </span>
-                </div>
-
-                <div className="twoCol" style={styles.twoCol}>
-                  <Field label="Enable prize reveal mode">
-                    <select
-                      name="prize_reveal_mode_enabled"
-                      defaultValue={
-                        addOn.prizeRevealModeEnabled ? "true" : "false"
-                      }
-                      className="input"
-                      style={styles.input}
-                    >
-                      <option value="false">
-                        No, keep prize reveal mode off
-                      </option>
-                      <option value="true">Yes, show prize reveal preview</option>
-                    </select>
-                  </Field>
-
-                  <Field label="Reveal order">
-                    <select
-                      name="prize_reveal_randomise_order"
-                      defaultValue={
-                        addOn.prizeRevealRandomiseOrder ? "true" : "false"
-                      }
-                      className="input"
-                      style={styles.input}
-                    >
-                      <option value="false">Use the order below</option>
-                      <option value="true">Randomise before the game</option>
-                    </select>
-                  </Field>
-                </div>
-
-                <Field label="Prize reveal title">
-                  <input
-                    name="prize_reveal_title"
-                    defaultValue={addOn.prizeRevealTitle || ""}
-                    placeholder="Higher or Lower Prize Reveal"
-                    className="input"
-                    style={styles.input}
-                  />
-                </Field>
-
-                <Field label="Prize reveal description">
-                  <textarea
-                    name="prize_reveal_description"
-                    rows={3}
-                    defaultValue={addOn.prizeRevealDescription || ""}
-                    placeholder="Add the prizes, reveal one at a time, and ask players whether the next value will be higher or lower."
-                    className="textarea"
-                    style={styles.textarea}
-                  />
-                </Field>
-
-                <input
-                  type="hidden"
-                  name="prize_reveal_prize_count"
-                  value={MAX_PRIZE_REVEAL_PRIZES}
-                />
-
-                <div style={styles.prizeRevealRows}>
-                  {prizeRevealRows.map((prize, index) => (
-                    <details
-                      key={prize?.id || `new-reveal-prize-${index + 1}`}
-                      open={Boolean(prize?.title)}
-                      style={styles.prizeRevealRow}
-                    >
-                      <summary
-                        className="prizeRevealRowHeader"
-                        style={styles.prizeRevealRowHeader}
-                      >
-                        <div>
-                          <span style={styles.prizeRevealRowEyebrow}>
-                            Prize {index + 1}
-                          </span>
-                          <strong style={styles.prizeRevealRowTitle}>
-                            {prize?.title || "Empty prize row"}
-                          </strong>
-                        </div>
-
-                        <div style={styles.prizeRevealRowActions}>
-                          <span
-                            style={{
-                              ...styles.prizeRevealRowStatus,
-                              ...(prize?.isRevealed
-                                ? styles.prizeRevealRowStatusRevealed
-                                : styles.prizeRevealRowStatusHidden),
-                            }}
-                          >
-                            {revealStatusLabel(prize)}
-                          </span>
-                          <span style={styles.prizeRevealToggle}>Open</span>
-                        </div>
-                      </summary>
-
-                      <div style={styles.prizeRevealRowBody}>
-                        <input
-                          type="hidden"
-                          name={`prize_reveal_prize_${index}_id`}
-                          defaultValue={prize?.id || ""}
-                        />
-
-                        <div style={styles.revealControlBox}>
-                          <div>
-                            <strong style={styles.revealControlTitle}>
-                              Public reveal status
-                            </strong>
-                            <p style={styles.revealControlText}>
-                              Use this during the event or campaign build-up.
-                              Change the status, save the Higher or Lower
-                              settings, then refresh the public page.
-                            </p>
-                          </div>
-
-                          <Field label="Reveal status">
-                            <select
-                              name={`prize_reveal_prize_${index}_is_revealed`}
-                              defaultValue={
-                                prize?.isRevealed ? "true" : "false"
-                              }
-                              className="input"
-                              style={styles.input}
-                            >
-                              <option value="false">
-                                Hidden — not revealed yet
-                              </option>
-                              <option value="true">
-                                Revealed — show as revealed publicly
-                              </option>
-                            </select>
-                          </Field>
-                        </div>
-
-                        <div className="twoCol" style={styles.twoCol}>
-                          <Field label="Prize name">
-                            <input
-                              name={`prize_reveal_prize_${index}_title`}
-                              defaultValue={prize?.title || ""}
-                              placeholder="Spa day, signed shirt, mystery hamper..."
-                              className="input"
-                              style={styles.input}
-                            />
-                          </Field>
-
-                          <Field label="Sponsor / donor">
-                            <input
-                              name={`prize_reveal_prize_${index}_sponsor_name`}
-                              defaultValue={prize?.sponsorName || ""}
-                              placeholder="Business, donor or sponsor name"
-                              className="input"
-                              style={styles.input}
-                            />
-                          </Field>
-                        </div>
-
-                        <div className="twoCol" style={styles.twoCol}>
-                          <Field label="Estimated value">
-                            <input
-                              name={`prize_reveal_prize_${index}_estimated_value`}
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              defaultValue={moneyFromCents(
-                                prize?.estimatedValueCents || 0,
-                              )}
-                              className="input"
-                              style={styles.input}
-                            />
-                          </Field>
-
-                          <Field label="Reveal order">
-                            <input
-                              name={`prize_reveal_prize_${index}_reveal_order`}
-                              type="number"
-                              min="1"
-                              defaultValue={prize?.revealOrder || index + 1}
-                              className="input"
-                              style={styles.input}
-                            />
-                          </Field>
-                        </div>
-
-                        <Field label="Prize description">
-                          <textarea
-                            name={`prize_reveal_prize_${index}_description`}
-                            rows={2}
-                            defaultValue={prize?.description || ""}
-                            placeholder="Short description for this prize."
-                            className="textarea"
-                            style={styles.textarea}
-                          />
-                        </Field>
-
-                        <div style={styles.prizeImageUploadShell}>
-                          <ImageFocusUploadField
-                            currentImageUrl={prize?.imageUrl || ""}
-                            currentFocusX={50}
-                            currentFocusY={50}
-                            imageFieldName={`prize_reveal_prize_${index}_image_url`}
-                            focusXFieldName={`prize_reveal_prize_${index}_image_focus_x`}
-                            focusYFieldName={`prize_reveal_prize_${index}_image_focus_y`}
-                            label={`Prize ${index + 1} image upload`}
-                            previewAlt={prize?.title || `Prize ${index + 1}`}
-                            subscriptionTier={subscriptionTier}
-                            customImagesAllowed={customImagesAllowed}
-                          />
-                        </div>
-                      </div>
-                    </details>
-                  ))}
-                </div>
-              </div>
-            </details>
+          {subscriptionTier === "professional" && !canUseMultipleAddOns ? (
+            <div style={styles.professionalNoticeLight}>
+              <strong>Professional plan limit</strong>
+              <span>
+                Professional can use one event fundraising add-on per event.
+                Foundation unlocks multiple add-ons together.
+              </span>
+            </div>
           ) : null}
 
-          {!canUseMultipleAddOns ? (
-            <div style={styles.professionalNotice}>
-              <strong>Professional add-on limit</strong>
-              <span>
-                This tenant can manage one event fundraising add-on per event.
-                Upgrade to Foundation for multiple add-ons together.
-              </span>
-            </div>
-          ) : (
-            <div style={styles.foundationNotice}>
-              <strong>Foundation add-ons enabled</strong>
-              <span>
-                This tenant can support multiple event fundraising add-ons per
-                event, including Heads or Tails and Higher or Lower together.
-              </span>
-            </div>
-          )}
-
-          <section className="submitBar" style={styles.submitBar}>
-            <div>
-              <strong style={{ color: "#0f172a" }}>
-                Save {definition.shortName} settings
-              </strong>
-              <div style={styles.mutedSmall}>
-                Updates this event only. Public display, checkout collection and
-                admin reporting use these saved settings.
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              className="primaryButton"
-              style={styles.primaryButton}
-            >
+          <div style={styles.submitRow}>
+            <button type="submit" style={styles.primaryButton}>
               Save {definition.shortName}
             </button>
-          </section>
+          </div>
         </form>
       </div>
     </details>
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
   return (
     <label style={styles.field}>
       <span style={styles.label}>{label}</span>
@@ -2154,83 +1848,84 @@ function UpgradeBanner({ title, text }: { title: string; text: string }) {
 }
 
 const responsiveStyles = `
-@media (max-width: 900px) {
-  .event-addons-page * {
-    box-sizing: border-box !important;
+.event-addons-page,
+.event-addons-page * {
+  box-sizing: border-box;
+}
+
+.event-addons-page {
+  overflow-x: hidden;
+}
+
+.event-addons-page section,
+.event-addons-page article,
+.event-addons-page div,
+.event-addons-page form,
+.event-addons-page input,
+.event-addons-page textarea,
+.event-addons-page select,
+.event-addons-page button,
+.event-addons-page a {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.event-addons-page summary::-webkit-details-marker {
+  display: none;
+}
+
+@media (max-width: 980px) {
+  .hero {
+    grid-template-columns: 1fr !important;
   }
 
-  .event-addons-page {
-    max-width: 100vw !important;
-    overflow-x: hidden !important;
+  .heroMetaGrid,
+  .summaryGrid,
+  .readinessOverviewGrid,
+  .readinessGrid,
+  .twoCol,
+  .threeCol {
+    grid-template-columns: 1fr !important;
+  }
+
+  .topActions {
+    grid-template-columns: 1fr !important;
+  }
+
+  .topActionsRight {
+    justify-content: stretch !important;
+  }
+
+  .topActionsRight a,
+  .topActions > a {
+    width: 100% !important;
   }
 }
 
-@media (max-width: 760px) {
-  .event-addons-page .heroMetaGrid,
-  .event-addons-page .summaryGrid,
-  .event-addons-page .readinessGrid,
-  .event-addons-page .readinessOverviewGrid,
-  .event-addons-page .twoCol,
-  .event-addons-page .threeCol {
-    grid-template-columns: 1fr !important;
-  }
-
-  .event-addons-page .hero,
-  .event-addons-page .topActions,
-  .event-addons-page .addOnAccordionSummary,
-  .event-addons-page .submitBar,
-  .event-addons-page .readinessHeader,
-  .event-addons-page .readinessActions,
-  .event-addons-page .legalQuestionSummary,
-  .event-addons-page .prizeRevealSummary,
-  .event-addons-page .prizeRevealRowHeader,
-  .event-addons-page .revealControlBox {
-    display: grid !important;
-    grid-template-columns: 1fr !important;
-    align-items: stretch !important;
-  }
-
-  .event-addons-page .topActionsRight,
-  .event-addons-page .addOnSummaryMeta {
-    display: grid !important;
-    grid-template-columns: 1fr !important;
-    gap: 10px !important;
-    width: 100% !important;
-  }
-
-  .event-addons-page .primaryButton,
-  .event-addons-page .primaryLink,
-  .event-addons-page .secondaryButton,
-  .event-addons-page .secondaryButtonDark {
-    width: 100% !important;
-    justify-content: center !important;
-    text-align: center !important;
-  }
-}
-
-@media (max-width: 520px) {
+@media (max-width: 720px) {
   .event-addons-page {
     padding: 18px 12px 44px !important;
   }
 
-  .event-addons-page .hero,
-  .event-addons-page .addOnAccordion,
-  .event-addons-page .lockedPanel,
-  .event-addons-page .upgradeBanner,
-  .event-addons-page .readinessPanel,
-  .event-addons-page .legalQuestionPanel,
-  .event-addons-page .prizeRevealPanel {
-    border-radius: 22px !important;
-    padding: 16px !important;
+  .hero,
+  .readinessPanel,
+  .lockedPanel,
+  .addOnAccordion,
+  .upgradeBanner {
+    padding: 20px !important;
+    border-radius: 26px !important;
   }
 
-  .event-addons-page .title {
-    font-size: clamp(32px, 10vw, 42px) !important;
+  .title {
+    font-size: clamp(38px, 12vw, 54px) !important;
+    line-height: 0.98 !important;
   }
 
-  .event-addons-page .input,
-  .event-addons-page .textarea {
-    font-size: 16px !important;
+  .addOnAccordionSummary,
+  .legalSummary,
+  .prizeRevealSummary {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
   }
 }
 `;
@@ -2238,89 +1933,97 @@ const responsiveStyles = `
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
-    maxWidth: 1120,
+    maxWidth: 1180,
     margin: "0 auto",
     padding: "28px 16px 56px",
-    background: "#f8fafc",
     minHeight: "100vh",
+    background:
+      "radial-gradient(circle at top left, rgba(22,131,248,0.08), transparent 32%), radial-gradient(circle at top right, rgba(250,204,21,0.12), transparent 34%), #f8fafc",
     overflowX: "hidden",
-    boxSizing: "border-box",
   },
 
   hero: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.15fr) minmax(260px, 0.85fr)",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(280px, 0.36fr)",
     gap: 18,
     alignItems: "stretch",
-    padding: "clamp(20px, 4vw, 28px)",
-    borderRadius: 28,
+    padding: 28,
+    borderRadius: 32,
     background:
-      "radial-gradient(circle at top left, rgba(245,158,11,0.24), transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 54%, #172554 100%)",
+      "radial-gradient(circle at bottom right, rgba(250,204,21,0.18), transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
     color: "#ffffff",
-    marginBottom: 16,
-    boxShadow: "0 24px 60px rgba(15,23,42,0.18)",
-    overflow: "hidden",
+    marginBottom: 18,
+    boxShadow: "0 28px 70px rgba(15,23,42,0.22)",
+    border: "1px solid rgba(250,204,21,0.24)",
   },
 
-  heroContent: { minWidth: 0 },
+  heroContent: {
+    minWidth: 0,
+  },
 
   eyebrow: {
     display: "inline-flex",
-    width: "fit-content",
-    padding: "6px 10px",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "8px 14px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.12)",
-    color: "#fde68a",
+    background: "rgba(15,23,42,0.24)",
+    color: "#facc15",
+    border: "1px solid rgba(250,204,21,0.76)",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
-    letterSpacing: "0.1em",
-    marginBottom: 12,
+    letterSpacing: "0.08em",
+    marginBottom: 14,
   },
 
   title: {
     margin: 0,
-    fontSize: "clamp(36px, 5vw, 54px)",
-    lineHeight: 1.02,
-    letterSpacing: "-0.06em",
+    fontSize: "clamp(48px, 7vw, 76px)",
+    lineHeight: 0.94,
+    letterSpacing: "-0.075em",
+    color: "#ffffff",
     overflowWrap: "anywhere",
   },
 
   heroText: {
-    margin: "14px 0 0",
+    margin: "16px 0 0",
+    maxWidth: 800,
     color: "#dbeafe",
-    lineHeight: 1.65,
-    maxWidth: 760,
-    fontSize: 15,
+    fontSize: 17,
+    lineHeight: 1.6,
+    fontWeight: 750,
   },
 
   heroMetaGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: 10,
-    marginTop: 22,
+    marginTop: 18,
   },
 
   heroMetric: {
-    padding: "13px 14px",
+    padding: 14,
     borderRadius: 18,
-    background: "rgba(255,255,255,0.09)",
-    border: "1px solid rgba(255,255,255,0.16)",
-    minWidth: 0,
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.14)",
   },
 
   heroMetricLabel: {
     display: "block",
     color: "#bfdbfe",
     fontSize: 12,
-    fontWeight: 900,
-    marginBottom: 4,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    marginBottom: 6,
   },
 
   heroMetricValue: {
     display: "block",
     color: "#ffffff",
-    fontSize: 17,
+    fontSize: 16,
+    lineHeight: 1.25,
     fontWeight: 950,
     overflowWrap: "anywhere",
   },
@@ -2328,19 +2031,15 @@ const styles: Record<string, CSSProperties> = {
   heroPanel: {
     display: "grid",
     alignContent: "center",
-    gap: 10,
+    gap: 8,
     padding: 18,
     borderRadius: 24,
-    background: "rgba(255,255,255,0.1)",
-    border: "1px solid rgba(255,255,255,0.18)",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(250,204,21,0.28)",
   },
 
   heroPanelEyebrow: {
-    width: "fit-content",
-    padding: "6px 10px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
+    color: "#facc15",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
@@ -2350,47 +2049,30 @@ const styles: Record<string, CSSProperties> = {
   heroPanelTitle: {
     color: "#ffffff",
     fontSize: 24,
-    lineHeight: 1.1,
+    lineHeight: 1.08,
     letterSpacing: "-0.04em",
   },
 
   heroPanelText: {
     color: "#dbeafe",
     fontSize: 14,
-    lineHeight: 1.55,
-    fontWeight: 800,
+    lineHeight: 1.5,
+    fontWeight: 750,
   },
 
   topActions: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0, 1fr)",
+    gap: 10,
     alignItems: "center",
-    marginBottom: 16,
-    flexWrap: "wrap",
+    marginBottom: 18,
   },
 
   topActionsRight: {
     display: "flex",
     gap: 10,
-    alignItems: "center",
-    justifyContent: "flex-end",
     flexWrap: "wrap",
-  },
-
-  primaryLink: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 44,
-    padding: "12px 16px",
-    borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
-    border: "1px solid #1683f8",
-    textDecoration: "none",
-    fontWeight: 950,
-    boxShadow: "0 10px 22px rgba(22,131,248,0.22)",
+    justifyContent: "flex-end",
   },
 
   secondaryButton: {
@@ -2398,14 +2080,14 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     minHeight: 44,
-    padding: "10px 15px",
+    padding: "10px 14px",
     borderRadius: 999,
     background: "#ffffff",
     color: "#334155",
     border: "1px solid #cbd5e1",
     textDecoration: "none",
-    fontWeight: 950,
-    whiteSpace: "nowrap",
+    fontWeight: 900,
+    textAlign: "center",
     boxShadow: "0 2px 8px rgba(15,23,42,0.04)",
   },
 
@@ -2418,78 +2100,87 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 999,
     background: "rgba(255,255,255,0.08)",
     color: "#ffffff",
-    border: "1px solid rgba(255,255,255,0.2)",
+    border: "1px solid rgba(148,163,184,0.52)",
+    textDecoration: "none",
+    fontWeight: 900,
+    textAlign: "center",
+  },
+
+  primaryLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    minHeight: 44,
+    padding: "10px 16px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    border: "none",
     textDecoration: "none",
     fontWeight: 950,
+    textAlign: "center",
+    boxShadow: "0 12px 22px rgba(22,131,248,0.2)",
   },
 
   successBox: {
-    padding: 13,
+    padding: 14,
+    borderRadius: 18,
     background: "#dcfce7",
     color: "#166534",
     border: "1px solid #bbf7d0",
-    borderRadius: 16,
-    marginBottom: 16,
-    fontWeight: 950,
+    fontWeight: 900,
+    marginBottom: 18,
   },
 
   upgradeBanner: {
-    marginBottom: 16,
-    padding: "clamp(18px, 4vw, 24px)",
-    borderRadius: 24,
-    background:
-      "linear-gradient(135deg, #fef3c7 0%, #ffffff 52%, #eff6ff 100%)",
+    display: "grid",
+    gap: 10,
+    padding: 22,
+    borderRadius: 26,
+    background: "#fffbeb",
     border: "1px solid #fde68a",
-    boxShadow: "0 16px 38px rgba(15,23,42,0.08)",
+    color: "#92400e",
+    marginBottom: 18,
   },
 
   upgradeEyebrow: {
-    display: "inline-flex",
-    padding: "6px 10px",
-    borderRadius: 999,
-    background: "#fffbeb",
     color: "#92400e",
-    border: "1px solid #fde68a",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
-    marginBottom: 10,
   },
 
   upgradeTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: "clamp(24px, 5vw, 32px)",
+    fontSize: 28,
     lineHeight: 1.05,
-    letterSpacing: "-0.045em",
+    letterSpacing: "-0.05em",
   },
 
   upgradeText: {
-    margin: "10px 0 16px",
-    color: "#475569",
-    fontSize: 15,
-    lineHeight: 1.6,
-    maxWidth: 820,
+    margin: 0,
+    color: "#92400e",
+    lineHeight: 1.55,
+    fontWeight: 800,
   },
 
   summaryGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: 12,
-    marginBottom: 16,
+    marginBottom: 18,
   },
 
   summaryCard: {
-    display: "grid",
-    alignContent: "start",
-    minHeight: 136,
     padding: 16,
-    borderRadius: 20,
+    borderRadius: 18,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
+    borderTop: "4px solid #1683f8",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    minWidth: 0,
   },
 
   summaryLabel: {
@@ -2498,14 +2189,14 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
-    letterSpacing: "0.08em",
+    letterSpacing: "0.06em",
     marginBottom: 6,
   },
 
   summaryValue: {
     display: "block",
     color: "#0f172a",
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: 950,
     letterSpacing: "-0.04em",
   },
@@ -2521,15 +2212,14 @@ const styles: Record<string, CSSProperties> = {
   readinessPanel: {
     display: "grid",
     gap: 16,
-    padding: 18,
-    borderRadius: 24,
+    padding: 22,
+    borderRadius: 28,
     background:
-      "radial-gradient(circle at top left, rgba(250,204,21,0.14), transparent 34%), linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #020617 100%)",
+      "radial-gradient(circle at top left, rgba(250,204,21,0.16), transparent 34%), linear-gradient(135deg, #0f172a 0%, #1e293b 58%, #020617 100%)",
     color: "#ffffff",
     border: "1px solid rgba(250,204,21,0.26)",
     boxShadow: "0 18px 48px rgba(15,23,42,0.16)",
-    marginBottom: 16,
-    overflow: "hidden",
+    marginBottom: 18,
   },
 
   readinessHeader: {
@@ -2546,277 +2236,34 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
-    marginBottom: 5,
+    marginBottom: 6,
   },
 
   readinessTitle: {
     margin: 0,
     color: "#ffffff",
-    fontSize: "clamp(24px, 5vw, 32px)",
+    fontSize: 30,
     lineHeight: 1.05,
-    letterSpacing: "-0.045em",
+    letterSpacing: "-0.05em",
   },
 
   readinessIntro: {
     margin: "8px 0 0",
     color: "#cbd5e1",
-    fontSize: 14,
     lineHeight: 1.55,
-    maxWidth: 780,
     fontWeight: 750,
+    maxWidth: 780,
   },
 
   readinessStatusPill: {
     display: "inline-flex",
-    width: "fit-content",
-    padding: "8px 12px",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "9px 12px",
     borderRadius: 999,
     border: "1px solid",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-  },
-
-  readinessOverviewGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 10,
-  },
-
-  readinessOverviewCard: {
-    minHeight: 118,
-    padding: 14,
-    borderRadius: 18,
-    background: "rgba(255,255,255,0.08)",
-    border: "1px solid rgba(255,255,255,0.14)",
-  },
-
-  readinessOverviewHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 10,
-    alignItems: "center",
-    flexWrap: "wrap",
-  },
-
-  readinessOverviewLabel: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: 950,
-    letterSpacing: "-0.03em",
-  },
-
-  readinessOverviewText: {
-    margin: "7px 0 0",
-    color: "#cbd5e1",
     fontSize: 13,
-    lineHeight: 1.45,
-    fontWeight: 750,
-  },
-
-  miniStatusPill: {
-    display: "inline-flex",
-    padding: "6px 9px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontSize: 11,
     fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-  },
-
-  readinessGridLight: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 10,
-  },
-
-  readinessItemLight: {
-    display: "grid",
-    gridTemplateColumns: "14px minmax(0, 1fr)",
-    gap: 10,
-    alignItems: "start",
-    padding: 14,
-    borderRadius: 18,
-    border: "1px solid",
-    minWidth: 0,
-  },
-
-  readinessItemGood: {
-    background: "rgba(34,197,94,0.12)",
-    borderColor: "rgba(187,247,208,0.34)",
-  },
-
-  readinessItemWarning: {
-    background: "rgba(250,204,21,0.12)",
-    borderColor: "rgba(250,204,21,0.34)",
-  },
-
-  readinessItemNeutral: {
-    background: "rgba(255,255,255,0.76)",
-    borderColor: "rgba(203,213,225,0.9)",
-  },
-
-  readinessToneDot: {
-    width: 11,
-    height: 11,
-    borderRadius: 999,
-    marginTop: 4,
-  },
-
-  readinessDotGood: {
-    background: "#22c55e",
-    boxShadow: "0 0 0 4px rgba(34,197,94,0.14)",
-  },
-
-  readinessDotWarning: {
-    background: "#facc15",
-    boxShadow: "0 0 0 4px rgba(250,204,21,0.14)",
-  },
-
-  readinessDotNeutral: {
-    background: "#94a3b8",
-    boxShadow: "0 0 0 4px rgba(148,163,184,0.14)",
-  },
-
-  readinessContent: { minWidth: 0 },
-
-  readinessLabelLight: {
-    display: "block",
-    color: "#64748b",
-    fontSize: 11,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 4,
-  },
-
-  readinessValueLight: {
-    display: "block",
-    color: "#0f172a",
-    fontSize: 16,
-    fontWeight: 950,
-    overflowWrap: "anywhere",
-  },
-
-  readinessDetailLight: {
-    margin: "5px 0 0",
-    color: "#64748b",
-    fontSize: 13,
-    lineHeight: 1.45,
-    fontWeight: 750,
-  },
-
-  readinessActions: {
-    display: "flex",
-    gap: 10,
-    alignItems: "center",
-    flexWrap: "wrap",
-  },
-
-  lockedPanel: {
-    padding: 20,
-    borderRadius: 24,
-    background:
-      "linear-gradient(135deg, #ffffff 0%, #f8fafc 58%, #eff6ff 100%)",
-    border: "1px solid #dbeafe",
-    boxShadow: "0 8px 28px rgba(15,23,42,0.055)",
-  },
-
-  lockedEyebrow: {
-    display: "inline-flex",
-    padding: "6px 10px",
-    borderRadius: 999,
-    background: "#fef3c7",
-    color: "#92400e",
-    border: "1px solid #fde68a",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 10,
-  },
-
-  addOnPanels: { display: "grid", gap: 14 },
-
-  addOnAccordion: {
-    display: "grid",
-    gap: 0,
-    padding: 18,
-    borderRadius: 24,
-    background:
-      "linear-gradient(135deg, #ffffff 0%, #f8fafc 56%, #eff6ff 100%)",
-    border: "1px solid #dbeafe",
-    boxShadow: "0 8px 28px rgba(15,23,42,0.055)",
-    minWidth: 0,
-    overflow: "hidden",
-  },
-
-  addOnAccordionSummary: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) auto",
-    gap: 14,
-    alignItems: "center",
-    cursor: "pointer",
-    listStyle: "none",
-  },
-
-  addOnSummaryMain: {
-    minWidth: 0,
-  },
-
-  addOnSummaryMeta: {
-    display: "flex",
-    gap: 8,
-    alignItems: "center",
-    justifyContent: "flex-end",
-    flexWrap: "wrap",
-  },
-
-  addOnAccordionBody: {
-    display: "grid",
-    gap: 16,
-    paddingTop: 16,
-    marginTop: 16,
-    borderTop: "1px solid #e2e8f0",
-  },
-
-  innerEyebrow: {
-    color: "#2563eb",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 5,
-  },
-
-  panelTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: "clamp(23px, 5vw, 30px)",
-    letterSpacing: "-0.045em",
-    lineHeight: 1.05,
-  },
-
-  sectionText: {
-    margin: "8px 0 0",
-    color: "#64748b",
-    fontSize: 14,
-    lineHeight: 1.55,
-    maxWidth: 820,
-  },
-
-  statusPill: {
-    display: "inline-flex",
-    padding: "8px 12px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-    whiteSpace: "nowrap",
   },
 
   statusGood: {
@@ -2833,25 +2280,192 @@ const styles: Record<string, CSSProperties> = {
 
   statusNeutral: {
     background: "#f8fafc",
-    color: "#64748b",
-    borderColor: "#cbd5e1",
+    color: "#475569",
+    borderColor: "#e2e8f0",
   },
 
-  warningCountPill: {
+  readinessOverviewGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 12,
+  },
+
+  readinessOverviewCard: {
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.12)",
+  },
+
+  readinessOverviewHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+
+  readinessOverviewLabel: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: 950,
+  },
+
+  miniStatusPill: {
     display: "inline-flex",
-    width: "fit-content",
+    padding: "7px 10px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+
+  readinessOverviewText: {
+    margin: "8px 0 0",
+    color: "#cbd5e1",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 750,
+  },
+
+  professionalNoticeDark: {
+    display: "grid",
+    gap: 4,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(250,204,21,0.12)",
+    color: "#fef3c7",
+    border: "1px solid rgba(250,204,21,0.28)",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 800,
+  },
+
+  professionalNoticeLight: {
+    display: "grid",
+    gap: 4,
+    padding: 14,
+    borderRadius: 18,
+    background: "#eff6ff",
+    color: "#1e3a8a",
+    border: "1px solid #bfdbfe",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 850,
+  },
+
+  readinessActions: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+
+  lockedPanel: {
+    display: "grid",
+    gap: 12,
+    padding: 22,
+    borderRadius: 26,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+  },
+
+  lockedEyebrow: {
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  addOnPanels: {
+    display: "grid",
+    gap: 16,
+  },
+
+  addOnAccordion: {
+    display: "grid",
+    gap: 0,
+    padding: 22,
+    borderRadius: 28,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    overflow: "hidden",
+  },
+
+  addOnAccordionSummary: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    alignItems: "flex-start",
+    cursor: "pointer",
+    listStyle: "none",
+  },
+
+  addOnSummaryMain: {
+    minWidth: 0,
+  },
+
+  innerEyebrow: {
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 6,
+  },
+
+  panelTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 30,
+    lineHeight: 1.05,
+    letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
+  },
+
+  sectionText: {
+    margin: "8px 0 0",
+    color: "#64748b",
+    lineHeight: 1.55,
+    fontWeight: 750,
+  },
+
+  addOnSummaryMeta: {
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
+    justifyContent: "flex-end",
+    flexWrap: "wrap",
+  },
+
+  statusPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
     padding: "8px 12px",
     borderRadius: 999,
     border: "1px solid",
     fontSize: 12,
     fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
+    whiteSpace: "nowrap",
+  },
+
+  warningCountPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "8px 12px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 12,
+    fontWeight: 950,
     whiteSpace: "nowrap",
   },
 
   warningCountPillActive: {
-    background: "#fffbeb",
+    background: "#fef3c7",
     color: "#92400e",
     borderColor: "#fde68a",
   },
@@ -2859,10 +2473,125 @@ const styles: Record<string, CSSProperties> = {
   warningCountPillQuiet: {
     background: "#f8fafc",
     color: "#64748b",
-    borderColor: "#cbd5e1",
+    borderColor: "#e2e8f0",
   },
 
-  form: { display: "grid", gap: 13, minWidth: 0 },
+  prizeRevealToggle: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#334155",
+    border: "1px solid #e2e8f0",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    whiteSpace: "nowrap",
+  },
+
+  addOnAccordionBody: {
+    display: "grid",
+    gap: 16,
+    marginTop: 18,
+  },
+
+  readinessGridLight: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  readinessItemLight: {
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0, 1fr)",
+    gap: 10,
+    padding: 13,
+    borderRadius: 16,
+    border: "1px solid",
+  },
+
+  readinessItemGood: {
+    background: "#f0fdf4",
+    borderColor: "#bbf7d0",
+  },
+
+  readinessItemWarning: {
+    background: "#fffbeb",
+    borderColor: "#fde68a",
+  },
+
+  readinessItemNeutral: {
+    background: "#f8fafc",
+    borderColor: "#e2e8f0",
+  },
+
+  readinessToneDot: {
+    width: 11,
+    height: 11,
+    borderRadius: 999,
+    marginTop: 4,
+  },
+
+  readinessDotGood: {
+    background: "#22c55e",
+  },
+
+  readinessDotWarning: {
+    background: "#f59e0b",
+  },
+
+  readinessDotNeutral: {
+    background: "#94a3b8",
+  },
+
+  readinessContent: {
+    minWidth: 0,
+  },
+
+  readinessLabelLight: {
+    display: "block",
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    marginBottom: 4,
+  },
+
+  readinessValueLight: {
+    display: "block",
+    color: "#0f172a",
+    fontSize: 15,
+    fontWeight: 950,
+  },
+
+  readinessDetailLight: {
+    margin: "5px 0 0",
+    color: "#64748b",
+    fontSize: 12,
+    lineHeight: 1.4,
+    fontWeight: 750,
+  },
+
+  warningNotice: {
+    display: "grid",
+    gap: 4,
+    padding: 14,
+    borderRadius: 18,
+    background: "#fffbeb",
+    color: "#92400e",
+    border: "1px solid #fde68a",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 850,
+  },
+
+  form: {
+    display: "grid",
+    gap: 14,
+  },
 
   twoCol: {
     display: "grid",
@@ -2876,7 +2605,11 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
   },
 
-  field: { display: "grid", gap: 6, minWidth: 0 },
+  field: {
+    display: "grid",
+    gap: 6,
+    minWidth: 0,
+  },
 
   label: {
     color: "#334155",
@@ -2908,21 +2641,20 @@ const styles: Record<string, CSSProperties> = {
     resize: "vertical",
     boxSizing: "border-box",
     minWidth: 0,
+    fontFamily: "inherit",
   },
 
-  legalQuestionPanel: {
+  legalPanel: {
     display: "grid",
     gap: 0,
     padding: 16,
     borderRadius: 22,
-    background:
-      "radial-gradient(circle at top left, rgba(59,130,246,0.16), transparent 34%), linear-gradient(135deg, #eff6ff 0%, #ffffff 58%, #f8fafc 100%)",
-    border: "1px solid #bfdbfe",
-    boxShadow: "0 8px 22px rgba(15,23,42,0.05)",
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
     overflow: "hidden",
   },
 
-  legalQuestionSummary: {
+  legalSummary: {
     display: "flex",
     justifyContent: "space-between",
     gap: 14,
@@ -2932,22 +2664,14 @@ const styles: Record<string, CSSProperties> = {
     listStyle: "none",
   },
 
-  legalQuestionSummaryActions: {
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap",
-    alignItems: "center",
-    justifyContent: "flex-end",
-  },
-
-  legalQuestionBody: {
+  legalBody: {
     display: "grid",
     gap: 14,
     marginTop: 16,
   },
 
-  legalQuestionEyebrow: {
-    color: "#1d4ed8",
+  legalEyebrow: {
+    color: "#2563eb",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
@@ -2955,7 +2679,7 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 5,
   },
 
-  legalQuestionTitle: {
+  legalTitle: {
     margin: 0,
     color: "#0f172a",
     fontSize: 24,
@@ -2963,50 +2687,13 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.04em",
   },
 
-  legalQuestionText: {
+  legalText: {
     margin: "7px 0 0",
-    color: "#475569",
+    color: "#64748b",
     fontSize: 13,
     lineHeight: 1.5,
     fontWeight: 750,
     maxWidth: 760,
-  },
-
-  legalQuestionBadge: {
-    display: "inline-flex",
-    width: "fit-content",
-    padding: "8px 12px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-  },
-
-  legalQuestionBadgeEnabled: {
-    background: "#dcfce7",
-    color: "#166534",
-    borderColor: "#bbf7d0",
-  },
-
-  legalQuestionBadgeNeutral: {
-    background: "#ffffff",
-    color: "#334155",
-    borderColor: "#cbd5e1",
-  },
-
-  legalQuestionNotice: {
-    display: "grid",
-    gap: 4,
-    padding: 14,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #bfdbfe",
-    color: "#1e3a8a",
-    fontSize: 13,
-    lineHeight: 1.45,
-    fontWeight: 850,
   },
 
   valueRangePanel: {
@@ -3015,16 +2702,7 @@ const styles: Record<string, CSSProperties> = {
     padding: 14,
     borderRadius: 18,
     background: "#ffffff",
-    border: "1px solid #dbeafe",
-  },
-
-  valueRangeEyebrow: {
-    color: "#1d4ed8",
-    fontSize: 11,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 5,
+    border: "1px solid #e2e8f0",
   },
 
   valueRangeTitle: {
@@ -3035,327 +2713,22 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.035em",
   },
 
-  valueRangeText: {
-    margin: "7px 0 0",
-    color: "#64748b",
-    fontSize: 13,
-    lineHeight: 1.5,
-    fontWeight: 750,
-  },
-
-  valueRangePreview: {
+  submitRow: {
     display: "flex",
-    alignItems: "center",
-    minHeight: 44,
-    padding: "10px 12px",
-    borderRadius: 13,
-    border: "1px solid #cbd5e1",
-    background: "#f8fafc",
-    color: "#0f172a",
-    fontSize: 15,
-    fontWeight: 950,
-    boxSizing: "border-box",
-  },
-
-  prizeRevealPanel: {
-    display: "grid",
-    gap: 0,
-    padding: 16,
-    borderRadius: 22,
-    background:
-      "radial-gradient(circle at top left, rgba(250,204,21,0.16), transparent 34%), linear-gradient(135deg, #fffbeb 0%, #ffffff 58%, #eff6ff 100%)",
-    border: "1px solid #fde68a",
-    boxShadow: "0 8px 22px rgba(15,23,42,0.05)",
-    overflow: "hidden",
-  },
-
-  prizeRevealSummary: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 14,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-    cursor: "pointer",
-    listStyle: "none",
-  },
-
-  prizeRevealSummaryActions: {
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap",
-    alignItems: "center",
     justifyContent: "flex-end",
-  },
-
-  prizeRevealBody: {
-    display: "grid",
-    gap: 14,
-    marginTop: 16,
-  },
-
-  prizeRevealEyebrow: {
-    color: "#92400e",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 5,
-  },
-
-  prizeRevealTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 24,
-    lineHeight: 1.05,
-    letterSpacing: "-0.04em",
-  },
-
-  prizeRevealText: {
-    margin: "7px 0 0",
-    color: "#64748b",
-    fontSize: 13,
-    lineHeight: 1.5,
-    fontWeight: 750,
-    maxWidth: 760,
-  },
-
-  prizeRevealBadge: {
-    display: "inline-flex",
-    width: "fit-content",
-    padding: "8px 12px",
-    borderRadius: 999,
-    background: "#fef3c7",
-    color: "#92400e",
-    border: "1px solid #fde68a",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-  },
-
-  prizeRevealToggle: {
-    display: "inline-flex",
-    width: "fit-content",
-    padding: "8px 12px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#334155",
-    border: "1px solid #e2e8f0",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-    whiteSpace: "nowrap",
-  },
-
-  revealControlNotice: {
-    display: "grid",
-    gap: 4,
-    padding: 14,
-    borderRadius: 18,
-    background: "#eff6ff",
-    border: "1px solid #bfdbfe",
-    color: "#1e3a8a",
-    fontSize: 13,
-    lineHeight: 1.45,
-    fontWeight: 850,
-  },
-
-  prizeRevealRows: { display: "grid", gap: 12 },
-
-  prizeRevealRow: {
-    display: "grid",
-    gap: 0,
-    padding: 14,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 10px rgba(15,23,42,0.035)",
-    overflow: "hidden",
-  },
-
-  prizeRevealRowHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "flex-start",
+    gap: 10,
     flexWrap: "wrap",
-    cursor: "pointer",
-    listStyle: "none",
-  },
-
-  prizeRevealRowActions: {
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap",
-    alignItems: "center",
-    justifyContent: "flex-end",
-  },
-
-  prizeRevealRowBody: {
-    display: "grid",
-    gap: 12,
-    marginTop: 14,
-  },
-
-  prizeRevealRowEyebrow: {
-    display: "block",
-    color: "#64748b",
-    fontSize: 11,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 4,
-  },
-
-  prizeRevealRowTitle: {
-    display: "block",
-    color: "#0f172a",
-    fontSize: 17,
-    fontWeight: 950,
-    letterSpacing: "-0.03em",
-  },
-
-  prizeRevealRowStatus: {
-    display: "inline-flex",
-    width: "fit-content",
-    padding: "8px 12px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontSize: 12,
-    fontWeight: 950,
-  },
-
-  prizeRevealRowStatusRevealed: {
-    background: "#dcfce7",
-    color: "#166534",
-    borderColor: "#bbf7d0",
-  },
-
-  prizeRevealRowStatusHidden: {
-    background: "#f8fafc",
-    color: "#64748b",
-    borderColor: "#cbd5e1",
-  },
-
-  revealControlBox: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(220px, 0.35fr)",
-    gap: 12,
-    alignItems: "center",
-    padding: 14,
-    borderRadius: 18,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-  },
-
-  revealControlTitle: {
-    display: "block",
-    color: "#0f172a",
-    fontSize: 15,
-    fontWeight: 950,
-    marginBottom: 4,
-  },
-
-  revealControlText: {
-    margin: 0,
-    color: "#64748b",
-    fontSize: 13,
-    lineHeight: 1.45,
-    fontWeight: 750,
-  },
-
-  prizeImageUploadShell: {
-    display: "grid",
-    gap: 8,
-    padding: 14,
-    borderRadius: 18,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    minWidth: 0,
-    overflow: "hidden",
-  },
-
-  professionalNotice: {
-    display: "grid",
-    gap: 4,
-    padding: 14,
-    borderRadius: 18,
-    background: "#fffbeb",
-    border: "1px solid #fde68a",
-    color: "#92400e",
-    fontSize: 13,
-    fontWeight: 800,
-    lineHeight: 1.45,
-  },
-
-  professionalNoticeDark: {
-    display: "grid",
-    gap: 4,
-    padding: 14,
-    borderRadius: 18,
-    background: "rgba(250,204,21,0.12)",
-    border: "1px solid rgba(250,204,21,0.34)",
-    color: "#fef3c7",
-    fontSize: 13,
-    fontWeight: 800,
-    lineHeight: 1.45,
-  },
-
-  foundationNotice: {
-    display: "grid",
-    gap: 4,
-    padding: 14,
-    borderRadius: 18,
-    background: "#ecfdf5",
-    border: "1px solid #bbf7d0",
-    color: "#166534",
-    fontSize: 13,
-    fontWeight: 800,
-    lineHeight: 1.45,
-  },
-
-  warningNotice: {
-    display: "grid",
-    gap: 4,
-    padding: 14,
-    borderRadius: 18,
-    background: "#fffbeb",
-    border: "1px solid #fde68a",
-    color: "#92400e",
-    fontSize: 13,
-    fontWeight: 800,
-    lineHeight: 1.45,
-  },
-
-  submitBar: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 14,
-    flexWrap: "wrap",
-    padding: 16,
-    borderRadius: 20,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
   },
 
   primaryButton: {
-    width: "fit-content",
-    minHeight: 44,
-    padding: "13px 18px",
-    border: "none",
+    minHeight: 46,
+    padding: "12px 18px",
     borderRadius: 999,
     background: "#1683f8",
     color: "#ffffff",
+    border: "none",
     fontWeight: 950,
     cursor: "pointer",
-    boxShadow: "0 10px 20px rgba(22,131,248,0.18)",
-  },
-
-  mutedSmall: {
-    color: "#64748b",
-    fontSize: 13,
-    marginTop: 3,
+    boxShadow: "0 12px 22px rgba(22,131,248,0.2)",
   },
 };
