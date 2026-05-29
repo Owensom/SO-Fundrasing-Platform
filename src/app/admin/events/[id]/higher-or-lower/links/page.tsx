@@ -509,23 +509,19 @@ export default async function HigherOrLowerPlayerLinksPage({
 
       <section className="links-hero" style={styles.hero}>
         <div>
-          <div style={styles.eyebrow}>Player answer links</div>
+          <div style={styles.eyebrow}>Player links</div>
           <h1 className="links-title" style={styles.title}>
             Higher or Lower
           </h1>
           <p style={styles.subtitle}>
-            Send each paid player their private answer link. The same link works
-            for every open round.
-          </p>
-          <p style={styles.tenant}>
-            Event: <strong>{event.title}</strong> · Tenant:{" "}
-            <strong>{tenantSlug}</strong>
+            Send private answer links to paid players. The same link works for
+            every open round.
           </p>
         </div>
 
         <div className="links-actions" style={styles.heroActions}>
           <Link href={`/admin/events/${event.id}/higher-or-lower`} style={styles.secondaryButton}>
-            ← Game controller
+            Game controller
           </Link>
           <Link href={`/e/${event.slug}/higher-or-lower`} style={styles.secondaryButton}>
             Room display
@@ -542,18 +538,16 @@ export default async function HigherOrLowerPlayerLinksPage({
       ) : null}
 
       <section className="summary-grid" style={styles.summaryGrid}>
-        <SummaryCard label="Game" value={session ? statusLabel(session.status) : "No game"} />
         <SummaryCard label="Paid entries" value={entries.length} />
         <SummaryCard label="Links ready" value={withTokens.length} />
-        <SummaryCard label="Email ready" value={activeEmailReadyCount} />
+        <SummaryCard label="Can email" value={activeEmailReadyCount} />
       </section>
 
       {!session ? (
         <section style={styles.sectionCard}>
           <h2 style={styles.sectionTitle}>No Higher or Lower game yet</h2>
           <p style={styles.sectionText}>
-            Create the live game first, then generate entries from paid orders
-            before emailing player answer links.
+            Create the live game first, then generate entries from paid orders.
           </p>
         </section>
       ) : entries.length === 0 ? (
@@ -561,7 +555,7 @@ export default async function HigherOrLowerPlayerLinksPage({
           <h2 style={styles.sectionTitle}>No paid entries generated yet</h2>
           <p style={styles.sectionText}>
             Go back to the game controller and use “Generate entries from paid
-            orders”. Ticket-only buyers and unpaid orders will not appear here.
+            orders”.
           </p>
         </section>
       ) : (
@@ -571,46 +565,39 @@ export default async function HigherOrLowerPlayerLinksPage({
               <div style={styles.sectionEyebrow}>Send links</div>
               <h2 style={styles.sectionTitle}>Player links & emails</h2>
               <p style={styles.sectionText}>
-                Email the link once before play starts. Use the copy field as a
-                backup for WhatsApp, QR codes or event-night support.
+                Email links once before play starts. Copy links are kept as a
+                backup.
               </p>
             </div>
 
-            <div style={styles.headerActions}>
-              <span style={{ ...styles.statusPill, ...statusStyle(session.status) }}>
-                {statusLabel(session.status)}
-              </span>
-
-              <form action={sendAllActivePlayerLinksAction} style={styles.inlineForm}>
-                <input type="hidden" name="event_id" value={event.id} />
-                <input type="hidden" name="session_id" value={session.id} />
-                <button
-                  type="submit"
-                  disabled={activeEmailReadyCount === 0}
-                  style={{
-                    ...styles.primaryButton,
-                    opacity: activeEmailReadyCount === 0 ? 0.55 : 1,
-                    cursor: activeEmailReadyCount === 0 ? "not-allowed" : "pointer",
-                  }}
-                >
-                  Send all active links
-                </button>
-              </form>
-            </div>
+            <form action={sendAllActivePlayerLinksAction} style={styles.fullWidthForm}>
+              <input type="hidden" name="event_id" value={event.id} />
+              <input type="hidden" name="session_id" value={session.id} />
+              <button
+                type="submit"
+                disabled={activeEmailReadyCount === 0}
+                style={{
+                  ...styles.primaryButton,
+                  opacity: activeEmailReadyCount === 0 ? 0.55 : 1,
+                  cursor: activeEmailReadyCount === 0 ? "not-allowed" : "pointer",
+                }}
+              >
+                Send all active links
+              </button>
+            </form>
           </div>
 
           {missingTokens > 0 ? (
             <div style={styles.warningBox}>
               {missingTokens} paid entr{missingTokens === 1 ? "y is" : "ies are"} missing a token.
-              Run the token backfill SQL, then refresh this page.
             </div>
           ) : null}
 
           <div style={styles.infoBox}>
-            <strong>Simple event-night flow</strong>
+            <strong>Event-night flow</strong>
             <span>
-              Send links once. Players keep their private page open and answer
-              each round only when the organiser opens it.
+              Players keep their private page open and answer only when the
+              organiser opens a round.
             </span>
           </div>
 
@@ -626,32 +613,30 @@ export default async function HigherOrLowerPlayerLinksPage({
 
               return (
                 <article key={entry.id} style={styles.linkCard}>
-                  <div style={styles.playerTop}>
-                    <div style={styles.playerMain}>
-                      <div style={styles.playerEyebrow}>Entry #{entry.entry_number}</div>
-                      <h3 style={styles.playerName}>
-                        {entry.player_name || "Unnamed player"}
-                      </h3>
-                      <p style={styles.metaText}>
-                        {entry.player_email || "No email recorded"}
-                        {entry.eliminated_round_number
-                          ? ` · Eliminated round ${entry.eliminated_round_number}`
-                          : ""}
-                      </p>
-                    </div>
+                  <div style={styles.entryNumber}>Entry #{entry.entry_number}</div>
 
-                    <div className="pill-row" style={styles.pillRow}>
-                      <span style={{ ...styles.statusPill, ...statusStyle(entry.status) }}>
-                        {statusLabel(entry.status)}
-                      </span>
-                      <span style={{ ...styles.statusPill, ...statusStyle(entry.order_status) }}>
-                        {statusLabel(entry.order_status)}
-                      </span>
-                    </div>
+                  <h3 style={styles.playerName}>
+                    {entry.player_name || "Unnamed player"}
+                  </h3>
+
+                  <p style={styles.metaText}>
+                    {entry.player_email || "No email recorded"}
+                    {entry.eliminated_round_number
+                      ? ` · Eliminated round ${entry.eliminated_round_number}`
+                      : ""}
+                  </p>
+
+                  <div className="pill-row" style={styles.pillRow}>
+                    <span style={{ ...styles.statusPill, ...statusStyle(entry.status) }}>
+                      {statusLabel(entry.status)}
+                    </span>
+                    <span style={{ ...styles.statusPill, ...statusStyle(entry.order_status) }}>
+                      {statusLabel(entry.order_status)}
+                    </span>
                   </div>
 
-                  <div className="mobile-action-grid" style={styles.mobileActionGrid}>
-                    <form action={sendSinglePlayerLinkAction} style={styles.inlineForm}>
+                  <div className="button-stack" style={styles.buttonStack}>
+                    <form action={sendSinglePlayerLinkAction} style={styles.fullWidthForm}>
                       <input type="hidden" name="event_id" value={event.id} />
                       <input type="hidden" name="session_id" value={session.id} />
                       <input type="hidden" name="entry_id" value={entry.id} />
@@ -670,7 +655,7 @@ export default async function HigherOrLowerPlayerLinksPage({
 
                     {answerUrl ? (
                       <Link href={answerUrl} style={styles.openButton}>
-                        Open page
+                        Open player page
                       </Link>
                     ) : (
                       <span style={styles.disabledOpenButton}>No token</span>
@@ -678,25 +663,21 @@ export default async function HigherOrLowerPlayerLinksPage({
                   </div>
 
                   {answerUrl ? (
-                    <div className="copy-panel" style={styles.copyPanel}>
-                      <label style={styles.copyLabel} htmlFor={`answer-link-${entry.id}`}>
-                        Copy fallback link
-                      </label>
-                      <input
-                        id={`answer-link-${entry.id}`}
+                    <details className="copy-details" style={styles.copyDetails}>
+                      <summary style={styles.copySummary}>Copy fallback link</summary>
+                      <textarea
                         readOnly
                         value={answerUrl}
-                        style={styles.copyInput}
+                        rows={4}
+                        style={styles.copyTextarea}
                       />
                       <p style={styles.copyHelp}>
-                        Tap the field, select all, then copy if you need to send
-                        the link manually.
+                        Tap the box, select all, then copy.
                       </p>
-                    </div>
+                    </details>
                   ) : (
                     <div style={styles.warningBox}>
-                      This paid entry has no token yet. Run the token backfill SQL,
-                      or regenerate entries after the token default is installed.
+                      This paid entry has no private answer token yet.
                     </div>
                   )}
                 </article>
@@ -732,56 +713,24 @@ const responsiveStyles = `
 .higher-lower-links-page article,
 .higher-lower-links-page div,
 .higher-lower-links-page a,
-.higher-lower-links-page input,
+.higher-lower-links-page textarea,
 .higher-lower-links-page form,
-.higher-lower-links-page button {
+.higher-lower-links-page button,
+.higher-lower-links-page details,
+.higher-lower-links-page summary {
   min-width: 0;
   max-width: 100%;
 }
 
-@media (max-width: 900px) {
-  .higher-lower-links-page .links-hero {
-    grid-template-columns: 1fr !important;
-  }
-
-  .higher-lower-links-page .links-actions {
-    justify-content: stretch !important;
-  }
-
-  .higher-lower-links-page .links-actions a {
-    width: 100% !important;
-  }
-
-  .higher-lower-links-page .summary-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-}
-
-@media (max-width: 720px) {
-  .higher-lower-links-page .pill-row {
-    justify-content: flex-start !important;
-  }
-
-  .higher-lower-links-page .mobile-action-grid {
-    grid-template-columns: 1fr !important;
-  }
-
-  .higher-lower-links-page .mobile-action-grid a,
-  .higher-lower-links-page .mobile-action-grid button,
-  .higher-lower-links-page .mobile-action-grid span {
-    width: 100% !important;
-  }
-}
-
-@media (max-width: 640px) {
+@media (max-width: 820px) {
   .higher-lower-links-page {
-    padding: 16px 10px 42px !important;
+    padding: 14px 10px 42px !important;
   }
 
   .higher-lower-links-page .links-hero {
+    grid-template-columns: 1fr !important;
     padding: 18px !important;
     border-radius: 24px !important;
-    margin-bottom: 14px !important;
   }
 
   .higher-lower-links-page .links-title {
@@ -789,22 +738,28 @@ const responsiveStyles = `
     line-height: 0.98 !important;
   }
 
+  .higher-lower-links-page .links-actions {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    width: 100% !important;
+  }
+
+  .higher-lower-links-page .links-actions a {
+    width: 100% !important;
+  }
+
   .higher-lower-links-page .summary-grid {
     grid-template-columns: 1fr !important;
-    gap: 10px !important;
   }
 
-  .higher-lower-links-page .section-card {
-    padding: 16px !important;
-    border-radius: 22px !important;
+  .higher-lower-links-page .button-stack {
+    grid-template-columns: 1fr !important;
   }
 
-  .higher-lower-links-page .copy-panel {
-    padding: 10px !important;
-  }
-
-  .higher-lower-links-page .copy-panel input {
-    font-size: 12px !important;
+  .higher-lower-links-page .button-stack a,
+  .higher-lower-links-page .button-stack button,
+  .higher-lower-links-page .button-stack span {
+    width: 100% !important;
   }
 }
 `;
@@ -812,9 +767,9 @@ const responsiveStyles = `
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
-    maxWidth: 1180,
+    maxWidth: 920,
     margin: "0 auto",
-    padding: "28px 16px 56px",
+    padding: "24px 14px 54px",
     minHeight: "100vh",
     background:
       "radial-gradient(circle at top left, rgba(250,204,21,0.12), transparent 32%), radial-gradient(circle at top right, rgba(22,131,248,0.08), transparent 34%), #f8fafc",
@@ -824,35 +779,35 @@ const styles: Record<string, CSSProperties> = {
   hero: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) auto",
-    gap: 18,
+    gap: 16,
     alignItems: "start",
-    padding: 28,
-    borderRadius: 32,
+    padding: 24,
+    borderRadius: 30,
     background:
       "radial-gradient(circle at bottom right, rgba(250,204,21,0.18), transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
     color: "#ffffff",
-    marginBottom: 18,
-    boxShadow: "0 28px 70px rgba(15,23,42,0.22)",
+    marginBottom: 14,
+    boxShadow: "0 22px 54px rgba(15,23,42,0.20)",
     border: "1px solid rgba(250,204,21,0.24)",
   },
 
   eyebrow: {
     display: "inline-flex",
-    padding: "8px 14px",
+    padding: "7px 12px",
     borderRadius: 999,
     background: "rgba(15,23,42,0.24)",
     color: "#facc15",
     border: "1px solid rgba(250,204,21,0.76)",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
-    marginBottom: 14,
+    marginBottom: 12,
   },
 
   title: {
     margin: 0,
-    fontSize: "clamp(48px, 7vw, 76px)",
+    fontSize: "clamp(44px, 7vw, 70px)",
     lineHeight: 0.94,
     letterSpacing: "-0.075em",
     color: "#ffffff",
@@ -860,25 +815,17 @@ const styles: Record<string, CSSProperties> = {
   },
 
   subtitle: {
-    margin: "16px 0 0",
-    maxWidth: 800,
+    margin: "12px 0 0",
+    maxWidth: 680,
     color: "#dbeafe",
-    fontSize: 17,
-    lineHeight: 1.6,
+    fontSize: 15,
+    lineHeight: 1.55,
     fontWeight: 750,
-  },
-
-  tenant: {
-    margin: "14px 0 0",
-    color: "#bfdbfe",
-    fontSize: 14,
-    fontWeight: 850,
-    overflowWrap: "anywhere",
   },
 
   heroActions: {
     display: "flex",
-    gap: 10,
+    gap: 9,
     flexWrap: "wrap",
     justifyContent: "flex-end",
   },
@@ -887,8 +834,8 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 44,
-    padding: "10px 14px",
+    minHeight: 42,
+    padding: "9px 13px",
     borderRadius: 999,
     background: "rgba(255,255,255,0.08)",
     color: "#ffffff",
@@ -896,37 +843,38 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 900,
     textAlign: "center",
+    fontSize: 13,
   },
 
   successBanner: {
-    padding: 14,
+    padding: 13,
     borderRadius: 18,
     background: "#dcfce7",
     color: "#166534",
     border: "1px solid #bbf7d0",
     fontWeight: 900,
-    marginBottom: 18,
+    marginBottom: 14,
   },
 
   errorBanner: {
-    padding: 14,
+    padding: 13,
     borderRadius: 18,
     background: "#fee2e2",
     color: "#991b1b",
     border: "1px solid #fecaca",
     fontWeight: 900,
-    marginBottom: 18,
+    marginBottom: 14,
   },
 
   summaryGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-    gap: 12,
-    marginBottom: 18,
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 10,
+    marginBottom: 14,
   },
 
   summaryCard: {
-    padding: 16,
+    padding: 14,
     borderRadius: 18,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
@@ -936,79 +884,83 @@ const styles: Record<string, CSSProperties> = {
 
   summaryLabel: {
     color: "#64748b",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 850,
   },
 
   summaryValue: {
     display: "block",
     color: "#0f172a",
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: 950,
-    marginTop: 5,
+    marginTop: 4,
     letterSpacing: "-0.04em",
     overflowWrap: "anywhere",
   },
 
   sectionCard: {
     display: "grid",
-    gap: 16,
-    padding: 22,
-    borderRadius: 26,
+    gap: 14,
+    padding: 18,
+    borderRadius: 24,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    marginBottom: 18,
+    marginBottom: 16,
     overflow: "hidden",
   },
 
   sectionHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 14,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-  },
-
-  headerActions: {
-    display: "flex",
-    gap: 10,
-    alignItems: "center",
-    justifyContent: "flex-end",
-    flexWrap: "wrap",
-  },
-
-  inlineForm: {
-    display: "contents",
+    display: "grid",
+    gap: 12,
   },
 
   sectionEyebrow: {
     color: "#2563eb",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
-    marginBottom: 6,
+    marginBottom: 5,
   },
 
   sectionTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 28,
+    fontSize: 26,
+    lineHeight: 1,
     letterSpacing: "-0.05em",
     overflowWrap: "anywhere",
   },
 
   sectionText: {
-    margin: "8px 0 0",
+    margin: "7px 0 0",
     color: "#64748b",
-    lineHeight: 1.55,
+    lineHeight: 1.5,
+    fontSize: 14,
     fontWeight: 750,
   },
 
+  fullWidthForm: {
+    width: "100%",
+  },
+
+  primaryButton: {
+    width: "100%",
+    minHeight: 44,
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    border: "none",
+    fontWeight: 950,
+    cursor: "pointer",
+    boxShadow: "0 10px 22px rgba(22,131,248,0.18)",
+  },
+
   warningBox: {
-    padding: 14,
-    borderRadius: 18,
+    padding: 13,
+    borderRadius: 16,
     background: "#fffbeb",
     color: "#92400e",
     border: "1px solid #fde68a",
@@ -1019,38 +971,14 @@ const styles: Record<string, CSSProperties> = {
   infoBox: {
     display: "grid",
     gap: 5,
-    padding: 14,
-    borderRadius: 18,
+    padding: 13,
+    borderRadius: 16,
     background: "#eff6ff",
     color: "#1e3a8a",
     border: "1px solid #bfdbfe",
+    fontSize: 13,
     fontWeight: 850,
     lineHeight: 1.45,
-  },
-
-  statusPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "fit-content",
-    padding: "8px 12px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontSize: 13,
-    fontWeight: 950,
-    textTransform: "capitalize",
-  },
-
-  primaryButton: {
-    minHeight: 42,
-    padding: "9px 14px",
-    borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
-    border: "none",
-    fontWeight: 950,
-    cursor: "pointer",
-    boxShadow: "0 10px 22px rgba(22,131,248,0.18)",
   },
 
   linkList: {
@@ -1060,24 +988,14 @@ const styles: Record<string, CSSProperties> = {
 
   linkCard: {
     display: "grid",
-    gap: 12,
+    gap: 11,
     padding: 14,
     borderRadius: 20,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
   },
 
-  playerTop: {
-    display: "grid",
-    gap: 10,
-  },
-
-  playerMain: {
-    display: "grid",
-    gap: 4,
-  },
-
-  playerEyebrow: {
+  entryNumber: {
     color: "#92400e",
     fontSize: 11,
     fontWeight: 950,
@@ -1088,10 +1006,10 @@ const styles: Record<string, CSSProperties> = {
   playerName: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 22,
-    lineHeight: 1.05,
+    fontSize: 24,
+    lineHeight: 1,
     fontWeight: 950,
-    letterSpacing: "-0.045em",
+    letterSpacing: "-0.05em",
     overflowWrap: "anywhere",
   },
 
@@ -1106,15 +1024,42 @@ const styles: Record<string, CSSProperties> = {
 
   pillRow: {
     display: "flex",
-    gap: 8,
+    gap: 7,
     flexWrap: "wrap",
     justifyContent: "flex-start",
   },
 
-  mobileActionGrid: {
+  statusPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    padding: "7px 10px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "capitalize",
+  },
+
+  buttonStack: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 8,
+  },
+
+  emailButton: {
+    width: "100%",
+    minHeight: 44,
+    padding: "10px 13px",
+    borderRadius: 999,
+    background: "#facc15",
+    color: "#422006",
+    border: "none",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+    textAlign: "center",
   },
 
   openButton: {
@@ -1148,52 +1093,42 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "center",
   },
 
-  emailButton: {
-    width: "100%",
-    minHeight: 44,
-    padding: "10px 13px",
-    borderRadius: 999,
-    background: "#facc15",
-    color: "#422006",
-    border: "none",
-    textDecoration: "none",
-    fontSize: 13,
-    fontWeight: 950,
-    textAlign: "center",
-  },
-
-  copyPanel: {
-    display: "grid",
-    gap: 8,
-    padding: 12,
+  copyDetails: {
     borderRadius: 16,
     background: "#ffffff",
     border: "1px solid #dbeafe",
+    padding: 10,
   },
 
-  copyLabel: {
+  copySummary: {
+    cursor: "pointer",
     color: "#1d4ed8",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
 
-  copyInput: {
+  copyTextarea: {
     width: "100%",
-    minHeight: 42,
+    marginTop: 10,
+    minHeight: 92,
     borderRadius: 12,
     border: "1px solid #bfdbfe",
     background: "#eff6ff",
     color: "#1e3a8a",
-    padding: "9px 10px",
-    fontSize: 13,
+    padding: 10,
+    fontSize: 12,
+    lineHeight: 1.45,
     fontWeight: 800,
     boxSizing: "border-box",
+    resize: "vertical",
+    overflowWrap: "anywhere",
+    wordBreak: "break-all",
   },
 
   copyHelp: {
-    margin: 0,
+    margin: "8px 0 0",
     color: "#64748b",
     fontSize: 12,
     lineHeight: 1.4,
