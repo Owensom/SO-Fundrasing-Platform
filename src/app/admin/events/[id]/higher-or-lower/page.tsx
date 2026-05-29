@@ -4,7 +4,11 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
-import { getEventById } from "../../../../../../api/_lib/events-repo";
+import {
+  getEventById,
+  type EventFundraisingAddOn,
+  type EventPrizeRevealPrize,
+} from "../../../../../../api/_lib/events-repo";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -89,6 +93,15 @@ type PaidHigherOrLowerOrderItem = {
   quantity: number | string | null;
 };
 
+type HigherOrLowerPrize = EventPrizeRevealPrize & {
+  estimatedValueCents: number;
+};
+
+type PrizeChainCheck = {
+  ok: boolean;
+  error?: string;
+};
+
 function cleanText(value: unknown) {
   return String(value || "").trim();
 }
@@ -100,22 +113,6 @@ function cleanGameStatus(value: unknown) {
     clean === "draft" ||
     clean === "live" ||
     clean === "paused" ||
-    clean === "closed"
-  ) {
-    return clean;
-  }
-
-  return "draft";
-}
-
-function cleanRoundStatus(value: unknown) {
-  const clean = cleanText(value).toLowerCase();
-
-  if (
-    clean === "draft" ||
-    clean === "open" ||
-    clean === "locked" ||
-    clean === "revealed" ||
     clean === "closed"
   ) {
     return clean;
@@ -142,20 +139,6 @@ function positiveInteger(value: unknown, fallback = 0) {
   }
 
   return Math.floor(number);
-}
-
-function moneyInputToCents(value: unknown) {
-  const raw = cleanText(value).replace(/[£,\s]/g, "");
-
-  if (!raw) return null;
-
-  const number = Number(raw);
-
-  if (!Number.isFinite(number) || number < 0) {
-    return null;
-  }
-
-  return Math.round(number * 100);
 }
 
 function moneyFromCents(cents: number | string | null | undefined) {
@@ -237,6 +220,138 @@ function statusStyle(value: string | null | undefined): CSSProperties {
     color: "#475569",
     borderColor: "#e2e8f0",
   };
+}
+
+function getHigherOrLowerAddOn(addOns: EventFundraisingAddOn[]) {
+  return addOns.find((addOn) => addOn.type === "higher_or_lower") || null;
+}
+
+function cleanPrizeRevealPrizes(
+  addOn: EventFundraisingAddOn | null,
+): HigherOrLowerPrize[] {
+  const prizes = Array.isArray(addOn?.prizeRevealPrizes)
+    ? addOn.prizeRevealPrizes
+    : [];
+
+  return prizes
+    .map((prize, index) => {
+      const title = cleanText(prize.title);
+      const estimatedValueCents = positiveInteger(
+        prize.estimatedValueCents,
+        0,
+      );
+
+      if (!title || estimatedValueCents <= 0) {
+        return null;
+      }
+
+      return {
+        ...prize,
+        id: cleanText(prize.id) || `prize-${index + 1}`,
+        title,
+        description: cleanText(prize.description),
+        imageUrl: cleanText(prize.imageUrl),
+        sponsorName: cleanText(prize.sponsorName),
+        estimatedValueCents,
+        revealOrder: positiveInteger(prize.revealOrder, index + 1),
+        isRevealed: Boolean(prize.isRevealed),
+      };
+    })
+    .filter(Boolean)
+    .sort(
+      (a, b) =>
+        Number(a?.revealOrder || 0) - Number(b?.revealOrder || 0),
+    ) as HigherOrLowerPrize[];
+}
+
+function deterministicShuffle<T>(items: T[], seed: string) {
+  const output = items.slice();
+
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash << 5) - hash + seed.charCodeAt(index);
+    hash |= 0;
+  }
+
+  for (let index = output.length - 1; index > 0; index -= 1) {
+    hash = (hash * 1664525 + 1013904223) | 0;
+    const randomIndex = Math.abs(hash) % (index + 1);
+    const current = output[index];
+
+    output[index] = output[randomIndex];
+    output[randomIndex] = current;
+  }
+
+  return output;
+}
+
+function buildPrizeChain(input: {
+  prizes: HigherOrLowerPrize[];
+  randomise: boolean;
+  seed: string;
+  requestedPrizeCount: number;
+}) {
+  const availablePrizes = input.randomise
+    ? deterministicShuffle(input.prizes, input.seed)
+    : input.prizes.slice();
+
+  const requestedPrizeCount = Math.max(2, input.requestedPrizeCount || 0);
+  const prizeCount = Math.min(requestedPrizeCount, availablePrizes.length);
+
+  return availablePrizes.slice(0, prizeCount);
+}
+
+function checkPrizeChain(prizes: HigherOrLowerPrize[]): PrizeChainCheck {
+  if (prizes.length < 2) {
+    return {
+      ok: false,
+      error:
+        "Add at least two Higher or Lower prizes with estimated values before creating a live game.",
+    };
+  }
+
+  for (let index = 1; index < prizes.length; index += 1) {
+    const previous = prizes[index - 1];
+    const current = prizes[index];
+
+    if (
+      Number(previous.estimatedValueCents || 0) ===
+      Number(current.estimatedValueCents || 0)
+    ) {
+      return {
+        ok: false,
+        error:
+          "Adjacent prizes in the game cannot have the same estimated value. Adjust the prize values or use randomise again.",
+      };
+    }
+  }
+
+  return { ok: true };
+}
+
+function calculatedCorrectAnswer(input: {
+  previousValueCents: number;
+  currentValueCents: number;
+}) {
+  if (input.currentValueCents > input.previousValueCents) {
+    return "higher";
+  }
+
+  if (input.currentValueCents < input.previousValueCents) {
+    return "lower";
+  }
+
+  return "";
+}
+
+function roundPrompt(input: {
+  roundNumber: number;
+  previousPrizeTitle: string;
+  previousValueCents: number;
+}) {
+  return `Round ${input.roundNumber}: will the next prize be higher or lower than ${input.previousPrizeTitle} (${moneyFromCents(
+    input.previousValueCents,
+  )})?`;
 }
 
 async function requireEventAccess(eventId: string) {
@@ -435,6 +550,7 @@ async function createSessionAction(formData: FormData) {
   const eventId = cleanText(formData.get("event_id"));
   const title = cleanText(formData.get("title")) || "Higher or Lower";
   const notes = cleanText(formData.get("notes")) || null;
+  const requestedPrizeCount = positiveInteger(formData.get("prize_count"), 0);
 
   if (!eventId) {
     redirect("/admin/events");
@@ -451,7 +567,28 @@ async function createSessionAction(formData: FormData) {
     redirect(`/admin/events/${event.id}/higher-or-lower?success=session-ready`);
   }
 
-  await query(
+  const higherOrLowerAddOn = getHigherOrLowerAddOn(event.event_addons_json || []);
+  const configuredPrizes = cleanPrizeRevealPrizes(higherOrLowerAddOn);
+
+  const prizeChain = buildPrizeChain({
+    prizes: configuredPrizes,
+    randomise: Boolean(higherOrLowerAddOn?.prizeRevealRandomiseOrder),
+    seed: `${event.id}:${Date.now()}`,
+    requestedPrizeCount:
+      requestedPrizeCount > 0 ? requestedPrizeCount : configuredPrizes.length,
+  });
+
+  const chainCheck = checkPrizeChain(prizeChain);
+
+  if (!chainCheck.ok) {
+    redirect(
+      `/admin/events/${event.id}/higher-or-lower?error=${encodeURIComponent(
+        chainCheck.error || "Prize chain is not ready.",
+      )}`,
+    );
+  }
+
+  const createdRows = await query<{ id: string }>(
     `
       insert into event_addon_game_sessions (
         tenant_slug,
@@ -459,12 +596,93 @@ async function createSessionAction(formData: FormData) {
         add_on_type,
         title,
         status,
+        current_round_number,
         notes
       )
-      values ($1, $2, 'higher_or_lower', $3, 'draft', $4)
+      values ($1, $2, 'higher_or_lower', $3, 'draft', 0, $4)
+      returning id::text
     `,
     [tenantSlug, event.id, title, notes],
   );
+
+  const sessionId = createdRows[0]?.id;
+
+  if (!sessionId) {
+    redirect(`/admin/events/${event.id}/higher-or-lower?error=session-create-failed`);
+  }
+
+  const startingPrize = prizeChain[0];
+
+  await query(
+    `
+      insert into event_addon_game_rounds (
+        tenant_slug,
+        event_id,
+        session_id,
+        round_number,
+        prompt,
+        reveal_title,
+        reveal_description,
+        reveal_value_cents,
+        correct_answer,
+        status,
+        revealed_at
+      )
+      values ($1,$2,$3,0,$4,$5,$6,$7,null,'revealed',now())
+    `,
+    [
+      tenantSlug,
+      event.id,
+      sessionId,
+      `Starting prize: ${startingPrize.title}`,
+      startingPrize.title,
+      startingPrize.description || null,
+      startingPrize.estimatedValueCents,
+    ],
+  );
+
+  for (let index = 1; index < prizeChain.length; index += 1) {
+    const previousPrize = prizeChain[index - 1];
+    const currentPrize = prizeChain[index];
+    const roundNumber = index;
+
+    await query(
+      `
+        insert into event_addon_game_rounds (
+          tenant_slug,
+          event_id,
+          session_id,
+          round_number,
+          prompt,
+          reveal_title,
+          reveal_description,
+          reveal_value_cents,
+          correct_answer,
+          status
+        )
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      `,
+      [
+        tenantSlug,
+        event.id,
+        sessionId,
+        roundNumber,
+        roundPrompt({
+          roundNumber,
+          previousPrizeTitle: previousPrize.title,
+          previousValueCents: previousPrize.estimatedValueCents,
+        }),
+        currentPrize.title,
+        currentPrize.description || null,
+        currentPrize.estimatedValueCents,
+        calculatedCorrectAnswer({
+          previousValueCents: previousPrize.estimatedValueCents,
+          currentValueCents: currentPrize.estimatedValueCents,
+        }),
+        roundNumber === 1 ? "open" : "draft",
+      ],
+    );
+  }
 
   redirect(`/admin/events/${event.id}/higher-or-lower?success=session-created`);
 }
@@ -589,202 +807,6 @@ async function generateEntriesAction(formData: FormData) {
   redirect(`/admin/events/${event.id}/higher-or-lower?success=entries-generated`);
 }
 
-async function createRoundAction(formData: FormData) {
-  "use server";
-
-  const eventId = cleanText(formData.get("event_id"));
-  const sessionId = cleanText(formData.get("session_id"));
-
-  if (!eventId || !sessionId) {
-    redirect("/admin/events");
-  }
-
-  const { event, tenantSlug } = await requireEventAccess(eventId);
-
-  const session = await getHigherOrLowerSession({
-    tenantSlug,
-    eventId: event.id,
-  });
-
-  if (!session || session.id !== sessionId) {
-    redirect(`/admin/events/${event.id}/higher-or-lower?error=session-missing`);
-  }
-
-  const nextRoundRows = await query<{ next_round: number }>(
-    `
-      select coalesce(max(round_number), 0) + 1 as next_round
-      from event_addon_game_rounds
-      where tenant_slug = $1
-        and event_id = $2
-        and session_id = $3
-    `,
-    [tenantSlug, event.id, session.id],
-  );
-
-  const nextRound = Number(nextRoundRows[0]?.next_round || 1);
-  const prompt =
-    cleanText(formData.get("prompt")) ||
-    `Round ${nextRound}: higher or lower?`;
-
-  const revealTitle = cleanText(formData.get("reveal_title")) || null;
-  const revealDescription = cleanText(formData.get("reveal_description")) || null;
-  const revealValueCents = moneyInputToCents(formData.get("reveal_value"));
-  const status = cleanRoundStatus(formData.get("status")) || "draft";
-
-  await query(
-    `
-      insert into event_addon_game_rounds (
-        tenant_slug,
-        event_id,
-        session_id,
-        round_number,
-        prompt,
-        reveal_title,
-        reveal_description,
-        reveal_value_cents,
-        status
-      )
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-    `,
-    [
-      tenantSlug,
-      event.id,
-      session.id,
-      nextRound,
-      prompt,
-      revealTitle,
-      revealDescription,
-      revealValueCents,
-      status,
-    ],
-  );
-
-  await query(
-    `
-      update event_addon_game_sessions
-      set
-        current_round_number = greatest(current_round_number, $4),
-        updated_at = now()
-      where tenant_slug = $1
-        and event_id = $2
-        and id = $3
-    `,
-    [tenantSlug, event.id, session.id, nextRound],
-  );
-
-  redirect(`/admin/events/${event.id}/higher-or-lower?success=round-created`);
-}
-
-async function updateRoundAction(formData: FormData) {
-  "use server";
-
-  const eventId = cleanText(formData.get("event_id"));
-  const sessionId = cleanText(formData.get("session_id"));
-  const roundId = cleanText(formData.get("round_id"));
-  const status = cleanRoundStatus(formData.get("status"));
-  const correctAnswer = cleanHigherLowerAnswer(formData.get("correct_answer"));
-
-  if (!eventId || !sessionId || !roundId) {
-    redirect("/admin/events");
-  }
-
-  const { event, tenantSlug } = await requireEventAccess(eventId);
-
-  const prompt = cleanText(formData.get("prompt")) || null;
-  const revealTitle = cleanText(formData.get("reveal_title")) || null;
-  const revealDescription = cleanText(formData.get("reveal_description")) || null;
-  const revealValueCents = moneyInputToCents(formData.get("reveal_value"));
-
-  await query(
-    `
-      update event_addon_game_rounds
-      set
-        prompt = $5,
-        reveal_title = $6,
-        reveal_description = $7,
-        reveal_value_cents = $8,
-        correct_answer = $9,
-        status = $10,
-        revealed_at = case
-          when $10 = 'revealed' and revealed_at is null then now()
-          else revealed_at
-        end,
-        updated_at = now()
-      where tenant_slug = $1
-        and event_id = $2
-        and session_id = $3
-        and id = $4
-    `,
-    [
-      tenantSlug,
-      event.id,
-      sessionId,
-      roundId,
-      prompt,
-      revealTitle,
-      revealDescription,
-      revealValueCents,
-      correctAnswer || null,
-      status,
-    ],
-  );
-
-  if (status === "revealed" && correctAnswer) {
-    await query(
-      `
-        update event_addon_game_answers
-        set is_correct = (answer = $5)
-        where tenant_slug = $1
-          and event_id = $2
-          and session_id = $3
-          and round_id = $4
-      `,
-      [tenantSlug, event.id, sessionId, roundId, correctAnswer],
-    );
-
-    const roundRows = await query<{ round_number: number }>(
-      `
-        select round_number
-        from event_addon_game_rounds
-        where tenant_slug = $1
-          and event_id = $2
-          and session_id = $3
-          and id = $4
-        limit 1
-      `,
-      [tenantSlug, event.id, sessionId, roundId],
-    );
-
-    const roundNumber = Number(roundRows[0]?.round_number || 0);
-
-    if (roundNumber > 0) {
-      await query(
-        `
-          update event_addon_game_entries e
-          set
-            status = 'eliminated',
-            eliminated_round_number = $5,
-            updated_at = now()
-          where e.tenant_slug = $1
-            and e.event_id = $2
-            and e.session_id = $3
-            and e.status = 'active'
-            and exists (
-              select 1
-              from event_addon_game_answers a
-              where a.entry_id = e.id
-                and a.round_id = $4
-                and a.is_correct = false
-            )
-        `,
-        [tenantSlug, event.id, sessionId, roundId, roundNumber],
-      );
-    }
-  }
-
-  redirect(`/admin/events/${event.id}/higher-or-lower?success=round-updated`);
-}
-
 async function saveAnswerAction(formData: FormData) {
   "use server";
 
@@ -810,6 +832,7 @@ async function saveAnswerAction(formData: FormData) {
         and event_id = $2
         and session_id = $3
         and id = $4
+        and status = 'active'
       limit 1
     `,
     [tenantSlug, event.id, sessionId, entryId],
@@ -819,6 +842,33 @@ async function saveAnswerAction(formData: FormData) {
 
   if (!entry) {
     redirect(`/admin/events/${event.id}/higher-or-lower?error=entry-missing`);
+  }
+
+  const roundRows = await query<{
+    id: string;
+    correct_answer: string | null;
+    status: string;
+  }>(
+    `
+      select
+        id::text,
+        correct_answer,
+        status
+      from event_addon_game_rounds
+      where tenant_slug = $1
+        and event_id = $2
+        and session_id = $3
+        and id = $4
+        and round_number > 0
+      limit 1
+    `,
+    [tenantSlug, event.id, sessionId, roundId],
+  );
+
+  const round = roundRows[0] || null;
+
+  if (!round || round.status !== "open") {
+    redirect(`/admin/events/${event.id}/higher-or-lower?error=round-not-open`);
   }
 
   await query(
@@ -853,6 +903,206 @@ async function saveAnswerAction(formData: FormData) {
   );
 
   redirect(`/admin/events/${event.id}/higher-or-lower?success=answer-saved`);
+}
+
+async function revealRoundAction(formData: FormData) {
+  "use server";
+
+  const eventId = cleanText(formData.get("event_id"));
+  const sessionId = cleanText(formData.get("session_id"));
+  const roundId = cleanText(formData.get("round_id"));
+
+  if (!eventId || !sessionId || !roundId) {
+    redirect("/admin/events");
+  }
+
+  const { event, tenantSlug } = await requireEventAccess(eventId);
+
+  const roundRows = await query<{
+    round_number: number;
+    correct_answer: string | null;
+  }>(
+    `
+      select
+        round_number,
+        correct_answer
+      from event_addon_game_rounds
+      where tenant_slug = $1
+        and event_id = $2
+        and session_id = $3
+        and id = $4
+        and round_number > 0
+      limit 1
+    `,
+    [tenantSlug, event.id, sessionId, roundId],
+  );
+
+  const round = roundRows[0] || null;
+  const correctAnswer = cleanHigherLowerAnswer(round?.correct_answer);
+
+  if (!round || !correctAnswer) {
+    redirect(`/admin/events/${event.id}/higher-or-lower?error=round-not-ready`);
+  }
+
+  await query(
+    `
+      update event_addon_game_answers
+      set is_correct = (answer = $5)
+      where tenant_slug = $1
+        and event_id = $2
+        and session_id = $3
+        and round_id = $4
+    `,
+    [tenantSlug, event.id, sessionId, roundId, correctAnswer],
+  );
+
+  await query(
+    `
+      update event_addon_game_entries e
+      set
+        status = 'eliminated',
+        eliminated_round_number = $5,
+        updated_at = now()
+      where e.tenant_slug = $1
+        and e.event_id = $2
+        and e.session_id = $3
+        and e.status = 'active'
+        and not exists (
+          select 1
+          from event_addon_game_answers a
+          where a.entry_id = e.id
+            and a.round_id = $4
+            and a.is_correct = true
+        )
+    `,
+    [tenantSlug, event.id, sessionId, roundId, Number(round.round_number || 0)],
+  );
+
+  await query(
+    `
+      update event_addon_game_rounds
+      set
+        status = 'revealed',
+        revealed_at = coalesce(revealed_at, now()),
+        updated_at = now()
+      where tenant_slug = $1
+        and event_id = $2
+        and session_id = $3
+        and id = $4
+    `,
+    [tenantSlug, event.id, sessionId, roundId],
+  );
+
+  await query(
+    `
+      update event_addon_game_rounds
+      set
+        status = 'open',
+        updated_at = now()
+      where tenant_slug = $1
+        and event_id = $2
+        and session_id = $3
+        and round_number = $4
+        and status = 'draft'
+    `,
+    [
+      tenantSlug,
+      event.id,
+      sessionId,
+      Number(round.round_number || 0) + 1,
+    ],
+  );
+
+  await query(
+    `
+      update event_addon_game_sessions
+      set
+        current_round_number = greatest(current_round_number, $4),
+        updated_at = now()
+      where tenant_slug = $1
+        and event_id = $2
+        and id = $3
+    `,
+    [tenantSlug, event.id, sessionId, Number(round.round_number || 0)],
+  );
+
+  redirect(`/admin/events/${event.id}/higher-or-lower?success=round-revealed`);
+}
+
+async function resetActiveEntriesAction(formData: FormData) {
+  "use server";
+
+  const eventId = cleanText(formData.get("event_id"));
+  const sessionId = cleanText(formData.get("session_id"));
+
+  if (!eventId || !sessionId) {
+    redirect("/admin/events");
+  }
+
+  const { event, tenantSlug } = await requireEventAccess(eventId);
+
+  await query(
+    `
+      update event_addon_game_entries
+      set
+        status = 'active',
+        eliminated_round_number = null,
+        updated_at = now()
+      where tenant_slug = $1
+        and event_id = $2
+        and session_id = $3
+        and status in ('eliminated', 'winner')
+    `,
+    [tenantSlug, event.id, sessionId],
+  );
+
+  await query(
+    `
+      update event_addon_game_answers
+      set is_correct = null
+      where tenant_slug = $1
+        and event_id = $2
+        and session_id = $3
+    `,
+    [tenantSlug, event.id, sessionId],
+  );
+
+  await query(
+    `
+      update event_addon_game_rounds
+      set
+        status = case
+          when round_number = 0 then 'revealed'
+          when round_number = 1 then 'open'
+          else 'draft'
+        end,
+        revealed_at = case
+          when round_number = 0 then revealed_at
+          else null
+        end,
+        updated_at = now()
+      where tenant_slug = $1
+        and event_id = $2
+        and session_id = $3
+    `,
+    [tenantSlug, event.id, sessionId],
+  );
+
+  await query(
+    `
+      update event_addon_game_sessions
+      set
+        status = 'draft',
+        current_round_number = 0,
+        updated_at = now()
+      where tenant_slug = $1
+        and event_id = $2
+        and id = $3
+    `,
+    [tenantSlug, event.id, sessionId],
+  );
+
+  redirect(`/admin/events/${event.id}/higher-or-lower?success=game-reset`);
 }
 
 async function markWinnerAction(formData: FormData) {
@@ -898,23 +1148,29 @@ async function markWinnerAction(formData: FormData) {
 }
 
 function getSuccessMessage(value: string | undefined) {
-  if (value === "session-created") return "Higher or Lower game created.";
+  if (value === "session-created") {
+    return "Higher or Lower prize-chain game created from the saved prize list.";
+  }
   if (value === "session-ready") return "Higher or Lower game already exists.";
   if (value === "session-updated") return "Game settings updated.";
   if (value === "entries-generated") {
     return "Entries generated from paid Higher or Lower orders.";
   }
-  if (value === "round-created") return "Round created.";
-  if (value === "round-updated") return "Round updated.";
   if (value === "answer-saved") return "Answer saved.";
+  if (value === "round-revealed") {
+    return "Round revealed, answers checked and incorrect active players eliminated.";
+  }
   if (value === "winner-marked") return "Winner marked and game closed.";
+  if (value === "game-reset") return "Game entries and rounds have been reset.";
 
   return "";
 }
 
 function getErrorMessage(value: string | undefined) {
   if (value === "session-missing") return "Higher or Lower game session was not found.";
-  if (value === "entry-missing") return "Player entry was not found.";
+  if (value === "entry-missing") return "Active player entry was not found.";
+  if (value === "round-not-open") return "This round is not open for answers.";
+  if (value === "round-not-ready") return "This round is missing its calculated answer.";
 
   return cleanText(value);
 }
@@ -941,11 +1197,33 @@ function eliminatedEntries(entries: GameEntry[]) {
   return entries.filter((entry) => entry.status === "eliminated");
 }
 
+function playableRounds(rounds: GameRound[]) {
+  return rounds.filter((round) => Number(round.round_number || 0) > 0);
+}
+
+function startingRound(rounds: GameRound[]) {
+  return rounds.find((round) => Number(round.round_number || 0) === 0) || null;
+}
+
+function previousRoundFor(rounds: GameRound[], round: GameRound) {
+  const previousRoundNumber = Number(round.round_number || 0) - 1;
+
+  return rounds.find(
+    (currentRound) => Number(currentRound.round_number || 0) === previousRoundNumber,
+  ) || null;
+}
+
 export default async function AdminHigherOrLowerGamePage({
   params,
   searchParams,
 }: PageProps) {
   const { event, tenantSlug } = await requireEventAccess(params.id);
+
+  const higherOrLowerAddOn = getHigherOrLowerAddOn(event.event_addons_json || []);
+  const configuredPrizes = cleanPrizeRevealPrizes(higherOrLowerAddOn);
+  const prizeRevealRandomiseOrder = Boolean(
+    higherOrLowerAddOn?.prizeRevealRandomiseOrder,
+  );
 
   const session = await getHigherOrLowerSession({
     tenantSlug,
@@ -986,6 +1264,8 @@ export default async function AdminHigherOrLowerGamePage({
   const active = activeEntries(entries);
   const winners = winnerEntries(entries);
   const eliminated = eliminatedEntries(entries);
+  const gameRounds = playableRounds(rounds);
+  const baseline = startingRound(rounds);
 
   const paidEntryCount = paidHigherOrLowerItems.reduce(
     (sum, item) => sum + Math.max(1, positiveInteger(item.quantity, 1)),
@@ -1008,8 +1288,9 @@ export default async function AdminHigherOrLowerGamePage({
           </h1>
 
           <p style={styles.subtitle}>
-            Run a live Higher or Lower fundraiser from paid event add-on entries,
-            record round answers, reveal results and track active players.
+            Run a prize-chain Higher or Lower fundraiser using the saved prize
+            reveal list. The first prize is revealed as the baseline; each round
+            asks whether the next prize value will be higher or lower.
           </p>
 
           <p style={styles.tenant}>
@@ -1021,6 +1302,10 @@ export default async function AdminHigherOrLowerGamePage({
         <div className="higher-lower-hero-actions" style={styles.heroActions}>
           <Link href={`/admin/events/${event.id}`} style={styles.secondaryButton}>
             ← Back to event
+          </Link>
+
+          <Link href={`/admin/events/${event.id}/addons`} style={styles.secondaryButton}>
+            Prize setup
           </Link>
 
           <Link href={`/admin/events/${event.id}/orders`} style={styles.secondaryButton}>
@@ -1042,12 +1327,12 @@ export default async function AdminHigherOrLowerGamePage({
       ) : null}
 
       <section className="higher-lower-summary-grid" style={styles.summaryGrid}>
+        <SummaryCard label="Configured prizes" value={configuredPrizes.length} />
         <SummaryCard label="Paid Higher or Lower entries" value={paidEntryCount} />
         <SummaryCard label="Generated game entries" value={entries.length} />
         <SummaryCard label="Active players" value={active.length} />
         <SummaryCard label="Eliminated" value={eliminated.length} />
-        <SummaryCard label="Winners" value={winners.length} />
-        <SummaryCard label="Rounds" value={rounds.length} />
+        <SummaryCard label="Playable rounds" value={gameRounds.length} />
       </section>
 
       {!session ? (
@@ -1055,15 +1340,46 @@ export default async function AdminHigherOrLowerGamePage({
           <div style={styles.sectionHeader}>
             <div>
               <div style={styles.sectionEyebrow}>Setup</div>
-              <h2 style={styles.sectionTitle}>Create live game</h2>
+              <h2 style={styles.sectionTitle}>Create prize-chain game</h2>
             </div>
           </div>
 
           <p style={styles.sectionText}>
-            This creates the admin game space for Higher or Lower. It does not
-            change checkout, public event pages, Stripe, receipts or existing
-            orders.
+            This creates the live game from the Higher or Lower prize reveal
+            prizes already saved in the Event Fundraising Add-ons editor. Only
+            paid Higher or Lower add-on entries can be generated as players.
           </p>
+
+          <div style={styles.setupNotice}>
+            <strong>Prize-chain rule</strong>
+            <span>
+              Prize 1 is revealed as the starting value. Round 1 asks whether
+              Prize 2 will be higher or lower. The answer is calculated
+              automatically from the saved prize values.
+            </span>
+          </div>
+
+          <div className="higher-lower-mini-grid" style={styles.miniGrid}>
+            <InfoCard
+              label="Prize order"
+              value={prizeRevealRandomiseOrder ? "Randomise once" : "Saved order"}
+            />
+            <InfoCard
+              label="Eligible players"
+              value="Paid Higher or Lower only"
+            />
+            <InfoCard
+              label="Minimum required"
+              value="2 valued prizes"
+            />
+          </div>
+
+          {configuredPrizes.length < 2 ? (
+            <div style={styles.warningBox}>
+              Add at least two Higher or Lower prize reveal prizes with estimated
+              values before creating the live game.
+            </div>
+          ) : null}
 
           <form action={createSessionAction} style={styles.formGrid}>
             <input type="hidden" name="event_id" value={event.id} />
@@ -1072,9 +1388,31 @@ export default async function AdminHigherOrLowerGamePage({
               <span style={styles.label}>Game title</span>
               <input
                 name="title"
-                defaultValue="Higher or Lower"
+                defaultValue={higherOrLowerAddOn?.title || "Higher or Lower"}
                 style={styles.input}
               />
+            </label>
+
+            <label style={styles.field}>
+              <span style={styles.label}>Number of prizes to use</span>
+              <select
+                name="prize_count"
+                defaultValue={String(configuredPrizes.length)}
+                style={styles.select}
+              >
+                {configuredPrizes.map((_, index) => {
+                  const prizeCount = index + 1;
+
+                  if (prizeCount < 2) return null;
+
+                  return (
+                    <option key={prizeCount} value={prizeCount}>
+                      {prizeCount} prizes — {prizeCount - 1} round
+                      {prizeCount - 1 === 1 ? "" : "s"}
+                    </option>
+                  );
+                })}
+              </select>
             </label>
 
             <label style={{ ...styles.field, gridColumn: "1 / -1" }}>
@@ -1088,11 +1426,43 @@ export default async function AdminHigherOrLowerGamePage({
             </label>
 
             <div style={styles.submitRow}>
-              <button type="submit" style={styles.primaryButton}>
-                Create Higher or Lower game
+              <button
+                type="submit"
+                disabled={configuredPrizes.length < 2}
+                style={{
+                  ...styles.primaryButton,
+                  opacity: configuredPrizes.length < 2 ? 0.55 : 1,
+                  cursor:
+                    configuredPrizes.length < 2 ? "not-allowed" : "pointer",
+                }}
+              >
+                Create game from saved prizes
               </button>
             </div>
           </form>
+
+          <div style={styles.prizePreviewList}>
+            {configuredPrizes.length === 0 ? (
+              <div style={styles.emptyState}>
+                No valid prize reveal prizes found. Go to Prize setup first.
+              </div>
+            ) : (
+              configuredPrizes.map((prize, index) => (
+                <div key={prize.id || `${prize.title}-${index}`} style={styles.prizePreviewCard}>
+                  <div>
+                    <div style={styles.prizePreviewEyebrow}>
+                      Saved prize {index + 1}
+                    </div>
+                    <strong style={styles.prizePreviewTitle}>{prize.title}</strong>
+                    <div style={styles.metaText}>
+                      {prize.sponsorName ? `${prize.sponsorName} · ` : ""}
+                      {moneyFromCents(prize.estimatedValueCents)}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </section>
       ) : (
         <>
@@ -1102,8 +1472,8 @@ export default async function AdminHigherOrLowerGamePage({
                 <div style={styles.sectionEyebrow}>Game control</div>
                 <h2 style={styles.sectionTitle}>{session.title}</h2>
                 <p style={styles.sectionText}>
-                  Created {formatDate(session.created_at)} · Current round{" "}
-                  {session.current_round_number || 0}
+                  Created {formatDate(session.created_at)} · Current revealed
+                  round {session.current_round_number || 0}
                 </p>
               </div>
 
@@ -1165,6 +1535,36 @@ export default async function AdminHigherOrLowerGamePage({
           <section style={styles.sectionCard}>
             <div style={styles.sectionHeader}>
               <div>
+                <div style={styles.sectionEyebrow}>Starting prize</div>
+                <h2 style={styles.sectionTitle}>
+                  {baseline?.reveal_title || "Starting prize not found"}
+                </h2>
+                <p style={styles.sectionText}>
+                  This prize is the revealed baseline. Players answer whether
+                  the next prize will be higher or lower than this value.
+                </p>
+              </div>
+
+              <span
+                style={{
+                  ...styles.statusPill,
+                  ...statusStyle(baseline?.status || "revealed"),
+                }}
+              >
+                {moneyFromCents(baseline?.reveal_value_cents || 0)}
+              </span>
+            </div>
+
+            {baseline?.reveal_description ? (
+              <div style={styles.revealDescription}>
+                {baseline.reveal_description}
+              </div>
+            ) : null}
+          </section>
+
+          <section style={styles.sectionCard}>
+            <div style={styles.sectionHeader}>
+              <div>
                 <div style={styles.sectionEyebrow}>Entries</div>
                 <h2 style={styles.sectionTitle}>Generate player entries</h2>
               </div>
@@ -1173,7 +1573,8 @@ export default async function AdminHigherOrLowerGamePage({
             <p style={styles.sectionText}>
               This reads paid Higher or Lower add-on order items and creates one
               live-game entry for each paid add-on entry. Existing generated
-              entries are skipped.
+              entries are skipped. Ticket-only buyers and unpaid/pending orders
+              are not eligible.
             </p>
 
             <div className="higher-lower-mini-grid" style={styles.miniGrid}>
@@ -1195,255 +1596,158 @@ export default async function AdminHigherOrLowerGamePage({
           <section style={styles.sectionCard}>
             <div style={styles.sectionHeader}>
               <div>
-                <div style={styles.sectionEyebrow}>Rounds</div>
-                <h2 style={styles.sectionTitle}>Create next round</h2>
-              </div>
-            </div>
-
-            <form action={createRoundAction} style={styles.formGrid}>
-              <input type="hidden" name="event_id" value={event.id} />
-              <input type="hidden" name="session_id" value={session.id} />
-
-              <label style={{ ...styles.field, gridColumn: "1 / -1" }}>
-                <span style={styles.label}>Round prompt</span>
-                <input
-                  name="prompt"
-                  placeholder={`Round ${rounds.length + 1}: higher or lower?`}
-                  style={styles.input}
-                />
-              </label>
-
-              <label style={styles.field}>
-                <span style={styles.label}>Reveal title</span>
-                <input
-                  name="reveal_title"
-                  placeholder="Prize, card, amount or reveal item"
-                  style={styles.input}
-                />
-              </label>
-
-              <label style={styles.field}>
-                <span style={styles.label}>Reveal value</span>
-                <input
-                  name="reveal_value"
-                  placeholder="25.00"
-                  inputMode="decimal"
-                  style={styles.input}
-                />
-              </label>
-
-              <label style={styles.field}>
-                <span style={styles.label}>Status</span>
-                <select name="status" defaultValue="open" style={styles.select}>
-                  <option value="draft">Draft</option>
-                  <option value="open">Open</option>
-                  <option value="locked">Locked</option>
-                  <option value="revealed">Revealed</option>
-                  <option value="closed">Closed</option>
-                </select>
-              </label>
-
-              <label style={{ ...styles.field, gridColumn: "1 / -1" }}>
-                <span style={styles.label}>Reveal description</span>
-                <textarea
-                  name="reveal_description"
-                  rows={3}
-                  placeholder="Optional context for the round reveal."
-                  style={styles.textarea}
-                />
-              </label>
-
-              <div style={styles.submitRow}>
-                <button type="submit" style={styles.primaryButton}>
-                  Create round
-                </button>
-              </div>
-            </form>
-          </section>
-
-          <section style={styles.sectionCard}>
-            <div style={styles.sectionHeader}>
-              <div>
                 <div style={styles.sectionEyebrow}>Round control</div>
-                <h2 style={styles.sectionTitle}>Rounds and answers</h2>
+                <h2 style={styles.sectionTitle}>Prize-chain rounds</h2>
               </div>
             </div>
 
-            {rounds.length === 0 ? (
-              <div style={styles.emptyState}>No rounds created yet.</div>
+            {gameRounds.length === 0 ? (
+              <div style={styles.emptyState}>No playable rounds were created.</div>
             ) : (
               <div style={styles.roundList}>
-                {rounds.map((round) => (
-                  <details key={round.id} style={styles.roundCard}>
-                    <summary style={styles.roundSummary}>
-                      <div>
-                        <strong>
-                          Round {round.round_number}:{" "}
-                          {round.prompt || "Higher or lower?"}
-                        </strong>
-                        <div style={styles.metaText}>
-                          {round.reveal_title || "No reveal title"} ·{" "}
-                          {round.reveal_value_cents !== null
-                            ? moneyFromCents(round.reveal_value_cents)
-                            : "No value"}{" "}
-                          · {statusLabel(round.status)}
+                {gameRounds.map((round) => {
+                  const previousRound = previousRoundFor(rounds, round);
+                  const isOpen = round.status === "open";
+                  const isRevealed = round.status === "revealed";
+
+                  return (
+                    <details
+                      key={round.id}
+                      open={isOpen || isRevealed}
+                      style={styles.roundCard}
+                    >
+                      <summary style={styles.roundSummary}>
+                        <div>
+                          <strong>
+                            Round {round.round_number}:{" "}
+                            {round.prompt || "Higher or lower?"}
+                          </strong>
+                          <div style={styles.metaText}>
+                            Previous: {previousRound?.reveal_title || "Unknown"}{" "}
+                            ({moneyFromCents(previousRound?.reveal_value_cents || 0)})
+                            {" "}→ Next: {round.reveal_title || "Unknown"} (
+                            {moneyFromCents(round.reveal_value_cents || 0)})
+                          </div>
+                          <div style={styles.metaText}>
+                            Correct answer:{" "}
+                            <strong>{statusLabel(round.correct_answer)}</strong>
+                          </div>
                         </div>
-                      </div>
 
-                      <span
-                        style={{
-                          ...styles.statusPill,
-                          ...statusStyle(round.status),
-                        }}
-                      >
-                        {statusLabel(round.status)}
-                      </span>
-                    </summary>
-
-                    <form action={updateRoundAction} style={styles.formGrid}>
-                      <input type="hidden" name="event_id" value={event.id} />
-                      <input type="hidden" name="session_id" value={session.id} />
-                      <input type="hidden" name="round_id" value={round.id} />
-
-                      <label style={{ ...styles.field, gridColumn: "1 / -1" }}>
-                        <span style={styles.label}>Prompt</span>
-                        <input
-                          name="prompt"
-                          defaultValue={round.prompt || ""}
-                          style={styles.input}
-                        />
-                      </label>
-
-                      <label style={styles.field}>
-                        <span style={styles.label}>Reveal title</span>
-                        <input
-                          name="reveal_title"
-                          defaultValue={round.reveal_title || ""}
-                          style={styles.input}
-                        />
-                      </label>
-
-                      <label style={styles.field}>
-                        <span style={styles.label}>Reveal value</span>
-                        <input
-                          name="reveal_value"
-                          defaultValue={
-                            round.reveal_value_cents !== null
-                              ? (Number(round.reveal_value_cents) / 100).toFixed(2)
-                              : ""
-                          }
-                          inputMode="decimal"
-                          style={styles.input}
-                        />
-                      </label>
-
-                      <label style={styles.field}>
-                        <span style={styles.label}>Correct answer</span>
-                        <select
-                          name="correct_answer"
-                          defaultValue={round.correct_answer || ""}
-                          style={styles.select}
+                        <span
+                          style={{
+                            ...styles.statusPill,
+                            ...statusStyle(round.status),
+                          }}
                         >
-                          <option value="">Not revealed</option>
-                          <option value="higher">Higher</option>
-                          <option value="lower">Lower</option>
-                        </select>
-                      </label>
+                          {statusLabel(round.status)}
+                        </span>
+                      </summary>
 
-                      <label style={styles.field}>
-                        <span style={styles.label}>Round status</span>
-                        <select
-                          name="status"
-                          defaultValue={round.status}
-                          style={styles.select}
-                        >
-                          <option value="draft">Draft</option>
-                          <option value="open">Open</option>
-                          <option value="locked">Locked</option>
-                          <option value="revealed">Revealed</option>
-                          <option value="closed">Closed</option>
-                        </select>
-                      </label>
+                      {round.reveal_description ? (
+                        <div style={styles.revealDescription}>
+                          {round.reveal_description}
+                        </div>
+                      ) : null}
 
-                      <label style={{ ...styles.field, gridColumn: "1 / -1" }}>
-                        <span style={styles.label}>Reveal description</span>
-                        <textarea
-                          name="reveal_description"
-                          rows={3}
-                          defaultValue={round.reveal_description || ""}
-                          style={styles.textarea}
-                        />
-                      </label>
+                      {isOpen ? (
+                        <div style={styles.answerGrid}>
+                          {active.length === 0 ? (
+                            <div style={styles.emptyState}>
+                              No active players available. Generate entries or
+                              reset the game if needed.
+                            </div>
+                          ) : (
+                            active.map((entry) => {
+                              const existingAnswer = answerMap.get(
+                                `${entry.id}:${round.id}`,
+                              );
 
-                      <div style={styles.submitRow}>
-                        <button type="submit" style={styles.primaryButton}>
-                          Save / reveal round
-                        </button>
-                      </div>
-                    </form>
+                              return (
+                                <form
+                                  key={`${round.id}-${entry.id}`}
+                                  action={saveAnswerAction}
+                                  style={styles.answerRow}
+                                >
+                                  <input type="hidden" name="event_id" value={event.id} />
+                                  <input
+                                    type="hidden"
+                                    name="session_id"
+                                    value={session.id}
+                                  />
+                                  <input type="hidden" name="round_id" value={round.id} />
+                                  <input type="hidden" name="entry_id" value={entry.id} />
 
-                    <div style={styles.answerGrid}>
-                      {entries.length === 0 ? (
-                        <div style={styles.emptyState}>
-                          Generate entries before recording round answers.
+                                  <div>
+                                    <div style={styles.playerName}>
+                                      {entry.player_name || "Unnamed player"} #
+                                      {entry.entry_number}
+                                    </div>
+                                    <div style={styles.metaText}>
+                                      {entry.player_email || "No email"} · Active
+                                      {existingAnswer?.answer
+                                        ? ` · Answered ${statusLabel(
+                                            existingAnswer.answer,
+                                          )}`
+                                        : ""}
+                                    </div>
+                                  </div>
+
+                                  <select
+                                    name="answer"
+                                    defaultValue={existingAnswer?.answer || ""}
+                                    style={styles.answerSelect}
+                                  >
+                                    <option value="">Choose</option>
+                                    <option value="higher">Higher</option>
+                                    <option value="lower">Lower</option>
+                                  </select>
+
+                                  <button type="submit" style={styles.smallButton}>
+                                    Save
+                                  </button>
+                                </form>
+                              );
+                            })
+                          )}
+
+                          <form action={revealRoundAction} style={styles.revealActionBox}>
+                            <input type="hidden" name="event_id" value={event.id} />
+                            <input type="hidden" name="session_id" value={session.id} />
+                            <input type="hidden" name="round_id" value={round.id} />
+
+                            <div>
+                              <strong style={styles.revealActionTitle}>
+                                Reveal {round.reveal_title || "next prize"}
+                              </strong>
+                              <p style={styles.revealActionText}>
+                                This checks all active-player answers. Missing
+                                or incorrect answers are eliminated.
+                              </p>
+                            </div>
+
+                            <button type="submit" style={styles.winnerButton}>
+                              Reveal round
+                            </button>
+                          </form>
                         </div>
                       ) : (
-                        entries.map((entry) => {
-                          const existingAnswer = answerMap.get(
-                            `${entry.id}:${round.id}`,
-                          );
-
-                          return (
-                            <form
-                              key={`${round.id}-${entry.id}`}
-                              action={saveAnswerAction}
-                              style={styles.answerRow}
-                            >
-                              <input type="hidden" name="event_id" value={event.id} />
-                              <input
-                                type="hidden"
-                                name="session_id"
-                                value={session.id}
-                              />
-                              <input type="hidden" name="round_id" value={round.id} />
-                              <input type="hidden" name="entry_id" value={entry.id} />
-
-                              <div>
-                                <div style={styles.playerName}>
-                                  {entry.player_name || "Unnamed player"} #
-                                  {entry.entry_number}
-                                </div>
-                                <div style={styles.metaText}>
-                                  {entry.player_email || "No email"} ·{" "}
-                                  {statusLabel(entry.status)}
-                                  {existingAnswer?.is_correct === true
-                                    ? " · Correct"
-                                    : existingAnswer?.is_correct === false
-                                      ? " · Incorrect"
-                                      : ""}
-                                </div>
-                              </div>
-
-                              <select
-                                name="answer"
-                                defaultValue={existingAnswer?.answer || ""}
-                                style={styles.answerSelect}
-                              >
-                                <option value="">Choose</option>
-                                <option value="higher">Higher</option>
-                                <option value="lower">Lower</option>
-                              </select>
-
-                              <button type="submit" style={styles.smallButton}>
-                                Save
-                              </button>
-                            </form>
-                          );
-                        })
+                        <div style={styles.revealedRoundBox}>
+                          <strong>
+                            {isRevealed ? "Round revealed" : "Round not open yet"}
+                          </strong>
+                          <span>
+                            {isRevealed
+                              ? `${round.reveal_title || "Prize"} was ${statusLabel(
+                                  round.correct_answer,
+                                )}.`
+                              : "This round opens automatically after the previous round is revealed."}
+                          </span>
+                        </div>
                       )}
-                    </div>
-                  </details>
-                ))}
+                    </details>
+                  );
+                })}
               </div>
             )}
           </section>
@@ -1454,6 +1758,14 @@ export default async function AdminHigherOrLowerGamePage({
                 <div style={styles.sectionEyebrow}>Players</div>
                 <h2 style={styles.sectionTitle}>Player status</h2>
               </div>
+
+              <form action={resetActiveEntriesAction}>
+                <input type="hidden" name="event_id" value={event.id} />
+                <input type="hidden" name="session_id" value={session.id} />
+                <button type="submit" style={styles.secondaryLightButton}>
+                  Reset game statuses
+                </button>
+              </form>
             </div>
 
             {entries.length === 0 ? (
@@ -1561,6 +1873,13 @@ const responsiveStyles = `
   .higher-lower-summary-grid,
   .higher-lower-mini-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .higher-lower-answer-row,
+  .higher-lower-player-card {
+    grid-template-columns: 1fr !important;
   }
 }
 
@@ -1695,6 +2014,29 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #fecaca",
     fontWeight: 900,
     marginBottom: 18,
+  },
+
+  warningBox: {
+    padding: 14,
+    borderRadius: 18,
+    background: "#fffbeb",
+    color: "#92400e",
+    border: "1px solid #fde68a",
+    fontWeight: 850,
+    lineHeight: 1.45,
+  },
+
+  setupNotice: {
+    display: "grid",
+    gap: 4,
+    padding: 14,
+    borderRadius: 18,
+    background: "#eff6ff",
+    border: "1px solid #bfdbfe",
+    color: "#1e3a8a",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 850,
   },
 
   summaryGrid: {
@@ -1863,6 +2205,17 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
   },
 
+  secondaryLightButton: {
+    minHeight: 40,
+    padding: "9px 13px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#334155",
+    border: "1px solid #cbd5e1",
+    fontWeight: 950,
+    cursor: "pointer",
+  },
+
   statusPill: {
     display: "inline-flex",
     alignItems: "center",
@@ -1914,6 +2267,35 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "center",
   },
 
+  prizePreviewList: {
+    display: "grid",
+    gap: 10,
+  },
+
+  prizePreviewCard: {
+    padding: 14,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+
+  prizePreviewEyebrow: {
+    color: "#92400e",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 5,
+  },
+
+  prizePreviewTitle: {
+    display: "block",
+    color: "#0f172a",
+    fontSize: 17,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
   roundList: {
     display: "grid",
     gap: 12,
@@ -1946,6 +2328,16 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
+  revealDescription: {
+    padding: 14,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    color: "#475569",
+    lineHeight: 1.5,
+    fontWeight: 750,
+  },
+
   answerGrid: {
     display: "grid",
     gap: 8,
@@ -1970,6 +2362,45 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #cbd5e1",
     padding: "8px 10px",
     background: "#ffffff",
+  },
+
+  revealActionBox: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 12,
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 18,
+    background: "#fffbeb",
+    border: "1px solid #fde68a",
+  },
+
+  revealActionTitle: {
+    display: "block",
+    color: "#0f172a",
+    fontSize: 16,
+    fontWeight: 950,
+  },
+
+  revealActionText: {
+    margin: "4px 0 0",
+    color: "#92400e",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 800,
+  },
+
+  revealedRoundBox: {
+    display: "grid",
+    gap: 4,
+    padding: 14,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    color: "#475569",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 850,
   },
 
   playerList: {
