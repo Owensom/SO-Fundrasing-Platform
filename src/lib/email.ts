@@ -653,7 +653,6 @@ async function sendEmail(params: {
     id: result.data?.id,
   });
 }
-
 export async function sendReceiptEmail({
   to,
   name,
@@ -1300,7 +1299,6 @@ export async function sendDonationReceiptEmail({
     console.error("donation receipt email failed", err);
   }
 }
-
 export async function sendEventWinnerEmail({
   to,
   name,
@@ -1948,13 +1946,12 @@ export async function sendHigherOrLowerWinnerEmail({
     intro: `Hi ${safeName}, congratulations — you have won Higher or Lower for ${eventTitle}.`,
     body: `
       <div style="
-        border:1px solid #fde68a;
-        border-radius:22px;
+        border:1px solid #cbd5e1;
+        border-radius:20px;
         padding:22px;
         margin:20px 0;
-        background:
-          radial-gradient(circle at top left, rgba(250,204,21,0.18), transparent 42%),
-          linear-gradient(135deg,#fffbeb 0%,#ffffff 68%);
+        background:#ffffff;
+        color:#0f172a;
       ">
         <p style="
           margin:0 0 8px;
@@ -1969,9 +1966,9 @@ export async function sendHigherOrLowerWinnerEmail({
 
         <h2 style="
           margin:0;
-          color:#422006;
+          color:#0f172a;
           font-size:28px;
-          line-height:1.2;
+          line-height:1.25;
           font-weight:900;
         ">
           ${escapeHtml(safeEntryLabel)}
@@ -1982,24 +1979,49 @@ export async function sendHigherOrLowerWinnerEmail({
         border-radius:20px;
         padding:22px;
         margin:22px 0;
-        background:#ecfdf5;
-        border:1px solid #bbf7d0;
+        background:#f8fafc;
+        border:1px solid #cbd5e1;
+        color:#0f172a;
       ">
         <p style="
           margin:0;
-          color:#14532d;
+          color:#0f172a;
+          font-size:17px;
+          line-height:1.7;
+          font-weight:800;
+        ">
+          The organiser has declared you as the Higher or Lower winner.
+        </p>
+
+        <p style="
+          margin:14px 0 0;
+          color:#334155;
           font-size:16px;
           line-height:1.65;
-          font-weight:850;
+          font-weight:700;
         ">
-          The organiser has declared you as the Higher or Lower winner. They will
-          be in touch soon with prize or next-step details.
+          They will be in touch soon with prize or next-step details.
         </p>
       </div>
 
-      <p style="margin:22px 0 0;color:#334155;font-size:16px;line-height:1.65;">
-        Thank you for taking part and supporting the event.
-      </p>
+      <div style="
+        border-radius:18px;
+        padding:18px;
+        margin:20px 0;
+        background:#fff7ed;
+        border:1px solid #fed7aa;
+        color:#7c2d12;
+      ">
+        <p style="
+          margin:0;
+          color:#7c2d12;
+          font-size:15px;
+          line-height:1.65;
+          font-weight:800;
+        ">
+          Thank you for taking part and supporting the event.
+        </p>
+      </div>
     `,
   });
 
