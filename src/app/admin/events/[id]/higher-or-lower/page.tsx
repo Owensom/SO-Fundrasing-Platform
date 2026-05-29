@@ -1534,12 +1534,19 @@ export default async function AdminHigherOrLowerGamePage({
           </Link>
 
           <Link href={`/admin/events/${event.id}/orders`} style={styles.secondaryButton}>
-            Orders
+           Orders
           </Link>
 
-          <Link href={`/e/${event.slug}`} style={styles.secondaryButton}>
-            Public event
-          </Link>
+         <Link
+          href={`/admin/events/${event.id}/higher-or-lower/links`}
+          style={styles.secondaryButton}
+         >
+         Player links & emails
+        </Link>
+
+         <Link href={`/e/${event.slug}`} style={styles.secondaryButton}>
+          Public event
+        </Link>
         </div>
       </section>
 
