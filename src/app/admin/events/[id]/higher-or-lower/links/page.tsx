@@ -167,12 +167,22 @@ function getSuccessMessage(value: string | undefined) {
 }
 
 function getErrorMessage(value: string | undefined) {
-  if (value === "session-missing") return "Higher or Lower game session was not found.";
+  if (value === "session-missing") {
+    return "Higher or Lower game session was not found.";
+  }
   if (value === "entry-missing") return "Player entry was not found.";
-  if (value === "email-missing") return "This player entry does not have an email address.";
-  if (value === "token-missing") return "This player entry does not have a private answer token.";
-  if (value === "paid-entry-required") return "Only paid Higher or Lower entries can receive player links.";
-  if (value === "send-failed") return "The player link email could not be sent. Check Vercel logs for details.";
+  if (value === "email-missing") {
+    return "This player entry does not have an email address.";
+  }
+  if (value === "token-missing") {
+    return "This player entry does not have a private answer token.";
+  }
+  if (value === "paid-entry-required") {
+    return "Only paid Higher or Lower entries can receive player links.";
+  }
+  if (value === "send-failed") {
+    return "The player link email could not be sent. Check Vercel logs for details.";
+  }
 
   return cleanText(value);
 }
@@ -504,8 +514,8 @@ export default async function HigherOrLowerPlayerLinksPage({
             Higher or Lower
           </h1>
           <p style={styles.subtitle}>
-            Email or copy one private answer link per paid Higher or Lower entry.
-            The same private link works for every open round.
+            Send each paid player their private answer link. The same link works
+            for every open round.
           </p>
           <p style={styles.tenant}>
             Event: <strong>{event.title}</strong> · Tenant:{" "}
@@ -515,10 +525,10 @@ export default async function HigherOrLowerPlayerLinksPage({
 
         <div className="links-actions" style={styles.heroActions}>
           <Link href={`/admin/events/${event.id}/higher-or-lower`} style={styles.secondaryButton}>
-            ← Back to game controller
+            ← Game controller
           </Link>
           <Link href={`/e/${event.slug}/higher-or-lower`} style={styles.secondaryButton}>
-            Public room display
+            Room display
           </Link>
         </div>
       </section>
@@ -532,7 +542,7 @@ export default async function HigherOrLowerPlayerLinksPage({
       ) : null}
 
       <section className="summary-grid" style={styles.summaryGrid}>
-        <SummaryCard label="Game status" value={session ? statusLabel(session.status) : "No game"} />
+        <SummaryCard label="Game" value={session ? statusLabel(session.status) : "No game"} />
         <SummaryCard label="Paid entries" value={entries.length} />
         <SummaryCard label="Links ready" value={withTokens.length} />
         <SummaryCard label="Email ready" value={activeEmailReadyCount} />
@@ -542,13 +552,13 @@ export default async function HigherOrLowerPlayerLinksPage({
         <section style={styles.sectionCard}>
           <h2 style={styles.sectionTitle}>No Higher or Lower game yet</h2>
           <p style={styles.sectionText}>
-            Create the Higher or Lower live game first, then generate entries from
-            paid orders before copying or emailing player answer links.
+            Create the live game first, then generate entries from paid orders
+            before emailing player answer links.
           </p>
         </section>
       ) : entries.length === 0 ? (
         <section style={styles.sectionCard}>
-          <h2 style={styles.sectionTitle}>No paid game entries generated yet</h2>
+          <h2 style={styles.sectionTitle}>No paid entries generated yet</h2>
           <p style={styles.sectionText}>
             Go back to the game controller and use “Generate entries from paid
             orders”. Ticket-only buyers and unpaid orders will not appear here.
@@ -558,10 +568,10 @@ export default async function HigherOrLowerPlayerLinksPage({
         <section style={styles.sectionCard}>
           <div style={styles.sectionHeader}>
             <div>
-              <div style={styles.sectionEyebrow}>Send or copy links</div>
-              <h2 style={styles.sectionTitle}>Paid player entries</h2>
+              <div style={styles.sectionEyebrow}>Send links</div>
+              <h2 style={styles.sectionTitle}>Player links & emails</h2>
               <p style={styles.sectionText}>
-                Send the private game link by email, or copy it manually as a
+                Email the link once before play starts. Use the copy field as a
                 backup for WhatsApp, QR codes or event-night support.
               </p>
             </div>
@@ -571,7 +581,7 @@ export default async function HigherOrLowerPlayerLinksPage({
                 {statusLabel(session.status)}
               </span>
 
-              <form action={sendAllActivePlayerLinksAction}>
+              <form action={sendAllActivePlayerLinksAction} style={styles.inlineForm}>
                 <input type="hidden" name="event_id" value={event.id} />
                 <input type="hidden" name="session_id" value={session.id} />
                 <button
@@ -597,10 +607,10 @@ export default async function HigherOrLowerPlayerLinksPage({
           ) : null}
 
           <div style={styles.infoBox}>
-            <strong>Recommended flow</strong>
+            <strong>Simple event-night flow</strong>
             <span>
-              Email the private answer links once before the game starts. Players
-              keep the same link open and use it for each open round.
+              Send links once. Players keep their private page open and answer
+              each round only when the organiser opens it.
             </span>
           </div>
 
@@ -616,20 +626,21 @@ export default async function HigherOrLowerPlayerLinksPage({
 
               return (
                 <article key={entry.id} style={styles.linkCard}>
-                  <div style={styles.playerHeader}>
-                    <div>
+                  <div style={styles.playerTop}>
+                    <div style={styles.playerMain}>
+                      <div style={styles.playerEyebrow}>Entry #{entry.entry_number}</div>
                       <h3 style={styles.playerName}>
-                        {entry.player_name || "Unnamed player"} #{entry.entry_number}
+                        {entry.player_name || "Unnamed player"}
                       </h3>
                       <p style={styles.metaText}>
-                        {entry.player_email || "No email"}
+                        {entry.player_email || "No email recorded"}
                         {entry.eliminated_round_number
                           ? ` · Eliminated round ${entry.eliminated_round_number}`
                           : ""}
                       </p>
                     </div>
 
-                    <div style={styles.pillRow}>
+                    <div className="pill-row" style={styles.pillRow}>
                       <span style={{ ...styles.statusPill, ...statusStyle(entry.status) }}>
                         {statusLabel(entry.status)}
                       </span>
@@ -639,10 +650,37 @@ export default async function HigherOrLowerPlayerLinksPage({
                     </div>
                   </div>
 
+                  <div className="mobile-action-grid" style={styles.mobileActionGrid}>
+                    <form action={sendSinglePlayerLinkAction} style={styles.inlineForm}>
+                      <input type="hidden" name="event_id" value={event.id} />
+                      <input type="hidden" name="session_id" value={session.id} />
+                      <input type="hidden" name="entry_id" value={entry.id} />
+                      <button
+                        type="submit"
+                        disabled={!canSend}
+                        style={{
+                          ...styles.emailButton,
+                          opacity: canSend ? 1 : 0.55,
+                          cursor: canSend ? "pointer" : "not-allowed",
+                        }}
+                      >
+                        Send link
+                      </button>
+                    </form>
+
+                    {answerUrl ? (
+                      <Link href={answerUrl} style={styles.openButton}>
+                        Open page
+                      </Link>
+                    ) : (
+                      <span style={styles.disabledOpenButton}>No token</span>
+                    )}
+                  </div>
+
                   {answerUrl ? (
-                    <div style={styles.copyBox}>
+                    <div className="copy-panel" style={styles.copyPanel}>
                       <label style={styles.copyLabel} htmlFor={`answer-link-${entry.id}`}>
-                        Player answer link
+                        Copy fallback link
                       </label>
                       <input
                         id={`answer-link-${entry.id}`}
@@ -650,29 +688,10 @@ export default async function HigherOrLowerPlayerLinksPage({
                         value={answerUrl}
                         style={styles.copyInput}
                       />
-
-                      <div style={styles.copyActions}>
-                        <Link href={answerUrl} style={styles.openButton}>
-                          Open player page
-                        </Link>
-
-                        <form action={sendSinglePlayerLinkAction}>
-                          <input type="hidden" name="event_id" value={event.id} />
-                          <input type="hidden" name="session_id" value={session.id} />
-                          <input type="hidden" name="entry_id" value={entry.id} />
-                          <button
-                            type="submit"
-                            disabled={!canSend}
-                            style={{
-                              ...styles.emailButton,
-                              opacity: canSend ? 1 : 0.55,
-                              cursor: canSend ? "pointer" : "not-allowed",
-                            }}
-                          >
-                            Send link
-                          </button>
-                        </form>
-                      </div>
+                      <p style={styles.copyHelp}>
+                        Tap the field, select all, then copy if you need to send
+                        the link manually.
+                      </p>
                     </div>
                   ) : (
                     <div style={styles.warningBox}>
@@ -720,7 +739,7 @@ const responsiveStyles = `
   max-width: 100%;
 }
 
-@media (max-width: 860px) {
+@media (max-width: 900px) {
   .higher-lower-links-page .links-hero {
     grid-template-columns: 1fr !important;
   }
@@ -739,37 +758,53 @@ const responsiveStyles = `
 }
 
 @media (max-width: 720px) {
-  .higher-lower-links-page .copyBox {
+  .higher-lower-links-page .pill-row {
+    justify-content: flex-start !important;
+  }
+
+  .higher-lower-links-page .mobile-action-grid {
     grid-template-columns: 1fr !important;
   }
 
-  .higher-lower-links-page .copyActions {
-    grid-template-columns: 1fr !important;
-  }
-
-  .higher-lower-links-page .copyActions a,
-  .higher-lower-links-page .copyActions button {
+  .higher-lower-links-page .mobile-action-grid a,
+  .higher-lower-links-page .mobile-action-grid button,
+  .higher-lower-links-page .mobile-action-grid span {
     width: 100% !important;
   }
 }
 
 @media (max-width: 640px) {
   .higher-lower-links-page {
-    padding: 18px 12px 44px !important;
+    padding: 16px 10px 42px !important;
   }
 
   .higher-lower-links-page .links-hero {
-    padding: 20px !important;
-    border-radius: 26px !important;
+    padding: 18px !important;
+    border-radius: 24px !important;
+    margin-bottom: 14px !important;
   }
 
   .higher-lower-links-page .links-title {
-    font-size: clamp(38px, 12vw, 54px) !important;
+    font-size: clamp(36px, 12vw, 52px) !important;
     line-height: 0.98 !important;
   }
 
   .higher-lower-links-page .summary-grid {
     grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .higher-lower-links-page .section-card {
+    padding: 16px !important;
+    border-radius: 22px !important;
+  }
+
+  .higher-lower-links-page .copy-panel {
+    padding: 10px !important;
+  }
+
+  .higher-lower-links-page .copy-panel input {
+    font-size: 12px !important;
   }
 }
 `;
@@ -943,6 +978,10 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
   },
 
+  inlineForm: {
+    display: "contents",
+  },
+
   sectionEyebrow: {
     color: "#2563eb",
     fontSize: 12,
@@ -1028,25 +1067,36 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
   },
 
-  playerHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
+  playerTop: {
+    display: "grid",
+    gap: 10,
+  },
+
+  playerMain: {
+    display: "grid",
+    gap: 4,
+  },
+
+  playerEyebrow: {
+    color: "#92400e",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
   },
 
   playerName: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 18,
-    lineHeight: 1.1,
+    fontSize: 22,
+    lineHeight: 1.05,
     fontWeight: 950,
+    letterSpacing: "-0.045em",
     overflowWrap: "anywhere",
   },
 
   metaText: {
-    margin: "4px 0 0",
+    margin: 0,
     color: "#64748b",
     fontSize: 13,
     lineHeight: 1.4,
@@ -1058,13 +1108,63 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     gap: 8,
     flexWrap: "wrap",
+    justifyContent: "flex-start",
   },
 
-  copyBox: {
+  mobileActionGrid: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
     gap: 8,
+  },
+
+  openButton: {
+    display: "inline-flex",
     alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "10px 13px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    border: "none",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+    textAlign: "center",
+  },
+
+  disabledOpenButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    padding: "10px 13px",
+    borderRadius: 999,
+    background: "#e2e8f0",
+    color: "#64748b",
+    border: "1px solid #cbd5e1",
+    fontSize: 13,
+    fontWeight: 950,
+    textAlign: "center",
+  },
+
+  emailButton: {
+    width: "100%",
+    minHeight: 44,
+    padding: "10px 13px",
+    borderRadius: 999,
+    background: "#facc15",
+    color: "#422006",
+    border: "none",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+    textAlign: "center",
+  },
+
+  copyPanel: {
+    display: "grid",
+    gap: 8,
     padding: 12,
     borderRadius: 16,
     background: "#ffffff",
@@ -1072,7 +1172,6 @@ const styles: Record<string, CSSProperties> = {
   },
 
   copyLabel: {
-    gridColumn: "1 / -1",
     color: "#1d4ed8",
     fontSize: 11,
     fontWeight: 950,
@@ -1093,39 +1192,11 @@ const styles: Record<string, CSSProperties> = {
     boxSizing: "border-box",
   },
 
-  copyActions: {
-    display: "grid",
-    gridTemplateColumns: "auto auto",
-    gap: 8,
-    alignItems: "center",
-  },
-
-  openButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 42,
-    padding: "9px 13px",
-    borderRadius: 999,
-    background: "#0f172a",
-    color: "#ffffff",
-    border: "none",
-    textDecoration: "none",
-    fontSize: 13,
-    fontWeight: 950,
-    whiteSpace: "nowrap",
-  },
-
-  emailButton: {
-    minHeight: 42,
-    padding: "9px 13px",
-    borderRadius: 999,
-    background: "#facc15",
-    color: "#422006",
-    border: "none",
-    textDecoration: "none",
-    fontSize: 13,
-    fontWeight: 950,
-    whiteSpace: "nowrap",
+  copyHelp: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 12,
+    lineHeight: 1.4,
+    fontWeight: 750,
   },
 };
