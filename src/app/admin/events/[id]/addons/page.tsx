@@ -512,7 +512,6 @@ function normaliseAddOnForAdmin(
     ),
   };
 }
-
 function getAddOn(
   addOns: EventFundraisingAddOn[],
   definition: AddOnDefinition,
@@ -620,6 +619,7 @@ function readinessToneStyle(tone: ReadinessItem["tone"]) {
     card: styles.readinessItemNeutral,
   };
 }
+
 function buildAddOnReadiness(input: {
   addOn: AdminEventFundraisingAddOn;
   currency: string;
@@ -1220,9 +1220,10 @@ export default async function EventFundraisingAddOnsPage({
           detail="Foundation can sell and report several live fundraising add-ons on the same event."
         />
       </section>
-            {canManageAddOns ? (
+
+      {canManageAddOns ? (
         <section className="readinessPanel" style={styles.readinessPanel}>
-          <div style={styles.readinessHeader}>
+          <div className="readinessHeader" style={styles.readinessHeader}>
             <div>
               <div style={styles.readinessEyebrow}>Readiness</div>
               <h2 style={styles.readinessTitle}>Event add-ons checklist</h2>
@@ -1260,7 +1261,7 @@ export default async function EventFundraisingAddOnsPage({
                 key={item.definition.type}
                 style={styles.readinessOverviewCard}
               >
-                <div style={styles.readinessOverviewHeader}>
+                <div className="readinessOverviewHeader" style={styles.readinessOverviewHeader}>
                   <span style={styles.readinessOverviewLabel}>
                     {item.definition.shortName}
                   </span>
@@ -1306,7 +1307,7 @@ export default async function EventFundraisingAddOnsPage({
             </div>
           ) : null}
 
-          <div style={styles.readinessActions}>
+          <div className="readinessActions" style={styles.readinessActions}>
             <Link
               href={`/e/${encodeURIComponent(event.slug)}`}
               target="_blank"
@@ -1324,8 +1325,7 @@ export default async function EventFundraisingAddOnsPage({
           </div>
         </section>
       ) : null}
-
-      {!canManageAddOns ? (
+            {!canManageAddOns ? (
         <section className="lockedPanel" style={styles.lockedPanel}>
           <div style={styles.lockedEyebrow}>Professional feature</div>
           <h2 style={styles.panelTitle}>Upgrade to use event add-ons</h2>
@@ -1413,7 +1413,10 @@ function AddOnSettingsPanel({
       className="addOnAccordion"
       style={styles.addOnAccordion}
     >
-      <summary className="addOnAccordionSummary" style={styles.addOnAccordionSummary}>
+      <summary
+        className="addOnAccordionSummary"
+        style={styles.addOnAccordionSummary}
+      >
         <div style={styles.addOnSummaryMain}>
           <div style={styles.innerEyebrow}>{definition.eyebrow}</div>
 
@@ -1428,7 +1431,7 @@ function AddOnSettingsPanel({
           </p>
         </div>
 
-        <div style={styles.addOnSummaryMeta}>
+        <div className="addOnSummaryMeta" style={styles.addOnSummaryMeta}>
           <span
             style={{
               ...styles.statusPill,
@@ -1782,7 +1785,7 @@ function AddOnSettingsPanel({
             </div>
           ) : null}
 
-          <div style={styles.submitRow}>
+          <div className="submitRow" style={styles.submitRow}>
             <button type="submit" style={styles.primaryButton}>
               Save {definition.shortName}
             </button>
@@ -1866,20 +1869,51 @@ const responsiveStyles = `
 .event-addons-page textarea,
 .event-addons-page select,
 .event-addons-page button,
-.event-addons-page a {
+.event-addons-page a,
+.event-addons-page summary,
+.event-addons-page details {
   min-width: 0;
   max-width: 100%;
+}
+
+.event-addons-page button,
+.event-addons-page a,
+.event-addons-page select,
+.event-addons-page input,
+.event-addons-page textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.event-addons-page summary {
+  list-style: none;
 }
 
 .event-addons-page summary::-webkit-details-marker {
   display: none;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1080px) {
   .hero {
     grid-template-columns: 1fr !important;
   }
 
+  .topActions {
+    grid-template-columns: 1fr !important;
+  }
+
+  .topActionGroup {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    justify-content: stretch !important;
+    width: 100% !important;
+  }
+
+  .topActions > a,
+  .topActionGroup a {
+    width: 100% !important;
+  }
+}
+
+@media (max-width: 860px) {
   .heroMetaGrid,
   .summaryGrid,
   .readinessOverviewGrid,
@@ -1889,24 +1923,35 @@ const responsiveStyles = `
     grid-template-columns: 1fr !important;
   }
 
-  .topActions {
+  .readinessHeader,
+  .readinessOverviewHeader,
+  .addOnAccordionSummary,
+  .legalSummary {
+    display: grid !important;
     grid-template-columns: 1fr !important;
+    gap: 12px !important;
   }
 
-  .topActionGroup {
+  .addOnSummaryMeta {
+    justify-content: start !important;
+  }
+
+  .readinessActions,
+  .submitRow {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
     justify-content: stretch !important;
-    grid-template-columns: 1fr !important;
   }
 
-  .topActionGroup a,
-  .topActions > a {
+  .readinessActions a,
+  .submitRow button {
     width: 100% !important;
   }
 }
 
 @media (max-width: 720px) {
   .event-addons-page {
-    padding: 18px 12px 44px !important;
+    padding: 16px 10px 44px !important;
   }
 
   .hero,
@@ -1914,29 +1959,88 @@ const responsiveStyles = `
   .lockedPanel,
   .addOnAccordion,
   .upgradeBanner {
-    padding: 20px !important;
-    border-radius: 26px !important;
+    padding: 18px !important;
+    border-radius: 24px !important;
   }
 
   .title {
-    font-size: clamp(38px, 12vw, 54px) !important;
+    font-size: clamp(36px, 12vw, 54px) !important;
     line-height: 0.98 !important;
+    letter-spacing: -0.06em !important;
   }
 
-  .addOnAccordionSummary,
-  .legalSummary,
-  .higher-lower-reveal-summary {
+  .heroPanel {
+    padding: 16px !important;
+  }
+
+  .topActions {
+    padding: 10px !important;
+    border-radius: 20px !important;
+  }
+
+  .topActionGroup {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  .addOnSummaryMeta {
     display: grid !important;
     grid-template-columns: 1fr !important;
+    width: 100% !important;
   }
 
-  .higher-lower-reveal-two-col {
-    grid-template-columns: 1fr !important;
+  .addOnSummaryMeta span {
+    width: 100% !important;
   }
 
-  .higher-lower-reveal-row-summary {
+  .legalPanel,
+  .valueRangePanel {
+    padding: 14px !important;
+  }
+
+  .higher-lower-reveal-summary,
+  .higher-lower-reveal-row-summary,
+  .higher-lower-reveal-two-col,
+  .higher-lower-reveal-prize-grid,
+  .higher-lower-reveal-prize-row,
+  .higher-lower-reveal-upload-row {
     display: grid !important;
     grid-template-columns: 1fr !important;
+    width: 100% !important;
+  }
+
+  .higher-lower-reveal-summary > *,
+  .higher-lower-reveal-row-summary > *,
+  .higher-lower-reveal-two-col > *,
+  .higher-lower-reveal-prize-grid > *,
+  .higher-lower-reveal-prize-row > *,
+  .higher-lower-reveal-upload-row > * {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .higher-lower-reveal-prize-row button,
+  .higher-lower-reveal-upload-row button {
+    width: 100% !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .event-addons-page {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  .hero,
+  .readinessPanel,
+  .lockedPanel,
+  .addOnAccordion,
+  .upgradeBanner {
+    padding: 14px !important;
+  }
+
+  .title {
+    font-size: clamp(34px, 14vw, 48px) !important;
   }
 }
 `;
@@ -2106,7 +2210,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     textAlign: "center",
     boxShadow: "0 2px 8px rgba(15,23,42,0.04)",
-    whiteSpace: "nowrap",
+    whiteSpace: "normal",
   },
 
   primaryActionButton: {
@@ -2123,7 +2227,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textAlign: "center",
     boxShadow: "0 12px 24px rgba(15,23,42,0.14)",
-    whiteSpace: "nowrap",
+    whiteSpace: "normal",
   },
 
   secondaryButtonDark: {
@@ -2167,6 +2271,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     marginBottom: 18,
   },
+
   upgradeBanner: {
     display: "grid",
     gap: 10,
@@ -2293,6 +2398,7 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    width: "fit-content",
     padding: "9px 12px",
     borderRadius: 999,
     border: "1px solid",
@@ -2478,24 +2584,28 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    width: "fit-content",
     padding: "8px 12px",
     borderRadius: 999,
     border: "1px solid",
     fontSize: 12,
     fontWeight: 950,
-    whiteSpace: "nowrap",
+    whiteSpace: "normal",
+    textAlign: "center",
   },
 
   warningCountPill: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    width: "fit-content",
     padding: "8px 12px",
     borderRadius: 999,
     border: "1px solid",
     fontSize: 12,
     fontWeight: 950,
-    whiteSpace: "nowrap",
+    whiteSpace: "normal",
+    textAlign: "center",
   },
 
   warningCountPillActive: {
@@ -2512,6 +2622,8 @@ const styles: Record<string, CSSProperties> = {
 
   prizeRevealToggle: {
     display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
     width: "fit-content",
     padding: "8px 12px",
     borderRadius: 999,
@@ -2522,7 +2634,8 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.04em",
-    whiteSpace: "nowrap",
+    whiteSpace: "normal",
+    textAlign: "center",
   },
 
   addOnAccordionBody: {
