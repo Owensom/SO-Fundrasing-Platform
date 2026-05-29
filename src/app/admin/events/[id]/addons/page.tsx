@@ -11,7 +11,7 @@ import {
   getTenantEventFundraisingAddOnLimits,
   normaliseSubscriptionTier,
 } from "@/lib/subscription-capabilities";
-import HigherOrLowerRevealEditor from "@/components/admin/HigherOrLowerRevealEditor";
+import HigherOrLowerRevealEditor from "@/components/admin/HigherOrLowerRevealEditor"; 
 import {
   getEventById,
   updateEvent,
