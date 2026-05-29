@@ -75,21 +75,6 @@ function moneyFromCents(cents: number | string | null | undefined) {
   return `£${(value / 100).toFixed(2)}`;
 }
 
-function formatDate(value: string | null | undefined) {
-  if (!value) return "Not recorded";
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Not recorded";
-  }
-
-  return new Intl.DateTimeFormat("en-GB", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
-}
-
 function statusLabel(value: string | null | undefined) {
   const clean = cleanText(value).toLowerCase();
 
@@ -296,6 +281,7 @@ async function listPublicHigherOrLowerEntries(input: {
     [input.tenantSlug, input.eventId, input.sessionId],
   );
 }
+
 function PrizeImage({
   imageUrl,
   alt,
@@ -544,7 +530,7 @@ export default async function PublicHigherOrLowerDisplayPage({
         </div>
       </section>
 
-      <section style={heroStyle}>
+      <section className="hero" style={heroStyle}>
         <div style={styles.heroContent}>
           <Link href={`/e/${encodeURIComponent(event.slug)}`} style={styles.backLink}>
             ← Back to event
@@ -571,7 +557,7 @@ export default async function PublicHigherOrLowerDisplayPage({
             </span>
           </div>
 
-          <h1 style={styles.heroTitle}>
+          <h1 className="heroTitle" style={styles.heroTitle}>
             {session?.title || "Higher or Lower"}
           </h1>
 
@@ -678,7 +664,7 @@ export default async function PublicHigherOrLowerDisplayPage({
                     .
                   </p>
 
-                  <div style={styles.hiddenNextPrize}>
+                  <div className="hiddenNextPrize" style={styles.hiddenNextPrize}>
                     <PrizeImage imageUrl={null} alt="Hidden next prize" hidden />
 
                     <div>
@@ -722,7 +708,8 @@ export default async function PublicHigherOrLowerDisplayPage({
             </p>
           </section>
         ) : null}
-                {session && revealedRounds.length > 0 ? (
+
+        {session && revealedRounds.length > 0 ? (
           <section style={styles.historyPanel}>
             <div style={styles.historyHeader}>
               <div>
@@ -816,36 +803,59 @@ const responsiveStyles = `
   }
 }
 
-@media (max-width: 680px) {
+@media (max-width: 760px) {
   .public-higher-lower-page .brandHeader {
+    margin: 10px 10px 12px !important;
     padding: 12px !important;
     border-radius: 22px !important;
-    margin: 10px 10px 12px !important;
+    gap: 10px !important;
   }
 
   .public-higher-lower-page .brandIdentity {
-    grid-template-columns: 56px minmax(0, 1fr) !important;
+    grid-template-columns: 54px minmax(0, 1fr) !important;
+    gap: 10px !important;
   }
 
   .public-higher-lower-page .brandLogoWrap,
   .public-higher-lower-page .brandLogoFallback {
-    width: 56px !important;
-    height: 56px !important;
+    width: 54px !important;
+    height: 54px !important;
     border-radius: 16px !important;
   }
 
-  .public-higher-lower-page .brandTitle {
-    font-size: clamp(24px, 8vw, 36px) !important;
-    letter-spacing: -0.06em !important;
+  .public-higher-lower-page .brandLogo {
+    padding: 5px !important;
   }
 
-  .public-higher-lower-page .hero {
-    padding: 22px 14px !important;
+  .public-higher-lower-page .brandTitle {
+    font-size: clamp(24px, 8vw, 34px) !important;
+    line-height: 0.98 !important;
+    letter-spacing: -0.055em !important;
+  }
+
+  .public-higher-lower-page .brandTagline {
+    font-size: 12px !important;
+  }
+
+  .public-higher-lower-page .brandFeature {
+    padding: 10px !important;
+    border-radius: 16px !important;
+  }
+
+  .public-higher-lower-page .heroContent {
+    padding: 24px 12px 26px !important;
   }
 
   .public-higher-lower-page .heroTitle {
-    font-size: clamp(42px, 14vw, 64px) !important;
-    line-height: 0.95 !important;
+    font-size: clamp(42px, 13vw, 58px) !important;
+    line-height: 0.94 !important;
+    letter-spacing: -0.065em !important;
+  }
+
+  .public-higher-lower-page .heroText {
+    font-size: 15px !important;
+    line-height: 1.45 !important;
+    margin-top: 12px !important;
   }
 
   .public-higher-lower-page .summaryGrid,
@@ -854,8 +864,108 @@ const responsiveStyles = `
     grid-template-columns: 1fr !important;
   }
 
+  .public-higher-lower-page .summaryGrid {
+    gap: 8px !important;
+    margin-top: 16px !important;
+  }
+
+  .public-higher-lower-page .statCard {
+    padding: 12px !important;
+    border-radius: 16px !important;
+  }
+
+  .public-higher-lower-page .statValue {
+    font-size: 22px !important;
+  }
+
+  .public-higher-lower-page .contentWrap {
+    padding: 12px 10px 0 !important;
+  }
+
+  .public-higher-lower-page .baselineCard,
+  .public-higher-lower-page .questionCard,
+  .public-higher-lower-page .historyPanel,
+  .public-higher-lower-page .playerPanel,
+  .public-higher-lower-page .waitingPanel,
+  .public-higher-lower-page .winnerPanel,
+  .public-higher-lower-page .noPlayersPanel {
+    border-radius: 22px !important;
+    padding: 16px !important;
+  }
+
+  .public-higher-lower-page .gameBoard,
+  .public-higher-lower-page .playersGrid {
+    gap: 12px !important;
+    margin-bottom: 12px !important;
+  }
+
+  .public-higher-lower-page .prizeImage {
+    max-height: 260px !important;
+  }
+
+  .public-higher-lower-page .hiddenPrizeImage {
+    min-height: 150px !important;
+    border-radius: 18px !important;
+  }
+
+  .public-higher-lower-page .hiddenPrizeIcon {
+    width: 58px !important;
+    height: 58px !important;
+    font-size: 34px !important;
+  }
+
+  .public-higher-lower-page .baselineTitle,
+  .public-higher-lower-page .questionTitle {
+    font-size: clamp(32px, 10vw, 48px) !important;
+    line-height: 0.96 !important;
+    letter-spacing: -0.06em !important;
+  }
+
+  .public-higher-lower-page .baselineValue {
+    font-size: 24px !important;
+  }
+
+  .public-higher-lower-page .questionText {
+    font-size: 15px !important;
+    line-height: 1.45 !important;
+  }
+
   .public-higher-lower-page .hiddenNextPrize {
     grid-template-columns: 1fr !important;
+    padding: 10px !important;
+    border-radius: 18px !important;
+  }
+
+  .public-higher-lower-page .hiddenTitle {
+    font-size: 22px !important;
+  }
+
+  .public-higher-lower-page .choiceCard {
+    min-height: 78px !important;
+    border-radius: 20px !important;
+    font-size: clamp(30px, 10vw, 44px) !important;
+  }
+
+  .public-higher-lower-page .historyHeading,
+  .public-higher-lower-page .playerPanelTitle,
+  .public-higher-lower-page .waitingTitle,
+  .public-higher-lower-page .noPlayersTitle {
+    font-size: clamp(28px, 8vw, 40px) !important;
+    line-height: 0.98 !important;
+  }
+
+  .public-higher-lower-page .winnerTitle {
+    font-size: clamp(36px, 11vw, 58px) !important;
+    line-height: 0.92 !important;
+  }
+
+  .public-higher-lower-page .historyCard {
+    border-radius: 18px !important;
+    padding: 12px !important;
+  }
+
+  .public-higher-lower-page .playerCard {
+    align-items: flex-start !important;
   }
 }
 `;
