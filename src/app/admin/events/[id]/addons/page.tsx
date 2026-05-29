@@ -11,7 +11,7 @@ import {
   getTenantEventFundraisingAddOnLimits,
   normaliseSubscriptionTier,
 } from "@/lib/subscription-capabilities";
-import ImageFocusUploadField from "@/components/ImageFocusUploadField";
+import HigherOrLowerPrizeRevealEditor from "@/components/admin/HigherOrLowerPrizeRevealEditor";
 import {
   getEventById,
   updateEvent,
@@ -1387,18 +1387,11 @@ function AddOnSettingsPanel({
   currency: string;
   defaultOpen: boolean;
 }) {
-  const isHigherOrLower = definition.type === "higher_or_lower";
+    const isHigherOrLower = definition.type === "higher_or_lower";
   const prizeRevealPrizes = (addOn.prizeRevealPrizes || []).slice(
     0,
     MAX_PRIZE_REVEAL_PRIZES,
   );
-  const prizeRevealRows = Array.from(
-    { length: MAX_PRIZE_REVEAL_PRIZES },
-    (_, index) => prizeRevealPrizes[index] || null,
-  );
-  const prizeRevealDefaultOpen =
-    Boolean(addOn.prizeRevealModeEnabled) || prizeRevealPrizes.length > 0;
-  const revealProgress = revealProgressText(prizeRevealPrizes);
   const legalQuestionDefaultOpen =
     Boolean(addOn.legalQuestionEnabled) ||
     Boolean(String(addOn.legalQuestionText || "").trim()) ||
