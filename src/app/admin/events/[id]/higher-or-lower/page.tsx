@@ -2,7 +2,8 @@ import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { query } from "@/lib/db";
+import { query, queryOne } from "@/lib/db";
+import { sendHigherOrLowerWinnerEmail } from "@/lib/email";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import {
   getEventById,
@@ -94,6 +95,26 @@ type PaidHigherOrLowerOrderItem = {
   quantity: number | string | null;
 };
 
+type EmailBranding = {
+  name?: string | null;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+};
+
+type TenantEmailBrandingRow = {
+  public_display_name: string | null;
+  public_logo_url: string | null;
+  public_logo_mark_url: string | null;
+  public_primary_colour: string | null;
+};
+
+type WinnerEmailEntry = {
+  id: string;
+  entry_number: number;
+  player_name: string | null;
+  player_email: string | null;
+};
+
 type HigherOrLowerPrize = EventPrizeRevealPrize & {
   estimatedValueCents: number;
 };
@@ -105,6 +126,16 @@ type PrizeChainCheck = {
 
 function cleanText(value: unknown) {
   return String(value || "").trim();
+}
+
+function normaliseHexColour(value: unknown, fallback: string) {
+  const clean = cleanText(value).toUpperCase();
+
+  if (/^#[0-9A-F]{6}$/.test(clean)) {
+    return clean;
+  }
+
+  return fallback;
 }
 
 function cleanGameStatus(value: unknown) {
@@ -441,6 +472,38 @@ async function getHigherOrLowerSession(input: {
   return rows[0] || null;
 }
 
+async function getTenantEmailBranding(tenantSlug: string): Promise<EmailBranding> {
+  const row = await queryOne<TenantEmailBrandingRow>(
+    `
+      select
+        public_display_name,
+        public_logo_url,
+        public_logo_mark_url,
+        public_primary_colour
+      from tenant_settings
+      where tenant_slug = $1
+      limit 1
+    `,
+    [tenantSlug],
+  );
+
+  const logoUrl =
+    cleanText(row?.public_logo_url) || cleanText(row?.public_logo_mark_url) || null;
+
+  return {
+    name: cleanText(row?.public_display_name) || "SO Fundraising Platform",
+    logoUrl,
+    primaryColor: normaliseHexColour(row?.public_primary_colour, "#1683F8"),
+  };
+}
+
+function playerEntryLabel(entry: {
+  player_name?: string | null;
+  entry_number: number;
+}) {
+  return `${cleanText(entry.player_name) || "Player"} #${entry.entry_number}`;
+}
+
 async function listGameEntries(input: {
   tenantSlug: string;
   eventId: string;
@@ -513,6 +576,7 @@ async function listGameRounds(input: {
     [input.tenantSlug, input.eventId, input.sessionId],
   );
 }
+
 async function listGameAnswers(input: {
   tenantSlug: string;
   eventId: string;
@@ -701,7 +765,6 @@ async function replacePrizeChainRounds(input: {
     [input.tenantSlug, input.eventId, input.sessionId],
   );
 }
-
 async function createSessionAction(formData: FormData) {
   "use server";
 
@@ -1049,6 +1112,7 @@ async function saveAnswerAction(formData: FormData) {
 
   redirect(`/admin/events/${event.id}/higher-or-lower?success=answer-saved`);
 }
+
 async function revealRoundAction(formData: FormData) {
   "use server";
 
@@ -1307,6 +1371,29 @@ async function markWinnerAction(formData: FormData) {
 
   const { event, tenantSlug } = await requireEventAccess(eventId);
 
+  const winnerRows = await query<WinnerEmailEntry>(
+    `
+      select
+        id::text,
+        entry_number,
+        player_name,
+        player_email
+      from event_addon_game_entries
+      where tenant_slug = $1
+        and event_id = $2
+        and session_id = $3
+        and id = $4
+      limit 1
+    `,
+    [tenantSlug, event.id, sessionId, entryId],
+  );
+
+  const winnerEntry = winnerRows[0] || null;
+
+  if (!winnerEntry) {
+    redirect(`/admin/events/${event.id}/higher-or-lower?error=entry-missing`);
+  }
+
   await query(
     `
       update event_addon_game_entries
@@ -1333,9 +1420,37 @@ async function markWinnerAction(formData: FormData) {
     [tenantSlug, event.id, sessionId],
   );
 
+  const winnerEmail = cleanText(winnerEntry.player_email);
+
+  if (winnerEmail) {
+    try {
+      const branding = await getTenantEmailBranding(tenantSlug);
+
+      await sendHigherOrLowerWinnerEmail({
+        to: winnerEmail,
+        name: cleanText(winnerEntry.player_name) || null,
+        eventTitle: event.title,
+        playerEntryLabel: playerEntryLabel(winnerEntry),
+        branding,
+      });
+    } catch (error) {
+      console.error("higher or lower winner email action failed", {
+        eventId: event.id,
+        tenantSlug,
+        entryId,
+        error,
+      });
+    }
+  } else {
+    console.warn("higher or lower winner email skipped because player email is missing", {
+      eventId: event.id,
+      tenantSlug,
+      entryId,
+    });
+  }
+
   redirect(`/admin/events/${event.id}/higher-or-lower?success=winner-marked`);
 }
-
 function getSuccessMessage(value: string | undefined) {
   if (value === "session-created") {
     return "Higher or Lower prize-chain game created from the saved prize list.";
@@ -1352,7 +1467,7 @@ function getSuccessMessage(value: string | undefined) {
   if (value === "round-revealed") {
     return "Round revealed, answers checked and incorrect active players eliminated.";
   }
-  if (value === "winner-marked") return "Winner marked and game closed.";
+  if (value === "winner-marked") return "Winner marked, game closed and winner email attempted.";
   if (value === "game-reset") return "Game entries and rounds have been reset.";
   if (value === "players-revived") {
     return "Players eliminated in the last revealed round have been reopened.";
@@ -1534,19 +1649,19 @@ export default async function AdminHigherOrLowerGamePage({
           </Link>
 
           <Link href={`/admin/events/${event.id}/orders`} style={styles.secondaryButton}>
-           Orders
+            Orders
           </Link>
 
-         <Link
-          href={`/admin/events/${event.id}/higher-or-lower/links`}
-          style={styles.secondaryButton}
-         >
-         Player links & emails
-        </Link>
+          <Link
+            href={`/admin/events/${event.id}/higher-or-lower/links`}
+            style={styles.secondaryButton}
+          >
+            Player links & emails
+          </Link>
 
-         <Link href={`/e/${event.slug}`} style={styles.secondaryButton}>
-          Public event
-        </Link>
+          <Link href={`/e/${event.slug}`} style={styles.secondaryButton}>
+            Public event
+          </Link>
         </div>
       </section>
 
@@ -1566,7 +1681,8 @@ export default async function AdminHigherOrLowerGamePage({
         <SummaryCard label="Eliminated" value={eliminated.length} />
         <SummaryCard label="Playable rounds" value={gameRounds.length} />
       </section>
-            {!session ? (
+
+      {!session ? (
         <section style={styles.sectionCard}>
           <div style={styles.sectionHeader}>
             <div>
@@ -1771,8 +1887,8 @@ export default async function AdminHigherOrLowerGamePage({
                     {winners[0]?.player_name || "Unnamed player"} #{winners[0]?.entry_number}
                   </h2>
                   <p style={styles.winnerText}>
-                    The game is closed. This winner can be shown on the public
-                    display once the display route is added.
+                    The game is closed. The winner has been marked and the winner
+                    email is attempted when the winner is declared.
                   </p>
                 </div>
 
@@ -2154,6 +2270,7 @@ export default async function AdminHigherOrLowerGamePage({
                                 <form
                                   key={`${round.id}-${entry.id}`}
                                   action={saveAnswerAction}
+                                  className="higher-lower-answer-row"
                                   style={styles.answerRow}
                                 >
                                   <input type="hidden" name="event_id" value={event.id} />
@@ -2260,7 +2377,11 @@ export default async function AdminHigherOrLowerGamePage({
             ) : (
               <div style={styles.playerList}>
                 {entries.map((entry) => (
-                  <div key={entry.id} style={styles.playerCard}>
+                  <div
+                    key={entry.id}
+                    className="higher-lower-player-card"
+                    style={styles.playerCard}
+                  >
                     <div>
                       <div style={styles.playerName}>
                         {entry.player_name || "Unnamed player"} #{entry.entry_number}
