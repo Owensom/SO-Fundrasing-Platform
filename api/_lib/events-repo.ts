@@ -39,6 +39,15 @@ export type EventFundraisingAddOn = {
   prizeRevealTitle?: string;
   prizeRevealDescription?: string;
   prizeRevealPrizes?: EventPrizeRevealPrize[];
+
+  legalQuestionEnabled?: boolean;
+  legalQuestionText?: string;
+  legalQuestionCorrectAnswer?: string;
+  legalQuestionHelperText?: string;
+  prizeValueRangeEnabled?: boolean;
+  prizeValueRangeMinCents?: number;
+  prizeValueRangeMaxCents?: number;
+  prizeValueRangeNote?: string;
 };
 
 type EventFundraisingAddOnRaw = Partial<EventFundraisingAddOn> &
@@ -159,6 +168,7 @@ export type EventOrderItem = {
   guest_name: string | null;
   dietary_requirements: string | null;
   menu_choice: string | null;
+  metadata: Record<string, unknown> | null;
   created_at: string;
 };
 
@@ -339,14 +349,6 @@ function normaliseImageFocus(value: number | null | undefined): number {
 function normaliseNonNegativeInteger(value: unknown, fallback = 0): number {
   const number = Number(value);
   if (!Number.isFinite(number) || number < 0) return fallback;
-  return Math.floor(number);
-}
-
-function normaliseNullablePositiveInteger(
-  value: number | string | null | undefined,
-): number | null {
-  const number = Number(value);
-  if (!Number.isFinite(number) || number <= 0) return null;
   return Math.floor(number);
 }
 
@@ -685,6 +687,47 @@ function normaliseEventFundraisingAddOnsJson(
       prizeRevealPrizes: normalisePrizeRevealPrizes(
         addOn.prizeRevealPrizes ?? addOn.prize_reveal_prizes,
       ),
+
+      legalQuestionEnabled: readBooleanField(
+        addOn,
+        ["legalQuestionEnabled", "legal_question_enabled"],
+        false,
+      ),
+      legalQuestionText: readStringField(
+        addOn,
+        ["legalQuestionText", "legal_question_text"],
+        "",
+      ),
+      legalQuestionCorrectAnswer: readStringField(
+        addOn,
+        ["legalQuestionCorrectAnswer", "legal_question_correct_answer"],
+        "",
+      ),
+      legalQuestionHelperText: readStringField(
+        addOn,
+        ["legalQuestionHelperText", "legal_question_helper_text"],
+        "",
+      ),
+      prizeValueRangeEnabled: readBooleanField(
+        addOn,
+        ["prizeValueRangeEnabled", "prize_value_range_enabled"],
+        false,
+      ),
+      prizeValueRangeMinCents: readNumberField(
+        addOn,
+        ["prizeValueRangeMinCents", "prize_value_range_min_cents"],
+        0,
+      ),
+      prizeValueRangeMaxCents: readNumberField(
+        addOn,
+        ["prizeValueRangeMaxCents", "prize_value_range_max_cents"],
+        0,
+      ),
+      prizeValueRangeNote: readStringField(
+        addOn,
+        ["prizeValueRangeNote", "prize_value_range_note"],
+        "",
+      ),
     });
   });
 
@@ -711,6 +754,7 @@ function normaliseEvent(event: EventItem): EventItem {
     ask_menu_choice: event.ask_menu_choice ?? true,
   };
 }
+
 export function slugifyEventTitle(value: string): string {
   const slug = value
     .toLowerCase()
@@ -1199,7 +1243,6 @@ export async function listAvailableEventSeats(
     [eventId],
   );
 }
-
 export async function createEventSeat(input: {
   eventId: string;
   ticketTypeId?: string | null;
@@ -1406,6 +1449,7 @@ export async function updateEventSeatsMetadata(input: {
     ],
   );
 }
+
 export async function updateEventSeatsStatus(input: {
   eventId: string;
   seatIds: string[];
@@ -2059,6 +2103,7 @@ export async function createEventOrderItem(input: {
   guest_name?: string | null;
   dietary_requirements?: string | null;
   menu_choice?: string | null;
+  metadata?: Record<string, unknown> | null;
 }): Promise<EventOrderItem> {
   const created = await queryOne<EventOrderItem>(
     `
@@ -2072,10 +2117,11 @@ export async function createEventOrderItem(input: {
         unit_amount,
         guest_name,
         dietary_requirements,
-        menu_choice
+        menu_choice,
+        metadata
       )
       values (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb
       )
       returning *
     `,
@@ -2090,6 +2136,7 @@ export async function createEventOrderItem(input: {
       input.guest_name ?? null,
       input.dietary_requirements ?? null,
       input.menu_choice ?? null,
+      JSON.stringify(input.metadata ?? {}),
     ],
   );
 
