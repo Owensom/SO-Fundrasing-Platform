@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import ImageFocusUploadField from "@/components/ImageFocusUploadField";
 import type { EventPrizeRevealPrize } from "../../../api/_lib/events-repo";
 
@@ -35,10 +35,10 @@ function clampPrizeCount(value: unknown, maxPrizes: number) {
 
 function revealStatusLabel(prize: EventPrizeRevealPrize | null) {
   if (!prize?.title) {
-    return "Empty row";
+    return "Empty";
   }
 
-  return prize.isRevealed ? "Revealed publicly" : "Hidden from reveal";
+  return prize.isRevealed ? "Publicly revealed" : "Hidden";
 }
 
 function revealProgressText(prizes: EventPrizeRevealPrize[]) {
@@ -46,13 +46,13 @@ function revealProgressText(prizes: EventPrizeRevealPrize[]) {
   const revealed = prizes.filter((prize) => prize.isRevealed).length;
 
   if (total === 0) {
-    return "No prizes saved yet";
+    return "No prizes saved";
   }
 
-  return `${revealed} of ${total} revealed`;
+  return `${revealed} of ${total} public`;
 }
 
-export default function HigherOrLowerPrizeRevealEditor({
+export default function HigherOrLowerRevealEditor({
   prizeRevealModeEnabled,
   prizeRevealRandomiseOrder,
   prizeRevealTitle,
@@ -62,9 +62,10 @@ export default function HigherOrLowerPrizeRevealEditor({
   subscriptionTier,
   customImagesAllowed,
 }: Props) {
-  const safeMaxPrizes = Math.max(2, Math.floor(Number(maxPrizes || 8)));
+  const safeMaxPrizes = Math.max(2, Math.floor(Number(maxPrizes || 20)));
   const savedPrizeCount = Math.max(2, prizeRevealPrizes.length || 0);
   const defaultPrizeCount = Math.min(safeMaxPrizes, savedPrizeCount);
+
   const [prizeCount, setPrizeCount] = useState(defaultPrizeCount);
 
   const visiblePrizeRows = useMemo(() => {
@@ -80,78 +81,76 @@ export default function HigherOrLowerPrizeRevealEditor({
   return (
     <details
       open={Boolean(prizeRevealModeEnabled) || prizeRevealPrizes.length > 0}
-      className="prizeRevealPanel"
-      style={styles.prizeRevealPanel}
+      className="higher-lower-reveal-panel"
+      style={styles.panel}
     >
-      <summary className="prizeRevealSummary" style={styles.prizeRevealSummary}>
-        <div>
-          <div style={styles.prizeRevealEyebrow}>
-            Higher or Lower prize reveal mode
-          </div>
+      <summary className="higher-lower-reveal-summary" style={styles.summary}>
+        <div style={styles.summaryCopy}>
+          <div style={styles.eyebrow}>Higher or Lower prize chain</div>
 
-          <h3 style={styles.prizeRevealTitle}>Prize reveal controls</h3>
+          <h3 style={styles.title}>Prize setup and game length</h3>
 
-          <p style={styles.prizeRevealText}>
-            Choose how many prizes this game should use, then complete one prize
-            row for each reveal. The live game uses the saved prize list: Prize 1
-            is the starting value, and each later prize becomes one Higher or
-            Lower round.
+          <p style={styles.text}>
+            Choose how many prizes this game should use, then complete one row
+            for each prize. Prize 1 becomes the starting value. Every prize after
+            that creates one Higher or Lower round.
           </p>
         </div>
 
-        <div style={styles.prizeRevealSummaryActions}>
-          <span style={styles.prizeRevealBadge}>{revealProgress}</span>
-          <span style={styles.prizeRevealToggle}>Open / close</span>
+        <div style={styles.summaryActions}>
+          <span style={styles.badge}>{revealProgress}</span>
+          <span style={styles.toggle}>Open / close</span>
         </div>
       </summary>
 
-      <div style={styles.prizeRevealBody}>
-        <div style={styles.revealControlNotice}>
-          <strong>Game length</strong>
+      <div style={styles.body}>
+        <div style={styles.notice}>
+          <strong>How the live game uses this</strong>
           <span>
-            Two prizes create one playable round. Three prizes create two rounds.
-            The maximum for this editor is {safeMaxPrizes} prizes.
+            The live game page reads these saved prizes. If randomise is on, it
+            randomises once when the game is built, then stores that fixed order
+            for the event-night game.
           </span>
         </div>
 
-        <div className="twoCol" style={styles.twoCol}>
-          <Field label="Enable prize reveal mode">
+        <div className="higher-lower-reveal-two-col" style={styles.twoCol}>
+          <Field label="Enable prize reveal preview">
             <select
               name="prize_reveal_mode_enabled"
               defaultValue={prizeRevealModeEnabled ? "true" : "false"}
               className="input"
               style={styles.input}
             >
-              <option value="false">No, keep prize reveal mode off</option>
-              <option value="true">Yes, show prize reveal preview</option>
+              <option value="false">No, keep prize reveal preview off</option>
+              <option value="true">Yes, enable prize reveal preview</option>
             </select>
           </Field>
 
-          <Field label="Reveal order">
+          <Field label="Live game order">
             <select
               name="prize_reveal_randomise_order"
               defaultValue={prizeRevealRandomiseOrder ? "true" : "false"}
               className="input"
               style={styles.input}
             >
-              <option value="false">Use the order below</option>
-              <option value="true">Randomise once when live game is created</option>
+              <option value="false">Use the saved order below</option>
+              <option value="true">Randomise once when live game is built</option>
             </select>
           </Field>
         </div>
 
-        <div style={styles.gameLengthPanel}>
+        <section style={styles.gameLengthPanel}>
           <div>
-            <div style={styles.gameLengthEyebrow}>Prizes / rounds</div>
-            <h4 style={styles.gameLengthTitle}>Choose game length</h4>
+            <div style={styles.gameLengthEyebrow}>Game length</div>
+            <h4 style={styles.gameLengthTitle}>Choose prizes and rounds</h4>
             <p style={styles.gameLengthText}>
-              The organiser decides how many prize reveals to set up here. The
-              live game can then use the saved prize list, with the first prize
-              acting as the starting revealed value.
+              Two prizes create one playable round. Three prizes create two
+              rounds. You can set up to {safeMaxPrizes} prizes for longer event
+              games.
             </p>
           </div>
 
-          <div className="twoCol" style={styles.twoCol}>
+          <div className="higher-lower-reveal-two-col" style={styles.twoCol}>
             <Field label="Number of prizes to set up">
               <select
                 value={prizeCount}
@@ -175,12 +174,12 @@ export default function HigherOrLowerPrizeRevealEditor({
             </Field>
 
             <Field label="Playable rounds from this setup">
-              <div style={styles.gameLengthPreview}>
+              <div style={styles.roundPreview}>
                 {playableRounds} round{playableRounds === 1 ? "" : "s"}
               </div>
             </Field>
           </div>
-        </div>
+        </section>
 
         <Field label="Prize reveal title">
           <input
@@ -205,67 +204,67 @@ export default function HigherOrLowerPrizeRevealEditor({
 
         <input type="hidden" name="prize_reveal_prize_count" value={prizeCount} />
 
-        <div style={styles.prizeRevealRows}>
+        <div style={styles.rows}>
           {visiblePrizeRows.map((prize, index) => (
             <details
               key={prize?.id || `new-reveal-prize-${index + 1}`}
               open={Boolean(prize?.title) || index < 2}
-              style={styles.prizeRevealRow}
+              style={styles.row}
             >
               <summary
-                className="prizeRevealRowHeader"
-                style={styles.prizeRevealRowHeader}
+                className="higher-lower-reveal-row-summary"
+                style={styles.rowSummary}
               >
-                <div>
-                  <span style={styles.prizeRevealRowEyebrow}>
+                <div style={styles.rowCopy}>
+                  <span style={styles.rowEyebrow}>
                     {index === 0
                       ? "Starting prize"
                       : `Round ${index} reveal prize`}
                   </span>
 
-                  <strong style={styles.prizeRevealRowTitle}>
+                  <strong style={styles.rowTitle}>
                     {prize?.title || "Empty prize row"}
                   </strong>
 
-                  <p style={styles.prizeRevealRowHelp}>
+                  <p style={styles.rowHelp}>
                     {index === 0
-                      ? "This is revealed first and sets the starting value."
+                      ? "This prize is revealed first and sets the starting value."
                       : `Players guess whether this prize is higher or lower than prize ${index}.`}
                   </p>
                 </div>
 
-                <div style={styles.prizeRevealRowActions}>
+                <div style={styles.rowActions}>
                   <span
                     style={{
-                      ...styles.prizeRevealRowStatus,
+                      ...styles.rowStatus,
                       ...(prize?.isRevealed
-                        ? styles.prizeRevealRowStatusRevealed
-                        : styles.prizeRevealRowStatusHidden),
+                        ? styles.rowStatusRevealed
+                        : styles.rowStatusHidden),
                     }}
                   >
                     {revealStatusLabel(prize)}
                   </span>
 
-                  <span style={styles.prizeRevealToggle}>Open</span>
+                  <span style={styles.toggle}>Open</span>
                 </div>
               </summary>
 
-              <div style={styles.prizeRevealRowBody}>
+              <div style={styles.rowBody}>
                 <input
                   type="hidden"
                   name={`prize_reveal_prize_${index}_id`}
                   defaultValue={prize?.id || ""}
                 />
 
-                <div style={styles.revealControlBox}>
+                <div style={styles.publicRevealBox}>
                   <div>
-                    <strong style={styles.revealControlTitle}>
-                      Public reveal status
+                    <strong style={styles.publicRevealTitle}>
+                      Public preview status
                     </strong>
 
-                    <p style={styles.revealControlText}>
-                      This controls the public preview only. The live game keeps
-                      its own fixed order once the game is created.
+                    <p style={styles.publicRevealText}>
+                      This controls the public preview only. The live game uses a
+                      fixed prize order once it is built.
                     </p>
                   </div>
 
@@ -276,13 +275,13 @@ export default function HigherOrLowerPrizeRevealEditor({
                       className="input"
                       style={styles.input}
                     >
-                      <option value="false">Hidden — not revealed yet</option>
-                      <option value="true">Revealed — show publicly</option>
+                      <option value="false">Hidden from public preview</option>
+                      <option value="true">Shown in public preview</option>
                     </select>
                   </Field>
                 </div>
 
-                <div className="twoCol" style={styles.twoCol}>
+                <div className="higher-lower-reveal-two-col" style={styles.twoCol}>
                   <Field label="Prize name">
                     <input
                       name={`prize_reveal_prize_${index}_title`}
@@ -308,7 +307,7 @@ export default function HigherOrLowerPrizeRevealEditor({
                   </Field>
                 </div>
 
-                <div className="twoCol" style={styles.twoCol}>
+                <div className="higher-lower-reveal-two-col" style={styles.twoCol}>
                   <Field label="Estimated value">
                     <input
                       name={`prize_reveal_prize_${index}_estimated_value`}
@@ -346,7 +345,7 @@ export default function HigherOrLowerPrizeRevealEditor({
                   />
                 </Field>
 
-                <div style={styles.prizeImageUploadShell}>
+                <div style={styles.imageUploadShell}>
                   <ImageFocusUploadField
                     currentImageUrl={cleanText(prize?.imageUrl)}
                     currentFocusX={50}
@@ -369,7 +368,7 @@ export default function HigherOrLowerPrizeRevealEditor({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label style={styles.field}>
       <span style={styles.label}>{label}</span>
@@ -379,19 +378,19 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const styles: Record<string, CSSProperties> = {
-  prizeRevealPanel: {
+  panel: {
     display: "grid",
     gap: 0,
     padding: 16,
-    borderRadius: 22,
+    borderRadius: 24,
     background:
-      "radial-gradient(circle at top left, rgba(250,204,21,0.16), transparent 34%), linear-gradient(135deg, #fffbeb 0%, #ffffff 58%, #eff6ff 100%)",
+      "radial-gradient(circle at top left, rgba(250,204,21,0.18), transparent 34%), linear-gradient(135deg, #fffbeb 0%, #ffffff 58%, #eff6ff 100%)",
     border: "1px solid #fde68a",
-    boxShadow: "0 8px 22px rgba(15,23,42,0.05)",
+    boxShadow: "0 10px 26px rgba(15,23,42,0.06)",
     overflow: "hidden",
   },
 
-  prizeRevealSummary: {
+  summary: {
     display: "flex",
     justifyContent: "space-between",
     gap: 14,
@@ -401,7 +400,12 @@ const styles: Record<string, CSSProperties> = {
     listStyle: "none",
   },
 
-  prizeRevealSummaryActions: {
+  summaryCopy: {
+    minWidth: 0,
+    flex: "1 1 420px",
+  },
+
+  summaryActions: {
     display: "flex",
     gap: 8,
     flexWrap: "wrap",
@@ -409,13 +413,13 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "flex-end",
   },
 
-  prizeRevealBody: {
+  body: {
     display: "grid",
     gap: 14,
     marginTop: 16,
   },
 
-  prizeRevealEyebrow: {
+  eyebrow: {
     color: "#92400e",
     fontSize: 12,
     fontWeight: 950,
@@ -424,7 +428,7 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 5,
   },
 
-  prizeRevealTitle: {
+  title: {
     margin: 0,
     color: "#0f172a",
     fontSize: 24,
@@ -432,16 +436,16 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.04em",
   },
 
-  prizeRevealText: {
+  text: {
     margin: "7px 0 0",
     color: "#64748b",
     fontSize: 13,
     lineHeight: 1.5,
     fontWeight: 750,
-    maxWidth: 760,
+    maxWidth: 780,
   },
 
-  prizeRevealBadge: {
+  badge: {
     display: "inline-flex",
     width: "fit-content",
     padding: "8px 12px",
@@ -455,7 +459,7 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.04em",
   },
 
-  prizeRevealToggle: {
+  toggle: {
     display: "inline-flex",
     width: "fit-content",
     padding: "8px 12px",
@@ -470,7 +474,7 @@ const styles: Record<string, CSSProperties> = {
     whiteSpace: "nowrap",
   },
 
-  revealControlNotice: {
+  notice: {
     display: "grid",
     gap: 4,
     padding: 14,
@@ -523,7 +527,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 750,
   },
 
-  gameLengthPreview: {
+  roundPreview: {
     display: "flex",
     alignItems: "center",
     minHeight: 44,
@@ -575,12 +579,12 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
   },
 
-  prizeRevealRows: {
+  rows: {
     display: "grid",
     gap: 12,
   },
 
-  prizeRevealRow: {
+  row: {
     display: "grid",
     gap: 0,
     padding: 14,
@@ -591,7 +595,7 @@ const styles: Record<string, CSSProperties> = {
     overflow: "hidden",
   },
 
-  prizeRevealRowHeader: {
+  rowSummary: {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
@@ -601,7 +605,12 @@ const styles: Record<string, CSSProperties> = {
     listStyle: "none",
   },
 
-  prizeRevealRowActions: {
+  rowCopy: {
+    minWidth: 0,
+    flex: "1 1 360px",
+  },
+
+  rowActions: {
     display: "flex",
     gap: 8,
     flexWrap: "wrap",
@@ -609,13 +618,13 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "flex-end",
   },
 
-  prizeRevealRowBody: {
+  rowBody: {
     display: "grid",
     gap: 12,
     marginTop: 14,
   },
 
-  prizeRevealRowEyebrow: {
+  rowEyebrow: {
     display: "block",
     color: "#64748b",
     fontSize: 11,
@@ -625,15 +634,16 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 4,
   },
 
-  prizeRevealRowTitle: {
+  rowTitle: {
     display: "block",
     color: "#0f172a",
     fontSize: 17,
     fontWeight: 950,
     letterSpacing: "-0.03em",
+    overflowWrap: "anywhere",
   },
 
-  prizeRevealRowHelp: {
+  rowHelp: {
     margin: "5px 0 0",
     color: "#64748b",
     fontSize: 12,
@@ -641,7 +651,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 750,
   },
 
-  prizeRevealRowStatus: {
+  rowStatus: {
     display: "inline-flex",
     width: "fit-content",
     padding: "8px 12px",
@@ -651,19 +661,19 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
   },
 
-  prizeRevealRowStatusRevealed: {
+  rowStatusRevealed: {
     background: "#dcfce7",
     color: "#166534",
     borderColor: "#bbf7d0",
   },
 
-  prizeRevealRowStatusHidden: {
+  rowStatusHidden: {
     background: "#f8fafc",
     color: "#64748b",
     borderColor: "#cbd5e1",
   },
 
-  revealControlBox: {
+  publicRevealBox: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) minmax(220px, 0.35fr)",
     gap: 12,
@@ -674,7 +684,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
   },
 
-  revealControlTitle: {
+  publicRevealTitle: {
     display: "block",
     color: "#0f172a",
     fontSize: 15,
@@ -682,7 +692,7 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 4,
   },
 
-  revealControlText: {
+  publicRevealText: {
     margin: 0,
     color: "#64748b",
     fontSize: 13,
@@ -690,7 +700,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 750,
   },
 
-  prizeImageUploadShell: {
+  imageUploadShell: {
     display: "grid",
     gap: 8,
     padding: 14,
