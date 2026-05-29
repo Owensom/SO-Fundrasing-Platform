@@ -79,199 +79,201 @@ export default function HigherOrLowerRevealEditor({
   const playableRounds = Math.max(0, prizeCount - 1);
 
   return (
-    <details
-      open={Boolean(prizeRevealModeEnabled) || prizeRevealPrizes.length > 0}
-      className="higher-lower-reveal-panel"
-      style={styles.panel}
-    >
-      <summary className="higher-lower-reveal-summary" style={styles.summary}>
-        <div style={styles.summaryCopy}>
-          <div style={styles.eyebrow}>Higher or Lower prize chain</div>
+    <>
+      <style>{responsiveStyles}</style>
 
-          <h3 style={styles.title}>Prize setup and game length</h3>
+      <details
+        open={Boolean(prizeRevealModeEnabled) || prizeRevealPrizes.length > 0}
+        className="higher-lower-reveal-panel"
+        style={styles.panel}
+      >
+        <summary className="higher-lower-reveal-summary" style={styles.summary}>
+          <div style={styles.summaryCopy}>
+            <div style={styles.eyebrow}>Higher or Lower prize chain</div>
 
-          <p style={styles.text}>
-            Choose how many prizes this game should use, then complete one row
-            for each prize. Prize 1 becomes the starting value. Every prize after
-            that creates one Higher or Lower round.
-          </p>
-        </div>
+            <h3 style={styles.title}>Prize setup and game length</h3>
 
-        <div style={styles.summaryActions}>
-          <span style={styles.badge}>{revealProgress}</span>
-          <span style={styles.toggle}>Open / close</span>
-        </div>
-      </summary>
-
-      <div style={styles.body}>
-        <div style={styles.notice}>
-          <strong>How the live game uses this</strong>
-          <span>
-            The live game page reads these saved prizes. If randomise is on, it
-            randomises once when the game is built, then stores that fixed order
-            for the event-night game.
-          </span>
-        </div>
-
-        <div className="higher-lower-reveal-two-col" style={styles.twoCol}>
-          <Field label="Enable prize reveal preview">
-            <select
-              name="prize_reveal_mode_enabled"
-              defaultValue={prizeRevealModeEnabled ? "true" : "false"}
-              className="input"
-              style={styles.input}
-            >
-              <option value="false">No, keep prize reveal preview off</option>
-              <option value="true">Yes, enable prize reveal preview</option>
-            </select>
-          </Field>
-
-          <Field label="Live game order">
-            <select
-              name="prize_reveal_randomise_order"
-              defaultValue={prizeRevealRandomiseOrder ? "true" : "false"}
-              className="input"
-              style={styles.input}
-            >
-              <option value="false">Use the saved order below</option>
-              <option value="true">Randomise once when live game is built</option>
-            </select>
-          </Field>
-        </div>
-
-        <section style={styles.gameLengthPanel}>
-          <div>
-            <div style={styles.gameLengthEyebrow}>Game length</div>
-            <h4 style={styles.gameLengthTitle}>Choose prizes and rounds</h4>
-            <p style={styles.gameLengthText}>
-              Two prizes create one playable round. Three prizes create two
-              rounds. You can set up to {safeMaxPrizes} prizes for longer event
-              games.
+            <p style={styles.text}>
+              Choose how many prizes this game should use, then complete one row
+              for each prize. Prize 1 becomes the starting value. Every prize after
+              that creates one Higher or Lower round.
             </p>
           </div>
 
+          <div style={styles.summaryActions}>
+            <span style={styles.badge}>{revealProgress}</span>
+            <span style={styles.toggle}>Open / close</span>
+          </div>
+        </summary>
+
+        <div style={styles.body}>
+          <div style={styles.notice}>
+            <strong>How the live game uses this</strong>
+            <span>
+              The live game page reads these saved prizes. If randomise is on, it
+              randomises once when the game is built, then stores that fixed order
+              for the event-night game.
+            </span>
+          </div>
+
           <div className="higher-lower-reveal-two-col" style={styles.twoCol}>
-            <Field label="Number of prizes to set up">
+            <Field label="Enable prize reveal preview">
               <select
-                value={prizeCount}
-                onChange={(event) =>
-                  setPrizeCount(clampPrizeCount(event.target.value, safeMaxPrizes))
-                }
+                name="prize_reveal_mode_enabled"
+                defaultValue={prizeRevealModeEnabled ? "true" : "false"}
                 className="input"
                 style={styles.input}
               >
-                {Array.from({ length: safeMaxPrizes - 1 }, (_, index) => {
-                  const count = index + 2;
-                  const rounds = count - 1;
-
-                  return (
-                    <option key={count} value={count}>
-                      {count} prizes — {rounds} round{rounds === 1 ? "" : "s"}
-                    </option>
-                  );
-                })}
+                <option value="false">No, keep prize reveal preview off</option>
+                <option value="true">Yes, enable prize reveal preview</option>
               </select>
             </Field>
 
-            <Field label="Playable rounds from this setup">
-              <div style={styles.roundPreview}>
-                {playableRounds} round{playableRounds === 1 ? "" : "s"}
-              </div>
+            <Field label="Live game order">
+              <select
+                name="prize_reveal_randomise_order"
+                defaultValue={prizeRevealRandomiseOrder ? "true" : "false"}
+                className="input"
+                style={styles.input}
+              >
+                <option value="false">Use the saved order below</option>
+                <option value="true">Randomise once when live game is built</option>
+              </select>
             </Field>
           </div>
-        </section>
 
-        <Field label="Prize reveal title">
-          <input
-            name="prize_reveal_title"
-            defaultValue={prizeRevealTitle || ""}
-            placeholder="Higher or Lower Prize Reveal"
-            className="input"
-            style={styles.input}
-          />
-        </Field>
+          <section style={styles.gameLengthPanel}>
+            <div>
+              <div style={styles.gameLengthEyebrow}>Game length</div>
+              <h4 style={styles.gameLengthTitle}>Choose prizes and rounds</h4>
+              <p style={styles.gameLengthText}>
+                Two prizes create one playable round. Three prizes create two
+                rounds. You can set up to {safeMaxPrizes} prizes for longer event
+                games.
+              </p>
+            </div>
 
-        <Field label="Prize reveal description">
-          <textarea
-            name="prize_reveal_description"
-            rows={3}
-            defaultValue={prizeRevealDescription || ""}
-            placeholder="Add the prizes, reveal one at a time, and ask players whether the next value will be higher or lower."
-            className="textarea"
-            style={styles.textarea}
-          />
-        </Field>
-
-        <input type="hidden" name="prize_reveal_prize_count" value={prizeCount} />
-
-        <div style={styles.rows}>
-          {visiblePrizeRows.map((prize, index) => (
-            <details
-              key={prize?.id || `new-reveal-prize-${index + 1}`}
-              open={Boolean(prize?.title) || index < 2}
-              style={styles.row}
-            >
-              <summary
-                className="higher-lower-reveal-row-summary"
-                style={styles.rowSummary}
-              >
-                <div style={styles.rowCopy}>
-                  <span style={styles.rowEyebrow}>
-                    {index === 0
-                      ? "Starting prize"
-                      : `Round ${index} reveal prize`}
-                  </span>
-
-                  <strong style={styles.rowTitle}>
-                    {prize?.title || "Empty prize row"}
-                  </strong>
-
-                  <p style={styles.rowHelp}>
-                    {index === 0
-                      ? "This prize is revealed first and sets the starting value."
-                      : `Players guess whether this prize is higher or lower than prize ${index}.`}
-                  </p>
-                </div>
-
-                <div style={styles.rowActions}>
-                  <span
-                    style={{
-                      ...styles.rowStatus,
-                      ...(prize?.isRevealed
-                        ? styles.rowStatusRevealed
-                        : styles.rowStatusHidden),
-                    }}
-                  >
-                    {revealStatusLabel(prize)}
-                  </span>
-
-                  <span style={styles.toggle}>Open</span>
-                </div>
-              </summary>
-
-              <div style={styles.rowBody}>
-                <input
-                  type="hidden"
-                  name={`prize_reveal_prize_${index}_id`}
-                  defaultValue={prize?.id || ""}
-                />
-
-                <div
-                  className="higher-lower-reveal-public-box"
-                  style={styles.publicRevealBox}
+            <div className="higher-lower-reveal-two-col" style={styles.twoCol}>
+              <Field label="Number of prizes to set up">
+                <select
+                  value={prizeCount}
+                  onChange={(event) =>
+                    setPrizeCount(clampPrizeCount(event.target.value, safeMaxPrizes))
+                  }
+                  className="input"
+                  style={styles.input}
                 >
-                  <div style={styles.publicRevealCopy}>
-                    <strong style={styles.publicRevealTitle}>
-                      Public preview status
+                  {Array.from({ length: safeMaxPrizes - 1 }, (_, index) => {
+                    const count = index + 2;
+                    const rounds = count - 1;
+
+                    return (
+                      <option key={count} value={count}>
+                        {count} prizes — {rounds} round{rounds === 1 ? "" : "s"}
+                      </option>
+                    );
+                  })}
+                </select>
+              </Field>
+
+              <Field label="Playable rounds from this setup">
+                <div style={styles.roundPreview}>
+                  {playableRounds} round{playableRounds === 1 ? "" : "s"}
+                </div>
+              </Field>
+            </div>
+          </section>
+
+          <Field label="Prize reveal title">
+            <input
+              name="prize_reveal_title"
+              defaultValue={prizeRevealTitle || ""}
+              placeholder="Higher or Lower Prize Reveal"
+              className="input"
+              style={styles.input}
+            />
+          </Field>
+
+          <Field label="Prize reveal description">
+            <textarea
+              name="prize_reveal_description"
+              rows={3}
+              defaultValue={prizeRevealDescription || ""}
+              placeholder="Add the prizes, reveal one at a time, and ask players whether the next value will be higher or lower."
+              className="textarea"
+              style={styles.textarea}
+            />
+          </Field>
+
+          <input type="hidden" name="prize_reveal_prize_count" value={prizeCount} />
+
+          <div style={styles.rows}>
+            {visiblePrizeRows.map((prize, index) => (
+              <details
+                key={prize?.id || `new-reveal-prize-${index + 1}`}
+                open={Boolean(prize?.title) || index < 2}
+                style={styles.row}
+              >
+                <summary
+                  className="higher-lower-reveal-row-summary"
+                  style={styles.rowSummary}
+                >
+                  <div style={styles.rowCopy}>
+                    <span style={styles.rowEyebrow}>
+                      {index === 0
+                        ? "Starting prize"
+                        : `Round ${index} reveal prize`}
+                    </span>
+
+                    <strong style={styles.rowTitle}>
+                      {prize?.title || "Empty prize row"}
                     </strong>
 
-                    <p style={styles.publicRevealText}>
-                      This controls the public preview only. The live game uses a
-                      fixed prize order once it is built.
+                    <p style={styles.rowHelp}>
+                      {index === 0
+                        ? "This prize is revealed first and sets the starting value."
+                        : `Players guess whether this prize is higher or lower than prize ${index}.`}
                     </p>
                   </div>
 
-                  <div style={styles.publicRevealFieldWrap}>
+                  <div style={styles.rowActions}>
+                    <span
+                      style={{
+                        ...styles.rowStatus,
+                        ...(prize?.isRevealed
+                          ? styles.rowStatusRevealed
+                          : styles.rowStatusHidden),
+                      }}
+                    >
+                      {revealStatusLabel(prize)}
+                    </span>
+
+                    <span style={styles.toggle}>Open</span>
+                  </div>
+                </summary>
+
+                <div style={styles.rowBody}>
+                  <input
+                    type="hidden"
+                    name={`prize_reveal_prize_${index}_id`}
+                    defaultValue={prize?.id || ""}
+                  />
+
+                  <div
+                    className="higher-lower-reveal-public-box"
+                    style={styles.publicRevealBox}
+                  >
+                    <div style={styles.publicRevealCopy}>
+                      <strong style={styles.publicRevealTitle}>
+                        Public preview status
+                      </strong>
+
+                      <p style={styles.publicRevealText}>
+                        This controls the public preview only. The live game uses a
+                        fixed prize order once it is built.
+                      </p>
+                    </div>
+
                     <Field label="Reveal status">
                       <select
                         name={`prize_reveal_prize_${index}_is_revealed`}
@@ -284,92 +286,92 @@ export default function HigherOrLowerRevealEditor({
                       </select>
                     </Field>
                   </div>
-                </div>
 
-                <div className="higher-lower-reveal-two-col" style={styles.twoCol}>
-                  <Field label="Prize name">
-                    <input
-                      name={`prize_reveal_prize_${index}_title`}
-                      defaultValue={prize?.title || ""}
-                      placeholder={
-                        index === 0
-                          ? "Starting prize name"
-                          : "Next prize name"
-                      }
-                      className="input"
-                      style={styles.input}
+                  <div className="higher-lower-reveal-two-col" style={styles.twoCol}>
+                    <Field label="Prize name">
+                      <input
+                        name={`prize_reveal_prize_${index}_title`}
+                        defaultValue={prize?.title || ""}
+                        placeholder={
+                          index === 0
+                            ? "Starting prize name"
+                            : "Next prize name"
+                        }
+                        className="input"
+                        style={styles.input}
+                      />
+                    </Field>
+
+                    <Field label="Sponsor / donor">
+                      <input
+                        name={`prize_reveal_prize_${index}_sponsor_name`}
+                        defaultValue={prize?.sponsorName || ""}
+                        placeholder="Business, donor or sponsor name"
+                        className="input"
+                        style={styles.input}
+                      />
+                    </Field>
+                  </div>
+
+                  <div className="higher-lower-reveal-two-col" style={styles.twoCol}>
+                    <Field label="Estimated value">
+                      <input
+                        name={`prize_reveal_prize_${index}_estimated_value`}
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        defaultValue={moneyFromCents(
+                          prize?.estimatedValueCents || 0,
+                        )}
+                        className="input"
+                        style={styles.input}
+                      />
+                    </Field>
+
+                    <Field label="Reveal order">
+                      <input
+                        name={`prize_reveal_prize_${index}_reveal_order`}
+                        type="number"
+                        min="1"
+                        defaultValue={prize?.revealOrder || index + 1}
+                        className="input"
+                        style={styles.input}
+                      />
+                    </Field>
+                  </div>
+
+                  <Field label="Prize description">
+                    <textarea
+                      name={`prize_reveal_prize_${index}_description`}
+                      rows={2}
+                      defaultValue={prize?.description || ""}
+                      placeholder="Short description for this prize."
+                      className="textarea"
+                      style={styles.textarea}
                     />
                   </Field>
 
-                  <Field label="Sponsor / donor">
-                    <input
-                      name={`prize_reveal_prize_${index}_sponsor_name`}
-                      defaultValue={prize?.sponsorName || ""}
-                      placeholder="Business, donor or sponsor name"
-                      className="input"
-                      style={styles.input}
+                  <div style={styles.imageUploadShell}>
+                    <ImageFocusUploadField
+                      currentImageUrl={cleanText(prize?.imageUrl)}
+                      currentFocusX={50}
+                      currentFocusY={50}
+                      imageFieldName={`prize_reveal_prize_${index}_image_url`}
+                      focusXFieldName={`prize_reveal_prize_${index}_image_focus_x`}
+                      focusYFieldName={`prize_reveal_prize_${index}_image_focus_y`}
+                      label={`Prize ${index + 1} image upload`}
+                      previewAlt={prize?.title || `Prize ${index + 1}`}
+                      subscriptionTier={subscriptionTier}
+                      customImagesAllowed={customImagesAllowed}
                     />
-                  </Field>
+                  </div>
                 </div>
-
-                <div className="higher-lower-reveal-two-col" style={styles.twoCol}>
-                  <Field label="Estimated value">
-                    <input
-                      name={`prize_reveal_prize_${index}_estimated_value`}
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      defaultValue={moneyFromCents(
-                        prize?.estimatedValueCents || 0,
-                      )}
-                      className="input"
-                      style={styles.input}
-                    />
-                  </Field>
-
-                  <Field label="Reveal order">
-                    <input
-                      name={`prize_reveal_prize_${index}_reveal_order`}
-                      type="number"
-                      min="1"
-                      defaultValue={prize?.revealOrder || index + 1}
-                      className="input"
-                      style={styles.input}
-                    />
-                  </Field>
-                </div>
-
-                <Field label="Prize description">
-                  <textarea
-                    name={`prize_reveal_prize_${index}_description`}
-                    rows={2}
-                    defaultValue={prize?.description || ""}
-                    placeholder="Short description for this prize."
-                    className="textarea"
-                    style={styles.textarea}
-                  />
-                </Field>
-
-                <div style={styles.imageUploadShell}>
-                  <ImageFocusUploadField
-                    currentImageUrl={cleanText(prize?.imageUrl)}
-                    currentFocusX={50}
-                    currentFocusY={50}
-                    imageFieldName={`prize_reveal_prize_${index}_image_url`}
-                    focusXFieldName={`prize_reveal_prize_${index}_image_focus_x`}
-                    focusYFieldName={`prize_reveal_prize_${index}_image_focus_y`}
-                    label={`Prize ${index + 1} image upload`}
-                    previewAlt={prize?.title || `Prize ${index + 1}`}
-                    subscriptionTier={subscriptionTier}
-                    customImagesAllowed={customImagesAllowed}
-                  />
-                </div>
-              </div>
-            </details>
-          ))}
+              </details>
+            ))}
+          </div>
         </div>
-      </div>
-    </details>
+      </details>
+    </>
   );
 }
 
@@ -381,6 +383,63 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
     </label>
   );
 }
+
+const responsiveStyles = `
+.higher-lower-reveal-panel,
+.higher-lower-reveal-panel * {
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.higher-lower-reveal-panel summary {
+  list-style: none;
+}
+
+.higher-lower-reveal-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.higher-lower-reveal-panel input,
+.higher-lower-reveal-panel select,
+.higher-lower-reveal-panel textarea,
+.higher-lower-reveal-panel button {
+  max-width: 100%;
+}
+
+@media (max-width: 760px) {
+  .higher-lower-reveal-panel {
+    padding: 12px !important;
+    border-radius: 20px !important;
+  }
+
+  .higher-lower-reveal-summary,
+  .higher-lower-reveal-row-summary,
+  .higher-lower-reveal-two-col,
+  .higher-lower-reveal-public-box {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    width: 100% !important;
+  }
+
+  .higher-lower-reveal-summary,
+  .higher-lower-reveal-row-summary {
+    gap: 10px !important;
+  }
+
+  .higher-lower-reveal-panel select,
+  .higher-lower-reveal-panel input,
+  .higher-lower-reveal-panel textarea {
+    width: 100% !important;
+    font-size: 16px !important;
+  }
+}
+
+@media (max-width: 430px) {
+  .higher-lower-reveal-panel {
+    padding: 10px !important;
+  }
+}
+`;
 
 const styles: Record<string, CSSProperties> = {
   panel: {
@@ -442,7 +501,8 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 24,
     lineHeight: 1.05,
     letterSpacing: "-0.04em",
-    overflowWrap: "anywhere",
+    overflowWrap: "normal",
+    wordBreak: "normal",
   },
 
   text: {
@@ -452,7 +512,8 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.5,
     fontWeight: 750,
     maxWidth: 780,
-    overflowWrap: "anywhere",
+    overflowWrap: "normal",
+    wordBreak: "normal",
   },
 
   badge: {
@@ -500,7 +561,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.45,
     fontWeight: 850,
-    overflowWrap: "anywhere",
   },
 
   twoCol: {
@@ -536,7 +596,8 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 18,
     lineHeight: 1.1,
     letterSpacing: "-0.035em",
-    overflowWrap: "anywhere",
+    overflowWrap: "normal",
+    wordBreak: "normal",
   },
 
   gameLengthText: {
@@ -545,7 +606,8 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.5,
     fontWeight: 750,
-    overflowWrap: "anywhere",
+    overflowWrap: "normal",
+    wordBreak: "normal",
   },
 
   roundPreview: {
@@ -561,7 +623,6 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     boxSizing: "border-box",
     minWidth: 0,
-    overflowWrap: "anywhere",
   },
 
   field: {
@@ -575,7 +636,8 @@ const styles: Record<string, CSSProperties> = {
     color: "#334155",
     fontSize: 13,
     fontWeight: 950,
-    overflowWrap: "anywhere",
+    overflowWrap: "normal",
+    wordBreak: "normal",
   },
 
   input: {
@@ -671,7 +733,8 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 17,
     fontWeight: 950,
     letterSpacing: "-0.03em",
-    overflowWrap: "anywhere",
+    overflowWrap: "normal",
+    wordBreak: "normal",
   },
 
   rowHelp: {
@@ -680,7 +743,8 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     lineHeight: 1.4,
     fontWeight: 750,
-    overflowWrap: "anywhere",
+    overflowWrap: "normal",
+    wordBreak: "normal",
   },
 
   rowStatus: {
@@ -710,7 +774,7 @@ const styles: Record<string, CSSProperties> = {
 
   publicRevealBox: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(0, 300px)",
+    gridTemplateColumns: "1fr",
     gap: 12,
     alignItems: "stretch",
     padding: 14,
@@ -721,23 +785,14 @@ const styles: Record<string, CSSProperties> = {
     overflow: "hidden",
   },
 
-  publicRevealCopy: {
-    minWidth: 0,
-    overflowWrap: "anywhere",
-  },
-
-  publicRevealFieldWrap: {
-    minWidth: 0,
-    width: "100%",
-  },
-
   publicRevealTitle: {
     display: "block",
     color: "#0f172a",
     fontSize: 15,
     fontWeight: 950,
     marginBottom: 4,
-    overflowWrap: "anywhere",
+    overflowWrap: "normal",
+    wordBreak: "normal",
   },
 
   publicRevealText: {
@@ -746,7 +801,8 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.45,
     fontWeight: 750,
-    overflowWrap: "anywhere",
+    overflowWrap: "normal",
+    wordBreak: "normal",
   },
 
   imageUploadShell: {
