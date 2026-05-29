@@ -62,6 +62,7 @@ type GameRound = {
   reveal_title: string | null;
   reveal_description: string | null;
   reveal_value_cents: number | null;
+  reveal_image_url: string | null;
   correct_answer: string | null;
   status: string;
   revealed_at: string | null;
@@ -354,6 +355,28 @@ function roundPrompt(input: {
   )})?`;
 }
 
+function renderPrizeImage(
+  imageUrl: string | null | undefined,
+  alt: string,
+  compact = false,
+) {
+  const cleanImageUrl = cleanText(imageUrl);
+
+  if (!cleanImageUrl) {
+    return null;
+  }
+
+  return (
+    <div style={compact ? styles.prizeImageCompactWrap : styles.prizeImageWrap}>
+      <img
+        src={cleanImageUrl}
+        alt={alt}
+        style={compact ? styles.prizeImageCompact : styles.prizeImage}
+      />
+    </div>
+  );
+}
+
 async function requireEventAccess(eventId: string) {
   const session = await auth();
 
@@ -473,6 +496,7 @@ async function listGameRounds(input: {
         reveal_title,
         reveal_description,
         reveal_value_cents,
+        reveal_image_url,
         correct_answer,
         status,
         revealed_at::text,
@@ -487,7 +511,6 @@ async function listGameRounds(input: {
     [input.tenantSlug, input.eventId, input.sessionId],
   );
 }
-
 async function listGameAnswers(input: {
   tenantSlug: string;
   eventId: string;
@@ -517,6 +540,7 @@ async function listGameAnswers(input: {
     [input.tenantSlug, input.eventId, input.sessionId],
   );
 }
+
 async function listPaidHigherOrLowerOrderItems(input: {
   tenantSlug: string;
   eventId: string;
@@ -596,11 +620,12 @@ async function replacePrizeChainRounds(input: {
         reveal_title,
         reveal_description,
         reveal_value_cents,
+        reveal_image_url,
         correct_answer,
         status,
         revealed_at
       )
-      values ($1,$2,$3,0,$4,$5,$6,$7,null,'revealed',now())
+      values ($1,$2,$3,0,$4,$5,$6,$7,$8,null,'revealed',now())
     `,
     [
       input.tenantSlug,
@@ -610,6 +635,7 @@ async function replacePrizeChainRounds(input: {
       startingPrize.title,
       startingPrize.description || null,
       startingPrize.estimatedValueCents,
+      cleanText(startingPrize.imageUrl) || null,
     ],
   );
 
@@ -629,10 +655,11 @@ async function replacePrizeChainRounds(input: {
           reveal_title,
           reveal_description,
           reveal_value_cents,
+          reveal_image_url,
           correct_answer,
           status
         )
-        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
       `,
       [
         input.tenantSlug,
@@ -647,6 +674,7 @@ async function replacePrizeChainRounds(input: {
         currentPrize.title,
         currentPrize.description || null,
         currentPrize.estimatedValueCents,
+        cleanText(currentPrize.imageUrl) || null,
         calculatedCorrectAnswer({
           previousValueCents: previousPrize.estimatedValueCents,
           currentValueCents: currentPrize.estimatedValueCents,
@@ -1568,6 +1596,8 @@ export default async function AdminHigherOrLowerGamePage({
                   key={prize.id || `${prize.title}-${index}`}
                   style={styles.prizePreviewCard}
                 >
+                  {renderPrizeImage(prize.imageUrl, prize.title, true)}
+
                   <div>
                     <div style={styles.prizePreviewEyebrow}>
                       Saved prize {index + 1}
@@ -1660,7 +1690,7 @@ export default async function AdminHigherOrLowerGamePage({
                   Use this when the event’s Higher or Lower prize setup has been
                   updated, or when an older game session exists without prize
                   rounds. It rebuilds the starting prize and playable rounds from
-                  the saved add-on prizes.
+                  the saved add-on prizes, including prize images.
                 </p>
               </div>
 
@@ -1766,9 +1796,23 @@ export default async function AdminHigherOrLowerGamePage({
               </span>
             </div>
 
-            {baseline?.reveal_description ? (
-              <div style={styles.revealDescription}>
-                {baseline.reveal_description}
+            {baseline ? (
+              <div style={styles.prizeRevealLayout}>
+                {renderPrizeImage(
+                  baseline.reveal_image_url,
+                  baseline.reveal_title || "Starting prize",
+                )}
+
+                {baseline.reveal_description ? (
+                  <div style={styles.revealDescription}>
+                    {baseline.reveal_description}
+                  </div>
+                ) : (
+                  <div style={styles.revealDescription}>
+                    Starting prize value:{" "}
+                    <strong>{moneyFromCents(baseline.reveal_value_cents || 0)}</strong>
+                  </div>
+                )}
               </div>
             ) : null}
           </section>
@@ -1855,11 +1899,19 @@ export default async function AdminHigherOrLowerGamePage({
                         </span>
                       </summary>
 
-                      {round.reveal_description ? (
-                        <div style={styles.revealDescription}>
-                          {round.reveal_description}
-                        </div>
-                      ) : null}
+                      <div style={styles.prizeRevealLayout}>
+                        {renderPrizeImage(
+                          round.reveal_image_url,
+                          round.reveal_title || `Round ${round.round_number} prize`,
+                          true,
+                        )}
+
+                        {round.reveal_description ? (
+                          <div style={styles.revealDescription}>
+                            {round.reveal_description}
+                          </div>
+                        ) : null}
+                      </div>
 
                       {isOpen ? (
                         <div style={styles.answerGrid}>
@@ -2063,7 +2115,8 @@ const responsiveStyles = `
 .higher-lower-page textarea,
 .higher-lower-page select,
 .higher-lower-page button,
-.higher-lower-page a {
+.higher-lower-page a,
+.higher-lower-page img {
   min-width: 0;
   max-width: 100%;
 }
@@ -2484,6 +2537,10 @@ const styles: Record<string, CSSProperties> = {
   },
 
   prizePreviewCard: {
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0, 1fr)",
+    gap: 12,
+    alignItems: "center",
     padding: 14,
     borderRadius: 18,
     background: "#f8fafc",
@@ -2505,6 +2562,46 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 17,
     fontWeight: 950,
     overflowWrap: "anywhere",
+  },
+
+  prizeRevealLayout: {
+    display: "grid",
+    gap: 14,
+  },
+
+  prizeImageWrap: {
+    width: "100%",
+    borderRadius: 24,
+    overflow: "hidden",
+    border: "1px solid #e2e8f0",
+    background: "#f8fafc",
+    boxShadow: "0 12px 28px rgba(15,23,42,0.08)",
+  },
+
+  prizeImage: {
+    display: "block",
+    width: "100%",
+    maxHeight: 420,
+    objectFit: "cover",
+    objectPosition: "center",
+  },
+
+  prizeImageCompactWrap: {
+    width: 92,
+    height: 92,
+    borderRadius: 18,
+    overflow: "hidden",
+    border: "1px solid #e2e8f0",
+    background: "#f8fafc",
+    flexShrink: 0,
+  },
+
+  prizeImageCompact: {
+    display: "block",
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    objectPosition: "center",
   },
 
   roundList: {
