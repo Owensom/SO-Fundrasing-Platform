@@ -152,7 +152,7 @@ function getAddOnDefaults(type: string) {
       description:
         "Join our Higher or Lower fundraiser on the night and see how long you can stay in the game.",
       instructions:
-        "Guess whether the next card, number or total will be higher or lower. Keep playing while you are correct.",
+        "Guess whether the next prize, number or total will be higher or lower. Keep playing while you are correct.",
       footnote:
         "Higher or Lower is run live by the organiser during the event. Main event tickets and seating are booked separately below.",
     };
@@ -312,6 +312,7 @@ async function getTenantBrandingSettings(tenantSlug: string) {
 function Card({ children }: { children: ReactNode }) {
   return <section style={styles.card}>{children}</section>;
 }
+
 export default async function EventSlugPage({
   params,
   searchParams,
@@ -429,22 +430,22 @@ export default async function EventSlugPage({
   );
 
   const checkoutAddOns: PublicEventCheckoutAddOn[] =
-  checkoutReadyDisplayAddOns.map((addOn) => ({
-    type: addOn.type,
-    title: addOn.title,
-    description:
-      addOn.description ||
-      `Add ${addOn.title} entries to your event booking.`,
-    entryPriceCents: addOn.entryPriceCents,
-    maxEntriesPerBooking: addOn.maxEntriesPerBooking,
-    legalQuestionEnabled: addOn.legalQuestionEnabled,
-    legalQuestionText: addOn.legalQuestionText,
-    legalQuestionHelperText: addOn.legalQuestionHelperText,
-    prizeValueRangeEnabled: addOn.prizeValueRangeEnabled,
-    prizeValueRangeMinCents: addOn.prizeValueRangeMinCents,
-    prizeValueRangeMaxCents: addOn.prizeValueRangeMaxCents,
-    prizeValueRangeNote: addOn.prizeValueRangeNote,
-  }));
+    checkoutReadyDisplayAddOns.map((addOn) => ({
+      type: addOn.type,
+      title: addOn.title,
+      description:
+        addOn.description ||
+        `Add ${addOn.title} entries to your event booking.`,
+      entryPriceCents: addOn.entryPriceCents,
+      maxEntriesPerBooking: addOn.maxEntriesPerBooking,
+      legalQuestionEnabled: addOn.legalQuestionEnabled,
+      legalQuestionText: addOn.legalQuestionText,
+      legalQuestionHelperText: addOn.legalQuestionHelperText,
+      prizeValueRangeEnabled: addOn.prizeValueRangeEnabled,
+      prizeValueRangeMinCents: addOn.prizeValueRangeMinCents,
+      prizeValueRangeMaxCents: addOn.prizeValueRangeMaxCents,
+      prizeValueRangeNote: addOn.prizeValueRangeNote,
+    }));
 
   const prizeRevealAddOns = publicDisplayAddOns.filter(
     (addOn) =>
@@ -488,6 +489,9 @@ export default async function EventSlugPage({
 
   const brandLogoSrc = publicLogoMarkUrl || publicLogoUrl;
   const backToCampaignsHref = `/c/${event.tenant_slug}`;
+  const higherOrLowerLiveHref = `/e/${encodeURIComponent(
+    event.slug,
+  )}/higher-or-lower`;
 
   const brandedPageStyle: CSSProperties = {
     ...styles.page,
@@ -528,8 +532,7 @@ export default async function EventSlugPage({
     background: primaryColour,
     boxShadow: `0 10px 22px ${primaryColour}2E`,
   };
-
-  return (
+    return (
     <main className="public-event-page" style={brandedPageStyle}>
       <style>{responsiveStyles}</style>
 
@@ -662,7 +665,8 @@ export default async function EventSlugPage({
             Your order was not completed. You can choose again below.
           </section>
         )}
-                <section style={brandedNoticeCardStyle}>
+
+        <section style={brandedNoticeCardStyle}>
           <div style={styles.noticeTextBlock}>
             <h2 style={styles.noticeTitle}>Open for bookings</h2>
             <p style={styles.noticeText}>
@@ -825,7 +829,32 @@ export default async function EventSlugPage({
               </div>
             </div>
 
-            {shouldShowLegalSafeguards(addOn) ? (
+            {addOn.type === "higher_or_lower" ? (
+              <div style={styles.liveScreenCallout}>
+                <div>
+                  <span style={styles.liveScreenEyebrow}>Live room screen</span>
+                  <strong style={styles.liveScreenTitle}>
+                    Playing Higher or Lower on the night?
+                  </strong>
+                  <p style={styles.liveScreenText}>
+                    Open the live display screen for the room. It hides the next
+                    prize until the organiser reveals each round.
+                  </p>
+                </div>
+
+                <Link
+                  href={higherOrLowerLiveHref}
+                  style={{
+                    ...styles.liveScreenButton,
+                    background: accentColour,
+                    color: "#422006",
+                  }}
+                >
+                  Open Higher or Lower live screen
+                </Link>
+              </div>
+            ) : null}
+                        {shouldShowLegalSafeguards(addOn) ? (
               <section
                 className="addOnSafeguardsPanel"
                 style={{
@@ -945,7 +974,7 @@ export default async function EventSlugPage({
                 <p style={styles.addOnSafeguardsFootnote}>
                   The organiser is responsible for running this promotion
                   lawfully. When checkout collection is enabled, the Higher or
-                   Lower answer is requested during booking.
+                  Lower answer is requested during booking.
                 </p>
               </section>
             ) : null}
@@ -1001,6 +1030,17 @@ export default async function EventSlugPage({
                   <p style={styles.prizeRevealPublicText}>
                     {revealDescription}
                   </p>
+
+                  <Link
+                    href={higherOrLowerLiveHref}
+                    style={{
+                      ...styles.prizeRevealLiveButton,
+                      background: primaryColour,
+                      boxShadow: `0 12px 24px ${primaryColour}2E`,
+                    }}
+                  >
+                    Open Higher or Lower live screen
+                  </Link>
                 </div>
 
                 <div
@@ -1028,80 +1068,100 @@ export default async function EventSlugPage({
                 className="prizeRevealPrizeGrid"
                 style={styles.prizeRevealPrizeGrid}
               >
-                {addOn.prizeRevealPrizes.map((prize, index) => (
-                  <article
-                    key={prize.id || `${addOn.type}-prize-${index + 1}`}
-                    style={styles.prizeRevealPrizeCard}
-                  >
-                    <div style={styles.prizeRevealImageWrap}>
-                      {prize.imageUrl ? (
-                        <img
-                          src={prize.imageUrl}
-                          alt={prize.title}
-                          style={styles.prizeRevealImage}
-                        />
-                      ) : (
-                        <div
+                {addOn.prizeRevealPrizes.map((prize, index) => {
+                  const isRevealed = Boolean(prize.isRevealed);
+
+                  return (
+                    <article
+                      key={prize.id || `${addOn.type}-prize-${index + 1}`}
+                      style={styles.prizeRevealPrizeCard}
+                    >
+                      <div style={styles.prizeRevealImageWrap}>
+                        {isRevealed && prize.imageUrl ? (
+                          <img
+                            src={prize.imageUrl}
+                            alt={prize.title}
+                            style={styles.prizeRevealImage}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              ...styles.prizeRevealImageFallback,
+                              background: isRevealed
+                                ? `linear-gradient(135deg, ${accentColour}22, #eff6ff 100%)`
+                                : "radial-gradient(circle at top left, rgba(250,204,21,0.18), transparent 34%), linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
+                              color: isRevealed ? "#475569" : "#fef3c7",
+                            }}
+                          >
+                            <span>
+                              {isRevealed
+                                ? `Prize ${index + 1}`
+                                : "Hidden prize"}
+                            </span>
+                          </div>
+                        )}
+
+                        <span
                           style={{
-                            ...styles.prizeRevealImageFallback,
-                            background: `linear-gradient(135deg, ${accentColour}22, #eff6ff 100%)`,
+                            ...styles.prizeRevealStatusPill,
+                            ...(isRevealed
+                              ? styles.prizeRevealStatusRevealed
+                              : styles.prizeRevealStatusHidden),
                           }}
                         >
-                          <span>Prize {index + 1}</span>
-                        </div>
-                      )}
-
-                      <span
-                        style={{
-                          ...styles.prizeRevealStatusPill,
-                          ...(prize.isRevealed
-                            ? styles.prizeRevealStatusRevealed
-                            : styles.prizeRevealStatusHidden),
-                        }}
-                      >
-                        {prize.isRevealed ? "Revealed" : "Hidden"}
-                      </span>
-                    </div>
-
-                    <div style={styles.prizeRevealPrizeBody}>
-                      <div style={styles.prizeRevealPrizeMetaRow}>
-                        <span style={styles.prizeRevealOrderPill}>
-                          #{prize.revealOrder || index + 1}
+                          {isRevealed ? "Revealed" : "Hidden"}
                         </span>
-
-                        {prize.estimatedValueCents > 0 ? (
-                          <span style={styles.prizeRevealValuePill}>
-                            {formatMoneyFromCents(
-                              prize.estimatedValueCents,
-                              event.currency,
-                            )}
-                          </span>
-                        ) : null}
                       </div>
 
-                      <h3 style={styles.prizeRevealPrizeTitle}>
-                        {prize.title}
-                      </h3>
+                      <div style={styles.prizeRevealPrizeBody}>
+                        <div style={styles.prizeRevealPrizeMetaRow}>
+                          <span style={styles.prizeRevealOrderPill}>
+                            #{prize.revealOrder || index + 1}
+                          </span>
 
-                      {prize.sponsorName ? (
-                        <p style={styles.prizeRevealSponsor}>
-                          Donated by {prize.sponsorName}
-                        </p>
-                      ) : null}
+                          {isRevealed && prize.estimatedValueCents > 0 ? (
+                            <span style={styles.prizeRevealValuePill}>
+                              {formatMoneyFromCents(
+                                prize.estimatedValueCents,
+                                event.currency,
+                              )}
+                            </span>
+                          ) : (
+                            <span style={styles.prizeRevealHiddenValuePill}>
+                              Value hidden
+                            </span>
+                          )}
+                        </div>
 
-                      {prize.description ? (
-                        <p style={styles.prizeRevealDescription}>
-                          {prize.description}
-                        </p>
-                      ) : null}
-                    </div>
-                  </article>
-                ))}
+                        <h3 style={styles.prizeRevealPrizeTitle}>
+                          {isRevealed ? prize.title : "Hidden until reveal"}
+                        </h3>
+
+                        {isRevealed && prize.sponsorName ? (
+                          <p style={styles.prizeRevealSponsor}>
+                            Donated by {prize.sponsorName}
+                          </p>
+                        ) : null}
+
+                        {isRevealed && prize.description ? (
+                          <p style={styles.prizeRevealDescription}>
+                            {prize.description}
+                          </p>
+                        ) : (
+                          <p style={styles.prizeRevealDescription}>
+                            This prize will be shown when the organiser reveals
+                            the matching Higher or Lower round.
+                          </p>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
 
               <p style={styles.prizeRevealPublicFootnote}>
-                Prize reveal preview only. The live game is managed by the event
-                organiser.
+                Preview only. The live screen hides the next prize title, value
+                and image until the organiser reveals each round.
               </p>
             </section>
           );
@@ -1810,6 +1870,60 @@ const styles: Record<string, CSSProperties> = {
     whiteSpace: "pre-line",
   },
 
+  liveScreenCallout: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 14,
+    alignItems: "center",
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 22,
+    background: "rgba(255,255,255,0.11)",
+    border: "1px solid rgba(255,255,255,0.16)",
+  },
+
+  liveScreenEyebrow: {
+    display: "block",
+    color: "#bfdbfe",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 6,
+  },
+
+  liveScreenTitle: {
+    display: "block",
+    color: "#ffffff",
+    fontSize: 20,
+    lineHeight: 1.1,
+    letterSpacing: "-0.035em",
+    overflowWrap: "anywhere",
+  },
+
+  liveScreenText: {
+    margin: "7px 0 0",
+    color: "#dbeafe",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 800,
+  },
+
+  liveScreenButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+    padding: "12px 16px",
+    borderRadius: 999,
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+    textAlign: "center",
+    boxShadow: "0 14px 28px rgba(250,204,21,0.18)",
+    whiteSpace: "nowrap",
+  },
+
   addOnSafeguardsPanel: {
     marginTop: 16,
     padding: 16,
@@ -1999,6 +2113,23 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
+  prizeRevealLiveButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    maxWidth: "100%",
+    minHeight: 46,
+    marginTop: 14,
+    padding: "12px 16px",
+    borderRadius: 999,
+    color: "#ffffff",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+    textAlign: "center",
+  },
+
   prizeRevealPublicStatusCard: {
     display: "grid",
     alignContent: "center",
@@ -2070,11 +2201,12 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     width: "100%",
     height: "100%",
-    color: "#475569",
     fontSize: 13,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
+    textAlign: "center",
+    padding: 18,
   },
 
   prizeRevealStatusPill: {
@@ -2138,6 +2270,18 @@ const styles: Record<string, CSSProperties> = {
     background: "#fffbeb",
     color: "#92400e",
     border: "1px solid #fde68a",
+    fontSize: 11,
+    fontWeight: 950,
+  },
+
+  prizeRevealHiddenValuePill: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "6px 9px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#fef3c7",
+    border: "1px solid rgba(250,204,21,0.32)",
     fontSize: 11,
     fontWeight: 950,
   },
