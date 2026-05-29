@@ -20,6 +20,9 @@ const EVENT_CHAMPAGNE_IMAGE_URL =
 const DONATION_HEART_IMAGE_URL =
   "https://so-fundraising-platform.vercel.app/brand/donation-heart-gold.png";
 
+const HIGHER_OR_LOWER_IMAGE_URL =
+  "https://so-fundraising-platform.vercel.app/brand/higher-or-lower-gold.png";
+
 type EmailBranding = {
   name?: string | null;
   logoUrl?: string | null;
@@ -350,6 +353,13 @@ function renderDonationHeartHero(label = "Donation confirmation") {
   });
 }
 
+function renderHigherOrLowerHero(label = "Higher or Lower") {
+  return renderStandardHero({
+    imageUrl: HIGHER_OR_LOWER_IMAGE_URL,
+    label,
+  });
+}
+
 function renderWinnerTrophyHero(label = "Winner trophy") {
   return `
     <div style="
@@ -478,12 +488,14 @@ function renderEmailShell(params: {
   squaresSquareLabel?: string;
   eventChampagneLabel?: string;
   donationHeartLabel?: string;
+  higherOrLowerLabel?: string;
   showTicketImage?: boolean;
   showWinnerTrophy?: boolean;
   showAuctionGavel?: boolean;
   showSquaresSquare?: boolean;
   showEventChampagne?: boolean;
   showDonationHeart?: boolean;
+  showHigherOrLower?: boolean;
 }) {
   const brand = getBranding(params.branding);
   const showTicketImage = params.showTicketImage !== false;
@@ -534,9 +546,11 @@ function renderEmailShell(params: {
                         ? renderEventChampagneHero(params.eventChampagneLabel)
                         : params.showDonationHeart
                           ? renderDonationHeartHero(params.donationHeartLabel)
-                          : showTicketImage
-                            ? renderTicketHero(params.ticketImageLabel)
-                            : ""
+                          : params.showHigherOrLower
+                            ? renderHigherOrLowerHero(params.higherOrLowerLabel)
+                            : showTicketImage
+                              ? renderTicketHero(params.ticketImageLabel)
+                              : ""
               }
 
               ${
@@ -638,7 +652,9 @@ async function sendEmail(params: {
     subject: params.subject,
     id: result.data?.id,
   });
-}export async function sendReceiptEmail({
+}
+
+export async function sendReceiptEmail({
   to,
   name,
   raffleTitle,
@@ -1142,6 +1158,7 @@ export async function sendEventReceiptEmail({
     console.error("event receipt email failed", err);
   }
 }
+
 export async function sendDonationReceiptEmail({
   to,
   name,
@@ -1638,5 +1655,249 @@ export async function sendAuctionWinnerEmail({
     });
   } catch (err) {
     console.error("auction winner email failed", err);
+  }
+}
+
+export async function sendHigherOrLowerPlayerLinkEmail({
+  to,
+  name,
+  eventTitle,
+  playerEntryLabel,
+  playerAnswerUrl,
+  branding,
+}: {
+  to: string;
+  name?: string | null;
+  eventTitle: string;
+  playerEntryLabel: string;
+  playerAnswerUrl: string;
+  branding?: EmailBranding;
+}) {
+  const safeName = String(name || "").trim() || "there";
+  const safeEntryLabel = String(playerEntryLabel || "").trim() || "Your entry";
+  const safePlayerAnswerUrl = String(playerAnswerUrl || "").trim();
+
+  if (!safePlayerAnswerUrl) {
+    console.error("higher or lower player link email missing answer URL", {
+      to,
+      eventTitle,
+      playerEntryLabel,
+    });
+    return;
+  }
+
+  const html = renderEmailShell({
+    branding,
+    eyebrow: "Higher or Lower player link",
+    heading: "Your private game link",
+    showHigherOrLower: true,
+    showTicketImage: false,
+    higherOrLowerLabel: "Higher or Lower player link",
+    intro: `Hi ${safeName}, you are entered into Higher or Lower for ${eventTitle}.`,
+    body: `
+      <div style="
+        border:1px solid #fde68a;
+        border-radius:22px;
+        padding:22px;
+        margin:20px 0;
+        background:
+          radial-gradient(circle at top left, rgba(250,204,21,0.18), transparent 42%),
+          linear-gradient(135deg,#fffbeb 0%,#ffffff 64%);
+      ">
+        <p style="
+          margin:0 0 8px;
+          color:#92400e;
+          font-size:13px;
+          font-weight:900;
+          letter-spacing:0.08em;
+          text-transform:uppercase;
+        ">
+          Your entry
+        </p>
+
+        <h2 style="
+          margin:0;
+          color:#0f172a;
+          font-size:26px;
+          line-height:1.2;
+          font-weight:900;
+        ">
+          ${escapeHtml(safeEntryLabel)}
+        </h2>
+
+        <p style="
+          margin:14px 0 0;
+          color:#475569;
+          font-size:15px;
+          line-height:1.65;
+          font-weight:750;
+        ">
+          Use this same private link each time the organiser opens a round.
+          You do not need a new link for each round.
+        </p>
+      </div>
+
+      <div style="
+        border-radius:20px;
+        padding:22px;
+        margin:24px 0;
+        background:#eff6ff;
+        border:1px solid #bfdbfe;
+        text-align:center;
+      ">
+        <p style="
+          margin:0 0 14px;
+          color:#1e3a8a;
+          font-size:16px;
+          line-height:1.6;
+          font-weight:800;
+        ">
+          Tap the button below when a round is open and choose Higher or Lower.
+        </p>
+
+        <a
+          href="${escapeHtml(safePlayerAnswerUrl)}"
+          style="
+            display:inline-block;
+            padding:14px 22px;
+            border-radius:999px;
+            background:#1683f8;
+            color:#ffffff;
+            text-decoration:none;
+            font-size:16px;
+            font-weight:900;
+            box-shadow:0 10px 22px rgba(22,131,248,0.22);
+          "
+        >
+          Open my answer page
+        </a>
+
+        <p style="
+          margin:14px 0 0;
+          color:#475569;
+          font-size:13px;
+          line-height:1.5;
+        ">
+          If the button does not work, copy and paste this private link into your browser:<br />
+          <span style="word-break:break-all;">${escapeHtml(safePlayerAnswerUrl)}</span>
+        </p>
+      </div>
+
+      <div style="
+        border-radius:18px;
+        padding:18px;
+        background:#fffbeb;
+        border:1px solid #fde68a;
+      ">
+        <p style="margin:0;font-size:15px;line-height:1.6;color:#78350f;font-weight:800;">
+          Keep this link safe. It is unique to your paid entry and should not be shared.
+        </p>
+      </div>
+    `,
+  });
+
+  try {
+    await sendEmail({
+      to,
+      subject: `Your Higher or Lower link for ${eventTitle}`,
+      html,
+      branding,
+    });
+  } catch (err) {
+    console.error("higher or lower player link email failed", err);
+  }
+}
+
+export async function sendHigherOrLowerEliminatedEmail({
+  to,
+  name,
+  eventTitle,
+  playerEntryLabel,
+  roundNumber,
+  answer,
+  correctAnswer,
+  branding,
+}: {
+  to: string;
+  name?: string | null;
+  eventTitle: string;
+  playerEntryLabel: string;
+  roundNumber: number;
+  answer?: string | null;
+  correctAnswer?: string | null;
+  branding?: EmailBranding;
+}) {
+  const safeName = String(name || "").trim() || "there";
+  const safeEntryLabel = String(playerEntryLabel || "").trim() || "Your entry";
+  const safeRoundNumber = Number(roundNumber || 0);
+  const safeAnswer = String(answer || "").trim() || "No answer submitted";
+  const safeCorrectAnswer = String(correctAnswer || "").trim() || "Not recorded";
+
+  const html = renderEmailShell({
+    branding,
+    eyebrow: "Higher or Lower update",
+    heading: "You have been eliminated",
+    showHigherOrLower: true,
+    showTicketImage: false,
+    higherOrLowerLabel: "Higher or Lower elimination update",
+    intro: `Hi ${safeName}, thank you for playing Higher or Lower for ${eventTitle}.`,
+    body: `
+      <div style="
+        border:1px solid #fed7aa;
+        border-radius:22px;
+        padding:22px;
+        margin:20px 0;
+        background:
+          radial-gradient(circle at top left, rgba(249,115,22,0.12), transparent 42%),
+          linear-gradient(135deg,#fff7ed 0%,#ffffff 68%);
+      ">
+        <p style="
+          margin:0 0 8px;
+          color:#c2410c;
+          font-size:13px;
+          font-weight:900;
+          letter-spacing:0.08em;
+          text-transform:uppercase;
+        ">
+          Round ${escapeHtml(safeRoundNumber)}
+        </p>
+
+        <h2 style="
+          margin:0;
+          color:#7c2d12;
+          font-size:26px;
+          line-height:1.2;
+          font-weight:900;
+        ">
+          ${escapeHtml(safeEntryLabel)}
+        </h2>
+
+        <div style="
+          border-radius:16px;
+          background:#ffffff;
+          border:1px solid #fed7aa;
+          padding:16px;
+          margin-top:16px;
+        ">
+          ${renderInfoRow("Your answer", safeAnswer)}
+          ${renderInfoRow("Correct answer", safeCorrectAnswer)}
+        </div>
+      </div>
+
+      <p style="margin:22px 0 0;color:#334155;font-size:16px;line-height:1.65;">
+        You are out of the game, but thank you for supporting the event.
+      </p>
+    `,
+  });
+
+  try {
+    await sendEmail({
+      to,
+      subject: `Higher or Lower update for ${eventTitle}`,
+      html,
+      branding,
+    });
+  } catch (err) {
+    console.error("higher or lower eliminated email failed", err);
   }
 }
