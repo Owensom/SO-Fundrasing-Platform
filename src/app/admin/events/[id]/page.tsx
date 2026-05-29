@@ -2296,10 +2296,14 @@ export default async function AdminEventManagePage({
   const eventAddOns = (event.event_addons_json || []) as EventAddOnSummaryLike[];
   const enabledEventAddOns = eventAddOns.filter((addOn) => addOn.enabled);
   const checkoutReadyEventAddOns = enabledEventAddOns.filter(
-    eventAddOnCheckoutReady,
-  );
+  eventAddOnCheckoutReady,
+);
 
-  const eventAddOnsSummaryValue =
+const hasHigherOrLowerAddOn = enabledEventAddOns.some(
+  (addOn) => addOn.type === "higher_or_lower",
+);
+
+const eventAddOnsSummaryValue =
     enabledEventAddOns.length > 0
       ? eventAddOnCountLabel(enabledEventAddOns.length)
       : canManageEventAddOns
@@ -2630,10 +2634,20 @@ export default async function AdminEventManagePage({
             style={styles.secondaryButton}
           >
             Event Fundraising Add-ons
-          </a>
+       </a>
 
-          <a
-            href={publicEventHref}
+{hasHigherOrLowerAddOn ? (
+  <a
+    href={`/admin/events/${encodeURIComponent(event.id)}/higher-or-lower`}
+    className="secondaryButton"
+    style={styles.secondaryButton}
+  >
+    Higher or Lower live game
+  </a>
+) : null}
+
+<a
+  href={publicEventHref}
             target={event.status === "published" ? "_blank" : undefined}
             className="primaryLink"
             style={styles.primaryLink}
