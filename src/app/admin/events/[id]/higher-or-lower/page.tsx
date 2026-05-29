@@ -517,7 +517,6 @@ async function listGameAnswers(input: {
     [input.tenantSlug, input.eventId, input.sessionId],
   );
 }
-
 async function listPaidHigherOrLowerOrderItems(input: {
   tenantSlug: string;
   eventId: string;
@@ -541,6 +540,135 @@ async function listPaidHigherOrLowerOrderItems(input: {
       order by eo.created_at asc, eoi.created_at asc
     `,
     [input.tenantSlug, input.eventId],
+  );
+}
+
+async function replacePrizeChainRounds(input: {
+  tenantSlug: string;
+  eventId: string;
+  sessionId: string;
+  prizeChain: HigherOrLowerPrize[];
+}) {
+  const startingPrize = input.prizeChain[0];
+
+  await query(
+    `
+      delete from event_addon_game_answers
+      where tenant_slug = $1
+        and event_id = $2
+        and session_id = $3
+    `,
+    [input.tenantSlug, input.eventId, input.sessionId],
+  );
+
+  await query(
+    `
+      delete from event_addon_game_rounds
+      where tenant_slug = $1
+        and event_id = $2
+        and session_id = $3
+    `,
+    [input.tenantSlug, input.eventId, input.sessionId],
+  );
+
+  await query(
+    `
+      update event_addon_game_entries
+      set
+        status = case when status = 'winner' then 'active' else status end,
+        eliminated_round_number = null,
+        updated_at = now()
+      where tenant_slug = $1
+        and event_id = $2
+        and session_id = $3
+    `,
+    [input.tenantSlug, input.eventId, input.sessionId],
+  );
+
+  await query(
+    `
+      insert into event_addon_game_rounds (
+        tenant_slug,
+        event_id,
+        session_id,
+        round_number,
+        prompt,
+        reveal_title,
+        reveal_description,
+        reveal_value_cents,
+        correct_answer,
+        status,
+        revealed_at
+      )
+      values ($1,$2,$3,0,$4,$5,$6,$7,null,'revealed',now())
+    `,
+    [
+      input.tenantSlug,
+      input.eventId,
+      input.sessionId,
+      `Starting prize: ${startingPrize.title}`,
+      startingPrize.title,
+      startingPrize.description || null,
+      startingPrize.estimatedValueCents,
+    ],
+  );
+
+  for (let index = 1; index < input.prizeChain.length; index += 1) {
+    const previousPrize = input.prizeChain[index - 1];
+    const currentPrize = input.prizeChain[index];
+    const roundNumber = index;
+
+    await query(
+      `
+        insert into event_addon_game_rounds (
+          tenant_slug,
+          event_id,
+          session_id,
+          round_number,
+          prompt,
+          reveal_title,
+          reveal_description,
+          reveal_value_cents,
+          correct_answer,
+          status
+        )
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      `,
+      [
+        input.tenantSlug,
+        input.eventId,
+        input.sessionId,
+        roundNumber,
+        roundPrompt({
+          roundNumber,
+          previousPrizeTitle: previousPrize.title,
+          previousValueCents: previousPrize.estimatedValueCents,
+        }),
+        currentPrize.title,
+        currentPrize.description || null,
+        currentPrize.estimatedValueCents,
+        calculatedCorrectAnswer({
+          previousValueCents: previousPrize.estimatedValueCents,
+          currentValueCents: currentPrize.estimatedValueCents,
+        }),
+        roundNumber === 1 ? "open" : "draft",
+      ],
+    );
+  }
+
+  await query(
+    `
+      update event_addon_game_sessions
+      set
+        current_round_number = 0,
+        status = 'draft',
+        updated_at = now()
+      where tenant_slug = $1
+        and event_id = $2
+        and id = $3
+        and add_on_type = 'higher_or_lower'
+    `,
+    [input.tenantSlug, input.eventId, input.sessionId],
   );
 }
 
@@ -611,80 +739,67 @@ async function createSessionAction(formData: FormData) {
     redirect(`/admin/events/${event.id}/higher-or-lower?error=session-create-failed`);
   }
 
-  const startingPrize = prizeChain[0];
+  await replacePrizeChainRounds({
+    tenantSlug,
+    eventId: event.id,
+    sessionId,
+    prizeChain,
+  });
 
-  await query(
-    `
-      insert into event_addon_game_rounds (
-        tenant_slug,
-        event_id,
-        session_id,
-        round_number,
-        prompt,
-        reveal_title,
-        reveal_description,
-        reveal_value_cents,
-        correct_answer,
-        status,
-        revealed_at
-      )
-      values ($1,$2,$3,0,$4,$5,$6,$7,null,'revealed',now())
-    `,
-    [
-      tenantSlug,
-      event.id,
-      sessionId,
-      `Starting prize: ${startingPrize.title}`,
-      startingPrize.title,
-      startingPrize.description || null,
-      startingPrize.estimatedValueCents,
-    ],
-  );
+  redirect(`/admin/events/${event.id}/higher-or-lower?success=session-created`);
+}
 
-  for (let index = 1; index < prizeChain.length; index += 1) {
-    const previousPrize = prizeChain[index - 1];
-    const currentPrize = prizeChain[index];
-    const roundNumber = index;
+async function rebuildPrizeChainAction(formData: FormData) {
+  "use server";
 
-    await query(
-      `
-        insert into event_addon_game_rounds (
-          tenant_slug,
-          event_id,
-          session_id,
-          round_number,
-          prompt,
-          reveal_title,
-          reveal_description,
-          reveal_value_cents,
-          correct_answer,
-          status
-        )
-        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-      `,
-      [
-        tenantSlug,
-        event.id,
-        sessionId,
-        roundNumber,
-        roundPrompt({
-          roundNumber,
-          previousPrizeTitle: previousPrize.title,
-          previousValueCents: previousPrize.estimatedValueCents,
-        }),
-        currentPrize.title,
-        currentPrize.description || null,
-        currentPrize.estimatedValueCents,
-        calculatedCorrectAnswer({
-          previousValueCents: previousPrize.estimatedValueCents,
-          currentValueCents: currentPrize.estimatedValueCents,
-        }),
-        roundNumber === 1 ? "open" : "draft",
-      ],
+  const eventId = cleanText(formData.get("event_id"));
+  const sessionId = cleanText(formData.get("session_id"));
+  const requestedPrizeCount = positiveInteger(formData.get("prize_count"), 0);
+
+  if (!eventId || !sessionId) {
+    redirect("/admin/events");
+  }
+
+  const { event, tenantSlug } = await requireEventAccess(eventId);
+
+  const session = await getHigherOrLowerSession({
+    tenantSlug,
+    eventId: event.id,
+  });
+
+  if (!session || session.id !== sessionId) {
+    redirect(`/admin/events/${event.id}/higher-or-lower?error=session-missing`);
+  }
+
+  const higherOrLowerAddOn = getHigherOrLowerAddOn(event.event_addons_json || []);
+  const configuredPrizes = cleanPrizeRevealPrizes(higherOrLowerAddOn);
+
+  const prizeChain = buildPrizeChain({
+    prizes: configuredPrizes,
+    randomise: Boolean(higherOrLowerAddOn?.prizeRevealRandomiseOrder),
+    seed: `${event.id}:${session.id}:${Date.now()}`,
+    requestedPrizeCount:
+      requestedPrizeCount > 0 ? requestedPrizeCount : configuredPrizes.length,
+  });
+
+  const chainCheck = checkPrizeChain(prizeChain);
+
+  if (!chainCheck.ok) {
+    redirect(
+      `/admin/events/${event.id}/higher-or-lower?error=${encodeURIComponent(
+        chainCheck.error || "Prize chain is not ready.",
+      )}`,
     );
   }
 
-  redirect(`/admin/events/${event.id}/higher-or-lower?success=session-created`);
+  await replacePrizeChainRounds({
+    tenantSlug,
+    eventId: event.id,
+    sessionId: session.id,
+    prizeChain,
+  });
+
+  redirect(`/admin/events/${event.id}/higher-or-lower?success=prize-chain-rebuilt`);
 }
 
 async function updateSessionAction(formData: FormData) {
@@ -904,7 +1019,6 @@ async function saveAnswerAction(formData: FormData) {
 
   redirect(`/admin/events/${event.id}/higher-or-lower?success=answer-saved`);
 }
-
 async function revealRoundAction(formData: FormData) {
   "use server";
 
@@ -1152,6 +1266,9 @@ function getSuccessMessage(value: string | undefined) {
     return "Higher or Lower prize-chain game created from the saved prize list.";
   }
   if (value === "session-ready") return "Higher or Lower game already exists.";
+  if (value === "prize-chain-rebuilt") {
+    return "Prize chain rebuilt from the saved Higher or Lower prize list.";
+  }
   if (value === "session-updated") return "Game settings updated.";
   if (value === "entries-generated") {
     return "Entries generated from paid Higher or Lower orders.";
@@ -1208,9 +1325,12 @@ function startingRound(rounds: GameRound[]) {
 function previousRoundFor(rounds: GameRound[], round: GameRound) {
   const previousRoundNumber = Number(round.round_number || 0) - 1;
 
-  return rounds.find(
-    (currentRound) => Number(currentRound.round_number || 0) === previousRoundNumber,
-  ) || null;
+  return (
+    rounds.find(
+      (currentRound) =>
+        Number(currentRound.round_number || 0) === previousRoundNumber,
+    ) || null
+  );
 }
 
 export default async function AdminHigherOrLowerGamePage({
@@ -1334,8 +1454,7 @@ export default async function AdminHigherOrLowerGamePage({
         <SummaryCard label="Eliminated" value={eliminated.length} />
         <SummaryCard label="Playable rounds" value={gameRounds.length} />
       </section>
-
-      {!session ? (
+            {!session ? (
         <section style={styles.sectionCard}>
           <div style={styles.sectionHeader}>
             <div>
@@ -1368,10 +1487,7 @@ export default async function AdminHigherOrLowerGamePage({
               label="Eligible players"
               value="Paid Higher or Lower only"
             />
-            <InfoCard
-              label="Minimum required"
-              value="2 valued prizes"
-            />
+            <InfoCard label="Minimum required" value="2 valued prizes" />
           </div>
 
           {configuredPrizes.length < 2 ? (
@@ -1448,7 +1564,10 @@ export default async function AdminHigherOrLowerGamePage({
               </div>
             ) : (
               configuredPrizes.map((prize, index) => (
-                <div key={prize.id || `${prize.title}-${index}`} style={styles.prizePreviewCard}>
+                <div
+                  key={prize.id || `${prize.title}-${index}`}
+                  style={styles.prizePreviewCard}
+                >
                   <div>
                     <div style={styles.prizePreviewEyebrow}>
                       Saved prize {index + 1}
@@ -1527,6 +1646,98 @@ export default async function AdminHigherOrLowerGamePage({
               <div style={styles.submitRow}>
                 <button type="submit" style={styles.primaryButton}>
                   Save game settings
+                </button>
+              </div>
+            </form>
+          </section>
+
+          <section style={styles.sectionCard}>
+            <div style={styles.sectionHeader}>
+              <div>
+                <div style={styles.sectionEyebrow}>Prize chain repair</div>
+                <h2 style={styles.sectionTitle}>Rebuild from saved prize list</h2>
+                <p style={styles.sectionText}>
+                  Use this when the event’s Higher or Lower prize setup has been
+                  updated, or when an older game session exists without prize
+                  rounds. It rebuilds the starting prize and playable rounds from
+                  the saved add-on prizes.
+                </p>
+              </div>
+
+              <span
+                style={{
+                  ...styles.statusPill,
+                  ...(gameRounds.length > 0 && baseline
+                    ? statusStyle("active")
+                    : statusStyle("draft")),
+                }}
+              >
+                {gameRounds.length > 0 && baseline ? "Prize chain ready" : "Needs rebuild"}
+              </span>
+            </div>
+
+            <div style={styles.setupNotice}>
+              <strong>Important</strong>
+              <span>
+                Rebuilding deletes existing round answers and recreates the prize
+                rounds. Paid player entries remain tied to paid Higher or Lower
+                order items, and entry generation still only uses paid orders.
+              </span>
+            </div>
+
+            <form action={rebuildPrizeChainAction} style={styles.formGrid}>
+              <input type="hidden" name="event_id" value={event.id} />
+              <input type="hidden" name="session_id" value={session.id} />
+
+              <label style={styles.field}>
+                <span style={styles.label}>Number of saved prizes to use</span>
+                <select
+                  name="prize_count"
+                  defaultValue={String(configuredPrizes.length)}
+                  style={styles.select}
+                >
+                  {configuredPrizes.map((_, index) => {
+                    const prizeCount = index + 1;
+
+                    if (prizeCount < 2) return null;
+
+                    return (
+                      <option key={prizeCount} value={prizeCount}>
+                        {prizeCount} prizes — {prizeCount - 1} round
+                        {prizeCount - 1 === 1 ? "" : "s"}
+                      </option>
+                    );
+                  })}
+                </select>
+              </label>
+
+              <div style={styles.field}>
+                <span style={styles.label}>Saved prize order</span>
+                <div style={styles.infoCard}>
+                  <div style={styles.infoValue}>
+                    {prizeRevealRandomiseOrder
+                      ? "Randomise once on rebuild"
+                      : "Use saved order"}
+                  </div>
+                  <div style={styles.metaText}>
+                    {configuredPrizes.length} configured prize
+                    {configuredPrizes.length === 1 ? "" : "s"} available.
+                  </div>
+                </div>
+              </div>
+
+              <div style={styles.submitRow}>
+                <button
+                  type="submit"
+                  disabled={configuredPrizes.length < 2}
+                  style={{
+                    ...styles.winnerButton,
+                    opacity: configuredPrizes.length < 2 ? 0.55 : 1,
+                    cursor:
+                      configuredPrizes.length < 2 ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Rebuild game from saved prize list
                 </button>
               </div>
             </form>
