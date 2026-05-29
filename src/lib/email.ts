@@ -293,9 +293,9 @@ function renderStandardHero({
       margin:0 auto 26px;
       max-width:320px;
       border-radius:24px;
-      background:linear-gradient(135deg,#ffffff 0%,#f8fafc 52%,#eff6ff 100%);
-      border:1px solid #dbeafe;
-      box-shadow:0 14px 34px rgba(15,23,42,0.08);
+      background:#ffffff;
+      border:1px solid #e2e8f0;
+      box-shadow:0 12px 28px rgba(15,23,42,0.08);
       padding:18px;
       text-align:center;
     ">
@@ -1696,18 +1696,16 @@ export async function sendHigherOrLowerPlayerLinkEmail({
     intro: `Hi ${safeName}, you are entered into Higher or Lower for ${eventTitle}.`,
     body: `
       <div style="
-        border:1px solid #fde68a;
-        border-radius:22px;
+        border:1px solid #e2e8f0;
+        border-radius:20px;
         padding:22px;
         margin:20px 0;
-        background:
-          radial-gradient(circle at top left, rgba(250,204,21,0.18), transparent 42%),
-          linear-gradient(135deg,#fffbeb 0%,#ffffff 64%);
+        background:#ffffff;
       ">
         <p style="
           margin:0 0 8px;
           color:#92400e;
-          font-size:13px;
+          font-size:12px;
           font-weight:900;
           letter-spacing:0.08em;
           text-transform:uppercase;
@@ -1727,10 +1725,10 @@ export async function sendHigherOrLowerPlayerLinkEmail({
 
         <p style="
           margin:14px 0 0;
-          color:#475569;
-          font-size:15px;
+          color:#334155;
+          font-size:16px;
           line-height:1.65;
-          font-weight:750;
+          font-weight:700;
         ">
           Use this same private link each time the organiser opens a round.
           You do not need a new link for each round.
@@ -1741,25 +1739,25 @@ export async function sendHigherOrLowerPlayerLinkEmail({
         border-radius:20px;
         padding:22px;
         margin:24px 0;
-        background:#eff6ff;
-        border:1px solid #bfdbfe;
+        background:#f8fafc;
+        border:1px solid #cbd5e1;
         text-align:center;
       ">
         <p style="
-          margin:0 0 14px;
-          color:#1e3a8a;
-          font-size:16px;
+          margin:0 0 16px;
+          color:#0f172a;
+          font-size:17px;
           line-height:1.6;
           font-weight:800;
         ">
-          Tap the button below when a round is open and choose Higher or Lower.
+          When a round is open, tap below and choose Higher or Lower.
         </p>
 
         <a
           href="${escapeHtml(safePlayerAnswerUrl)}"
           style="
             display:inline-block;
-            padding:14px 22px;
+            padding:15px 24px;
             border-radius:999px;
             background:#1683f8;
             color:#ffffff;
@@ -1771,26 +1769,50 @@ export async function sendHigherOrLowerPlayerLinkEmail({
         >
           Open my answer page
         </a>
-
-        <p style="
-          margin:14px 0 0;
-          color:#475569;
-          font-size:13px;
-          line-height:1.5;
-        ">
-          If the button does not work, copy and paste this private link into your browser:<br />
-          <span style="word-break:break-all;">${escapeHtml(safePlayerAnswerUrl)}</span>
-        </p>
       </div>
 
       <div style="
         border-radius:18px;
         padding:18px;
-        background:#fffbeb;
-        border:1px solid #fde68a;
+        margin:20px 0;
+        background:#fff7ed;
+        border:1px solid #fed7aa;
       ">
-        <p style="margin:0;font-size:15px;line-height:1.6;color:#78350f;font-weight:800;">
+        <p style="
+          margin:0;
+          font-size:15px;
+          line-height:1.6;
+          color:#7c2d12;
+          font-weight:800;
+        ">
           Keep this link safe. It is unique to your paid entry and should not be shared.
+        </p>
+      </div>
+
+      <div style="
+        border-radius:16px;
+        padding:16px;
+        background:#ffffff;
+        border:1px solid #e2e8f0;
+      ">
+        <p style="
+          margin:0 0 8px;
+          color:#475569;
+          font-size:13px;
+          line-height:1.5;
+          font-weight:700;
+        ">
+          If the button does not work, copy and paste this private link into your browser:
+        </p>
+
+        <p style="
+          margin:0;
+          color:#1e3a8a;
+          font-size:13px;
+          line-height:1.5;
+          word-break:break-all;
+        ">
+          ${escapeHtml(safePlayerAnswerUrl)}
         </p>
       </div>
     `,
@@ -1847,9 +1869,7 @@ export async function sendHigherOrLowerEliminatedEmail({
         border-radius:22px;
         padding:22px;
         margin:20px 0;
-        background:
-          radial-gradient(circle at top left, rgba(249,115,22,0.12), transparent 42%),
-          linear-gradient(135deg,#fff7ed 0%,#ffffff 68%);
+        background:#fff7ed;
       ">
         <p style="
           margin:0 0 8px;
@@ -1899,5 +1919,98 @@ export async function sendHigherOrLowerEliminatedEmail({
     });
   } catch (err) {
     console.error("higher or lower eliminated email failed", err);
+  }
+}
+
+export async function sendHigherOrLowerWinnerEmail({
+  to,
+  name,
+  eventTitle,
+  playerEntryLabel,
+  branding,
+}: {
+  to: string;
+  name?: string | null;
+  eventTitle: string;
+  playerEntryLabel: string;
+  branding?: EmailBranding;
+}) {
+  const safeName = String(name || "").trim() || "there";
+  const safeEntryLabel = String(playerEntryLabel || "").trim() || "Winning entry";
+
+  const html = renderEmailShell({
+    branding,
+    eyebrow: "Higher or Lower winner",
+    heading: "You are the winner!",
+    showHigherOrLower: true,
+    showTicketImage: false,
+    higherOrLowerLabel: "Higher or Lower winner",
+    intro: `Hi ${safeName}, congratulations — you have won Higher or Lower for ${eventTitle}.`,
+    body: `
+      <div style="
+        border:1px solid #fde68a;
+        border-radius:22px;
+        padding:22px;
+        margin:20px 0;
+        background:
+          radial-gradient(circle at top left, rgba(250,204,21,0.18), transparent 42%),
+          linear-gradient(135deg,#fffbeb 0%,#ffffff 68%);
+      ">
+        <p style="
+          margin:0 0 8px;
+          color:#92400e;
+          font-size:13px;
+          font-weight:900;
+          letter-spacing:0.08em;
+          text-transform:uppercase;
+        ">
+          Winning entry
+        </p>
+
+        <h2 style="
+          margin:0;
+          color:#422006;
+          font-size:28px;
+          line-height:1.2;
+          font-weight:900;
+        ">
+          ${escapeHtml(safeEntryLabel)}
+        </h2>
+      </div>
+
+      <div style="
+        border-radius:20px;
+        padding:22px;
+        margin:22px 0;
+        background:#ecfdf5;
+        border:1px solid #bbf7d0;
+      ">
+        <p style="
+          margin:0;
+          color:#14532d;
+          font-size:16px;
+          line-height:1.65;
+          font-weight:850;
+        ">
+          The organiser has declared you as the Higher or Lower winner. They will
+          be in touch soon with prize or next-step details.
+        </p>
+      </div>
+
+      <p style="margin:22px 0 0;color:#334155;font-size:16px;line-height:1.65;">
+        Thank you for taking part and supporting the event.
+      </p>
+    `,
+  });
+
+  try {
+    await sendEmail({
+      to,
+      subject: `You won Higher or Lower for ${eventTitle}!`,
+      html,
+      branding,
+    });
+  } catch (err) {
+    console.error("higher or lower winner email failed", err);
   }
 }
