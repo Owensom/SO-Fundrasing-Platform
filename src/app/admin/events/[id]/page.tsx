@@ -391,7 +391,6 @@ function parseMenuOptionsFromForm(formData: FormData): EventMenuOption[] {
     };
   }).filter((option) => option.name);
 }
-
 function parsePrizeSelection(
   value: FormDataEntryValue | null,
 ): ParsedPrizeSelection | null {
@@ -747,6 +746,7 @@ async function getActivePublishedCampaignCountForTenant(tenantSlug: string) {
 
   return Number(rows[0]?.active_count || 0);
 }
+
 async function listEventAccessCodes(eventId: string) {
   return query<EventAccessCodeRow>(
     `
@@ -900,7 +900,6 @@ async function requireEventGuestCateringEditAccess(eventId: string) {
 
   return event;
 }
-
 async function requireEventVipAccessCodeAccess(eventId: string) {
   const event = await requireEventAccess(eventId);
   const tenantSettings = await getTenantSettings(event.tenant_slug);
@@ -1276,7 +1275,6 @@ async function updateSeatingLayoutAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=layout#${returnAnchor}`);
 }
-
 async function updateTableNamesAction(formData: FormData) {
   "use server";
 
@@ -1332,6 +1330,7 @@ async function updateTableShapeAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=table-shape#table-seating`);
 }
+
 async function addTicketTypeAction(formData: FormData) {
   "use server";
 
@@ -1642,7 +1641,6 @@ async function generateTablesAction(formData: FormData) {
 
   redirect(`/admin/events/${eventId}?saved=tables#table-seating`);
 }
-
 async function clearRowSeatsAction(formData: FormData) {
   "use server";
 
@@ -2296,14 +2294,14 @@ export default async function AdminEventManagePage({
   const eventAddOns = (event.event_addons_json || []) as EventAddOnSummaryLike[];
   const enabledEventAddOns = eventAddOns.filter((addOn) => addOn.enabled);
   const checkoutReadyEventAddOns = enabledEventAddOns.filter(
-  eventAddOnCheckoutReady,
-);
+    eventAddOnCheckoutReady,
+  );
 
-const hasHigherOrLowerAddOn = enabledEventAddOns.some(
-  (addOn) => addOn.type === "higher_or_lower",
-);
+  const hasHigherOrLowerAddOn = enabledEventAddOns.some(
+    (addOn) => addOn.type === "higher_or_lower",
+  );
 
-const eventAddOnsSummaryValue =
+  const eventAddOnsSummaryValue =
     enabledEventAddOns.length > 0
       ? eventAddOnCountLabel(enabledEventAddOns.length)
       : canManageEventAddOns
@@ -2392,6 +2390,14 @@ const eventAddOnsSummaryValue =
     (ticketType) => ticketType.is_active,
   );
 
+  const activePaidTicketTypes = activeTicketTypes.filter(
+    (ticketType) => Number(ticketType.price || 0) > 0,
+  );
+
+  const hasFreeActiveTickets =
+    activeTicketTypes.length > 0 &&
+    activeTicketTypes.some((ticketType) => Number(ticketType.price || 0) <= 0);
+
   const lowestTicketPrice =
     activeTicketTypes.length > 0
       ? Math.min(...activeTicketTypes.map((ticketType) => ticketType.price || 0))
@@ -2445,8 +2451,7 @@ const eventAddOnsSummaryValue =
     : isReservedSeating
       ? `${rowSeats.length} row seats`
       : `${tableSeats.length} table seats`;
-
-  const dietaryResponses = guestCateringRows.filter((row) =>
+    const dietaryResponses = guestCateringRows.filter((row) =>
     String(row.dietary_requirements || "").trim(),
   ).length;
 
@@ -2458,32 +2463,94 @@ const eventAddOnsSummaryValue =
     (row) => !String(row.menu_choice || "").trim(),
   ).length;
 
+  const startDateConfigured = Boolean(event.starts_at);
+  const activeTicketsConfigured = activeTicketTypes.length > 0;
+  const paidTicketGuidanceNeeded =
+    activeTicketTypes.length > 0 && activePaidTicketTypes.length === 0;
+
+  const seatingConfigured =
+    isGeneralAdmission ||
+    (isReservedSeating && rowSeats.length > 0) ||
+    (isTables && tableSeats.length > 0);
+
+  const publishedNeedsAttention =
+    event.status === "published" &&
+    (!startDateConfigured ||
+      !activeTicketsConfigured ||
+      !seatingConfigured ||
+      paidTicketGuidanceNeeded);
+
+  const guestCollectionLabel =
+    [
+      event.ask_menu_choice ? "Menu" : null,
+      event.ask_dietary_requirements ? "Dietary" : null,
+    ]
+      .filter(Boolean)
+      .join(" + ") || "Off";
+
+  const addOnsConfigured = enabledEventAddOns.length > 0;
+  const addOnsCheckoutReady =
+    enabledEventAddOns.length > 0 &&
+    checkoutReadyEventAddOns.length === enabledEventAddOns.length;
+
   const readinessItems: ReadinessItem[] = [
     {
       label: "Public page",
       value: statusLabel(event.status),
-      tone: event.status === "published" ? "good" : "warning",
+      tone:
+        event.status === "published"
+          ? publishedNeedsAttention
+            ? "warning"
+            : "good"
+          : "warning",
       detail:
         event.status === "published"
-          ? "The event can be opened by supporters."
+          ? publishedNeedsAttention
+            ? "This event is public, but one or more launch checks need attention."
+            : "The event can be opened by supporters."
           : "Draft and closed events stay hidden from the public page.",
     },
     {
       label: "Tickets",
       value: `${activeTicketTypes.length} active`,
-      tone: activeTicketTypes.length > 0 ? "good" : "warning",
+      tone:
+        activeTicketTypes.length > 0 && !paidTicketGuidanceNeeded
+          ? "good"
+          : "warning",
       detail:
-        activeTicketTypes.length > 0
-          ? "At least one ticket type is active for checkout."
-          : "Add an active ticket type before selling tickets.",
+        activeTicketTypes.length === 0
+          ? "Add an active ticket type before selling tickets."
+          : paidTicketGuidanceNeeded
+            ? "Active ticket types are currently free. Keep this only if the event is intentionally free or complimentary."
+            : `${activePaidTicketTypes.length} paid active ticket type${
+                activePaidTicketTypes.length === 1 ? "" : "s"
+              } available for checkout.`,
     },
     {
       label: "Timing",
       value: formatDisplayDate(event.starts_at),
       tone: event.starts_at ? "good" : "warning",
       detail: event.starts_at
-        ? "Start date is set."
-        : "Add a start date so supporters know when the event happens.",
+        ? event.ends_at
+          ? "Start and end times are set."
+          : "Start date is set. Add an end time if the event needs one."
+        : event.status === "published"
+          ? "This event is published without a start date. Add one before sharing widely."
+          : "Add a start date so supporters know when the event happens.",
+    },
+    {
+      label: "Seating / capacity",
+      value: capacitySummary,
+      tone: seatingConfigured ? "good" : "warning",
+      detail: isGeneralAdmission
+        ? event.capacity
+          ? "General admission capacity is set."
+          : "General admission has no fixed capacity. Keep this only if unlimited sales are intended."
+        : seatingConfigured
+          ? `${availableSeats} available, ${soldSeats} sold, ${blockedSeats} blocked.`
+          : isReservedSeating
+            ? "Generate row seats before publishing a reserved seating event."
+            : "Generate table seats before publishing a table event.",
     },
     {
       label: "Image",
@@ -2495,43 +2562,39 @@ const eventAddOnsSummaryValue =
     },
     {
       label: "Guest collection",
-      value:
-        [
-          event.ask_menu_choice ? "Menu" : null,
-          event.ask_dietary_requirements ? "Dietary" : null,
-        ]
-          .filter(Boolean)
-          .join(" + ") || "Off",
+      value: guestCollectionLabel,
       tone:
         event.ask_menu_choice || event.ask_dietary_requirements
           ? "good"
           : "neutral",
       detail:
         event.ask_menu_choice || event.ask_dietary_requirements
-          ? "Guest menu or dietary fields are enabled."
+          ? guestCateringRows.length > 0
+            ? `${menuResponses} menu choices and ${dietaryResponses} dietary notes recorded.`
+            : "Guest menu or dietary fields are enabled for future bookings."
           : "Guest menu and dietary fields are hidden.",
     },
     {
       label: "Event add-ons",
       value: eventAddOnsSummaryValue,
-      tone:
-        enabledEventAddOns.length > 0
+      tone: addOnsConfigured
+        ? addOnsCheckoutReady
           ? "good"
-          : canManageEventAddOns
-            ? "neutral"
-            : "warning",
-      detail:
-        enabledEventAddOns.length > 0
-          ? `${formatEventAddOnList(enabledEventAddOns)} ${
-              checkoutReadyEventAddOns.length > 0
-                ? `• ${eventAddOnCountLabel(
-                    checkoutReadyEventAddOns.length,
-                  )} checkout-ready`
-                : "• organiser collection only"
-            }`
-          : canManageEventAddOns
-            ? "Professional/Foundation event add-ons can be configured."
-            : "Event fundraising add-ons require Professional or Foundation.",
+          : "warning"
+        : canManageEventAddOns
+          ? "neutral"
+          : "warning",
+      detail: addOnsConfigured
+        ? `${formatEventAddOnList(enabledEventAddOns)} ${
+            checkoutReadyEventAddOns.length > 0
+              ? `• ${eventAddOnCountLabel(
+                  checkoutReadyEventAddOns.length,
+                )} checkout-ready`
+              : "• display/organiser collection only"
+          }`
+        : canManageEventAddOns
+          ? "Professional/Foundation event add-ons can be configured."
+          : "Event fundraising add-ons require Professional or Foundation.",
     },
     {
       label: "Operations",
@@ -2540,6 +2603,13 @@ const eventAddOnsSummaryValue =
       detail: `${guestCateringRows.length} paid guests recorded so far.`,
     },
   ];
+
+  const readinessReady =
+    event.status === "published" &&
+    activeTicketsConfigured &&
+    startDateConfigured &&
+    seatingConfigured &&
+    !paidTicketGuidanceNeeded;
 
   const sentCount = Number(searchParams?.sent || 0);
   const skippedCount = Number(searchParams?.skipped || 0);
@@ -2603,7 +2673,8 @@ const eventAddOnsSummaryValue =
           </div>
         </div>
       </section>
-            <section className="topActions" style={styles.topActions}>
+
+      <section className="topActions" style={styles.topActions}>
         <a
           href="/admin/events"
           className="secondaryButton"
@@ -2634,20 +2705,22 @@ const eventAddOnsSummaryValue =
             style={styles.secondaryButton}
           >
             Event Fundraising Add-ons
-       </a>
+          </a>
 
-{hasHigherOrLowerAddOn ? (
-  <a
-    href={`/admin/events/${encodeURIComponent(event.id)}/higher-or-lower`}
-    className="secondaryButton"
-    style={styles.secondaryButton}
-  >
-    Higher or Lower live game
-  </a>
-) : null}
+          {hasHigherOrLowerAddOn ? (
+            <a
+              href={`/admin/events/${encodeURIComponent(
+                event.id,
+              )}/higher-or-lower`}
+              className="secondaryButton"
+              style={styles.secondaryButton}
+            >
+              Higher or Lower live game
+            </a>
+          ) : null}
 
-<a
-  href={publicEventHref}
+          <a
+            href={publicEventHref}
             target={event.status === "published" ? "_blank" : undefined}
             className="primaryLink"
             style={styles.primaryLink}
@@ -2804,24 +2877,18 @@ const eventAddOnsSummaryValue =
             <div style={styles.readinessEyebrow}>Campaign readiness</div>
             <h2 style={styles.readinessTitle}>Event readiness snapshot</h2>
             <p style={styles.readinessIntro}>
-              A quick operational check before sharing the public page or
-              running the event.
+              A quick operational check before sharing the public page, taking
+              bookings, using add-ons or running the event.
             </p>
           </div>
 
           <span
             style={{
               ...styles.readinessStatusPill,
-              ...readinessToneStyle(
-                event.status === "published" && activeTicketTypes.length > 0
-                  ? "good"
-                  : "warning",
-              ),
+              ...readinessToneStyle(readinessReady ? "good" : "warning"),
             }}
           >
-            {event.status === "published" && activeTicketTypes.length > 0
-              ? "Ready to sell"
-              : "Needs attention"}
+            {readinessReady ? "Ready to sell" : "Needs attention"}
           </span>
         </div>
 
@@ -2886,8 +2953,7 @@ const eventAddOnsSummaryValue =
         <SummaryCard label="VIP" value={vipSeats} />
         <SummaryCard label="Complimentary" value={complimentarySeats} />
       </section>
-
-      <CollapsibleSection
+            <CollapsibleSection
         id="overview"
         eyebrow="Section 1"
         title="Overview"
@@ -3672,12 +3738,12 @@ const eventAddOnsSummaryValue =
         } menus`}
       >
         <EventPrizeMenuSettings
-         eventId={event.id}
-         initialPrizes={event.prizes_json || []}
-         initialMenuOptions={event.menu_options || []}
-         updatePrizesAction={updatePrizesAction}
-         updateMenuOptionsAction={updateMenuOptionsAction}
-      />
+          eventId={event.id}
+          initialPrizes={event.prizes_json || []}
+          initialMenuOptions={event.menu_options || []}
+          updatePrizesAction={updatePrizesAction}
+          updateMenuOptionsAction={updateMenuOptionsAction}
+        />
       </CollapsibleSection>
 
       <CollapsibleSection
@@ -3932,15 +3998,15 @@ const eventAddOnsSummaryValue =
         badge={`${winners.length} winners`}
       >
         <EventWinnerDrawPanel
-         eventId={event.id}
-         eventType={event.event_type}
-         prizes={event.prizes_json || []}
-         winners={winners}
-         drawWinnerAction={runWinnerDrawAction}
-         deleteWinnerAction={deleteWinnerAction}
-         clearWinnersAction={clearWinnersAction}
+          eventId={event.id}
+          eventType={event.event_type}
+          prizes={event.prizes_json || []}
+          winners={winners}
+          drawWinnerAction={runWinnerDrawAction}
+          deleteWinnerAction={deleteWinnerAction}
+          clearWinnersAction={clearWinnersAction}
         />
-              </CollapsibleSection>
+      </CollapsibleSection>
 
       <CollapsibleSection
         id="event-addons"
@@ -5491,18 +5557,6 @@ const styles: Record<string, CSSProperties> = {
     color: "#92400e",
     fontSize: 13,
     fontWeight: 800,
-    lineHeight: 1.45,
-  },
-  menuRequestSuccess: {
-    display: "grid",
-    gap: 4,
-    padding: 14,
-    borderRadius: 18,
-    background: "#dcfce7",
-    border: "1px solid #bbf7d0",
-    color: "#166534",
-    fontSize: 13,
-    fontWeight: 850,
     lineHeight: 1.45,
   },
   guestCardList: {
