@@ -5074,9 +5074,9 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 750,
     overflowWrap: "anywhere",
   },
-  summaryGrid: {
+    summaryGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
     gap: 12,
     marginBottom: 16,
   },
