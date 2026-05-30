@@ -219,8 +219,8 @@ export default async function AdminSharePage() {
 
           <p style={styles.subtitle}>
             Create public hub links, campaign links, donation links, ready-made
-            captions and branded PNG cards for social posts, WhatsApp, email and
-            printed promotion.
+            captions, branded PNG cards and QR assets for social posts,
+            WhatsApp, email and printed promotion.
           </p>
 
           <p style={styles.tenantLine}>
@@ -231,7 +231,7 @@ export default async function AdminSharePage() {
         <div className="share-hero-stats" style={styles.heroStats}>
           <StatCard label="Active campaigns" value={campaigns.length} dark />
           <StatCard label="Public hub" value="Share" dark />
-          <StatCard label="Campaign link" value="Copy" dark />
+          <StatCard label="QR assets" value="Download" dark />
           <StatCard label="PNG card" value="Download" dark />
         </div>
       </section>
@@ -248,8 +248,8 @@ export default async function AdminSharePage() {
         />
 
         <InfoCard
-          title="Download a branded card"
-          text="Create a premium PNG share card using tenant branding first, with platform branding as the fallback."
+          title="Create QR assets"
+          text="Generate a QR code for the public hub, selected campaign or donation link, then download a branded QR PNG card."
         />
       </section>
 
@@ -350,7 +350,8 @@ const responsiveStyles = `
   }
 
   .admin-share-page .share-preview-actions,
-  .admin-share-page .share-hub-actions {
+  .admin-share-page .share-hub-actions,
+  .admin-share-page .share-qr-actions {
     grid-template-columns: 1fr !important;
   }
 
