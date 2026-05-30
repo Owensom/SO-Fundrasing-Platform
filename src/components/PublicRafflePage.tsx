@@ -126,6 +126,86 @@ function normaliseHexColour(value: unknown, fallback: string) {
   return fallback;
 }
 
+const RAFFLE_COLOUR_SWATCHES: Record<string, string> = {
+  red: "#ef4444",
+  blue: "#1683f8",
+  green: "#16a34a",
+  yellow: "#facc15",
+  orange: "#f97316",
+  purple: "#8b5cf6",
+  pink: "#ec4899",
+  black: "#111827",
+  white: "#ffffff",
+  gold: "#f59e0b",
+  silver: "#cbd5e1",
+  grey: "#64748b",
+  gray: "#64748b",
+};
+
+function getRaffleColourHex(colour: RaffleColour | string | null | undefined) {
+  const rawHex =
+    typeof colour === "object" && colour ? cleanText(colour.hex) : "";
+
+  if (/^#[0-9A-F]{6}$/i.test(rawHex)) {
+    return rawHex.toUpperCase();
+  }
+
+  const rawName =
+    typeof colour === "string" ? colour : colour ? colour.name : "";
+
+  const cleanName = cleanText(rawName);
+
+  if (/^#[0-9A-F]{6}$/i.test(cleanName)) {
+    return cleanName.toUpperCase();
+  }
+
+  return RAFFLE_COLOUR_SWATCHES[cleanName.toLowerCase()] || "#e5e7eb";
+}
+
+function getReadableTextColour(backgroundHex: string) {
+  const clean = normaliseHexColour(backgroundHex, "#e5e7eb").replace("#", "");
+
+  const red = parseInt(clean.slice(0, 2), 16);
+  const green = parseInt(clean.slice(2, 4), 16);
+  const blue = parseInt(clean.slice(4, 6), 16);
+
+  const brightness = (red * 299 + green * 587 + blue * 114) / 1000;
+
+  return brightness > 145 ? "#111827" : "#ffffff";
+}
+
+function colourButtonStyle({
+  colour,
+  selected,
+  canReserve,
+  primaryColour,
+}: {
+  colour: RaffleColour;
+  selected: boolean;
+  canReserve: boolean;
+  primaryColour: string;
+}): React.CSSProperties {
+  const background = getRaffleColourHex(colour);
+  const textColour = getReadableTextColour(background);
+  const isLight = textColour === "#111827";
+
+  return {
+    ...styles.colourButton,
+    background,
+    color: textColour,
+    border: selected
+      ? `3px solid ${primaryColour}`
+      : isLight
+        ? "1px solid #cbd5e1"
+        : "1px solid rgba(15,23,42,0.18)",
+    boxShadow: selected
+      ? `0 0 0 4px ${primaryColour}24, 0 12px 26px rgba(15,23,42,0.16)`
+      : "0 8px 18px rgba(15,23,42,0.08)",
+    opacity: canReserve ? 1 : 0.7,
+    cursor: canReserve ? "pointer" : "not-allowed",
+  };
+}
+
 function normaliseRaffleSubtype(value: unknown): SafeRaffleSubtype {
   const clean = String(value ?? "").trim().toLowerCase();
 
@@ -494,7 +574,8 @@ function calculateBestPrice(
       }
     }
   }
-    const total = Number.isFinite(dp[safeQuantity]?.total)
+
+  const total = Number.isFinite(dp[safeQuantity]?.total)
     ? dp[safeQuantity].total
     : 0;
 
@@ -511,25 +592,32 @@ function calculateBestPrice(
 }
 
 function renderColourLabel(colour: RaffleColour) {
-  if (colour.hex) {
-    return (
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-        <span
-          style={{
-            width: 14,
-            height: 14,
-            borderRadius: 999,
-            background: colour.hex,
-            border: "1px solid #cbd5e1",
-            display: "inline-block",
-          }}
-        />
-        {colour.name}
-      </span>
-    );
-  }
-
-  return colour.name;
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        minWidth: 0,
+      }}
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          width: 12,
+          height: 12,
+          borderRadius: 999,
+          background: getRaffleColourHex(colour),
+          border: "1px solid rgba(255,255,255,0.82)",
+          boxShadow: "0 0 0 1px rgba(15,23,42,0.24)",
+          display: "inline-block",
+          flexShrink: 0,
+        }}
+      />
+      <span>{colour.name}</span>
+    </span>
+  );
 }
 
 function colourSwatch(colourName: string | null, colours: RaffleColour[]) {
@@ -539,20 +627,38 @@ function colourSwatch(colourName: string | null, colours: RaffleColour[]) {
     (colour) => colour.name === colourName || colour.id === colourName,
   );
 
-  const background = match?.hex || colourName;
-
   return (
     <span
+      aria-hidden="true"
       style={{
         width: 14,
         height: 14,
         borderRadius: 999,
-        background,
+        background: getRaffleColourHex(match || colourName),
         border: "1px solid #cbd5e1",
+        boxShadow: "0 0 0 1px rgba(255,255,255,0.9)",
         display: "inline-block",
         flexShrink: 0,
       }}
     />
+  );
+}
+
+function renderTicketSummary(ticket: TicketSelection, colours: RaffleColour[]) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        minWidth: 0,
+      }}
+    >
+      {colourSwatch(ticket.colour, colours)}
+      <span>
+        {ticket.colour} #{ticket.number}
+      </span>
+    </span>
   );
 }
 
@@ -1036,7 +1142,8 @@ export default function PublicRafflePage({ slug }: Props) {
   const brandLogoSrc = branding.logoMarkUrl || branding.logoUrl;
   const primaryColour = branding.primaryColour || "#2563EB";
   const accentColour = branding.accentColour || "#F59E0B";
-    const brandedPrimaryButtonStyle: React.CSSProperties = {
+
+  const brandedPrimaryButtonStyle: React.CSSProperties = {
     ...styles.primaryButton,
     background: `linear-gradient(135deg, ${primaryColour} 0%, #1d4ed8 58%, #1e40af 100%)`,
     boxShadow: `0 14px 30px ${primaryColour}36`,
@@ -1173,8 +1280,7 @@ export default function PublicRafflePage({ slug }: Props) {
 
     autoSelectTicketQuantity(autoQuantity);
   }
-
-  async function reserveTickets() {
+    async function reserveTickets() {
     if (!raffle || !canReserve) return;
 
     try {
@@ -1572,37 +1678,38 @@ export default function PublicRafflePage({ slug }: Props) {
               <div style={styles.prizesTitle}>Prizes</div>
 
               <div style={{ display: "grid", gap: 10 }}>
-                {(showAllPrizes ? raffle.prizes : raffle.prizes.slice(0, 3)).map(
-                  (prize) => (
+                {(showAllPrizes
+                  ? raffle.prizes
+                  : raffle.prizes.slice(0, 3)
+                ).map((prize) => (
+                  <div
+                    key={String(prize.position) + "-" + prize.title}
+                    className="public-raffle-prize-card"
+                    style={styles.prizeCard}
+                  >
                     <div
-                      key={String(prize.position) + "-" + prize.title}
-                      className="public-raffle-prize-card"
-                      style={styles.prizeCard}
+                      className="public-raffle-prize-position"
+                      style={brandedPrizePositionStyle}
                     >
-                      <div
-                        className="public-raffle-prize-position"
-                        style={brandedPrizePositionStyle}
-                      >
-                        {ordinal(prize.position)}
-                      </div>
-
-                      <div style={styles.prizeContent}>
-                        <div
-                          className="public-raffle-prize-title"
-                          style={styles.prizeTitle}
-                        >
-                          {prize.title}
-                        </div>
-
-                        {prize.description ? (
-                          <div style={styles.prizeDescription}>
-                            {prize.description}
-                          </div>
-                        ) : null}
-                      </div>
+                      {ordinal(prize.position)}
                     </div>
-                  ),
-                )}
+
+                    <div style={styles.prizeContent}>
+                      <div
+                        className="public-raffle-prize-title"
+                        style={styles.prizeTitle}
+                      >
+                        {prize.title}
+                      </div>
+
+                      {prize.description ? (
+                        <div style={styles.prizeDescription}>
+                          {prize.description}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
               </div>
 
               {raffle.prizes.length > 3 ? (
@@ -1616,7 +1723,8 @@ export default function PublicRafflePage({ slug }: Props) {
               ) : null}
             </section>
           ) : null}
-                    {isDrawn ? (
+
+          {isDrawn ? (
             <section
               className="public-raffle-winners"
               style={styles.winnersBox}
@@ -1816,26 +1924,28 @@ export default function PublicRafflePage({ slug }: Props) {
             {raffle.colours.length === 0 ? (
               <div style={styles.notice}>No colours configured.</div>
             ) : (
-              raffle.colours.map((colour) => (
-                <button
-                  key={colour.id}
-                  className="public-raffle-colour-button"
-                  type="button"
-                  onClick={() => setSelectedColour(colour.name)}
-                  disabled={!canReserve}
-                  style={{
-                    ...styles.colourButton,
-                    background:
-                      selectedColour === colour.name ? primaryColour : "#e5e7eb",
-                    color:
-                      selectedColour === colour.name ? "#ffffff" : "#111827",
-                    opacity: canReserve ? 1 : 0.7,
-                    cursor: canReserve ? "pointer" : "not-allowed",
-                  }}
-                >
-                  {renderColourLabel(colour)}
-                </button>
-              ))
+              raffle.colours.map((colour) => {
+                const isSelectedColour = selectedColour === colour.name;
+
+                return (
+                  <button
+                    key={colour.id}
+                    className="public-raffle-colour-button"
+                    type="button"
+                    onClick={() => setSelectedColour(colour.name)}
+                    disabled={!canReserve}
+                    aria-pressed={isSelectedColour}
+                    style={colourButtonStyle({
+                      colour,
+                      selected: isSelectedColour,
+                      canReserve,
+                      primaryColour,
+                    })}
+                  >
+                    {renderColourLabel(colour)}
+                  </button>
+                );
+              })
             )}
           </div>
 
@@ -1903,9 +2013,7 @@ export default function PublicRafflePage({ slug }: Props) {
                   className="public-raffle-basket-row"
                   style={styles.basketRow}
                 >
-                  <span>
-                    {ticket.colour} #{ticket.number}
-                  </span>
+                  {renderTicketSummary(ticket, raffle.colours)}
 
                   <button
                     className="public-raffle-remove-button"
@@ -2174,7 +2282,6 @@ export default function PublicRafflePage({ slug }: Props) {
     </div>
   );
 }
-
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
@@ -2725,10 +2832,15 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   colourButton: {
-    border: "none",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
     borderRadius: 999,
     padding: "12px 18px",
-    fontWeight: 800,
+    fontWeight: 950,
+    transition:
+      "transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease",
   },
 
   numberGrid: {
