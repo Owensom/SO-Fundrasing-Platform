@@ -235,6 +235,7 @@ function formatMoney(cents: number | string | null | undefined, currency: string
     }`;
   }
 }
+
 function formatWholeNumber(value: number | string | null | undefined) {
   const parsed = Number(value || 0);
 
@@ -534,13 +535,22 @@ export default async function AdminRafflePage({
     return acc;
   }, {} as Record<string, number>);
 
+  const legalQuestionTextConfigured = isConfigured(config.question?.text);
+  const legalQuestionAnswerConfigured = isConfigured(config.question?.answer);
   const legalQuestionEnabled =
-    isConfigured(config.question?.text) &&
-    isConfigured(config.question?.answer);
+    legalQuestionTextConfigured && legalQuestionAnswerConfigured;
+  const legalQuestionPartiallyConfigured =
+    legalQuestionTextConfigured !== legalQuestionAnswerConfigured;
 
+  const postalEntryAddressConfigured = isConfigured(config.free_entry?.address);
+  const postalEntryInstructionsConfigured = isConfigured(
+    config.free_entry?.instructions,
+  );
+  const postalEntryClosingConfigured = isConfigured(config.free_entry?.closes_at);
   const postalEntryEnabled =
-    isConfigured(config.free_entry?.address) ||
-    isConfigured(config.free_entry?.instructions);
+    postalEntryAddressConfigured && postalEntryInstructionsConfigured;
+  const postalEntryPartiallyConfigured =
+    postalEntryAddressConfigured !== postalEntryInstructionsConfigured;
 
   const prizesConfigured =
     Array.isArray(config.prizes) && config.prizes.length > 0;
@@ -548,6 +558,14 @@ export default async function AdminRafflePage({
   const ticketPriceConfigured = Number(raffle.ticket_price_cents || 0) > 0;
   const ticketRangeConfigured = totalTickets > 0;
   const drawDateConfigured = isConfigured(raffle.draw_at);
+  const publishedNeedsAttention =
+    canViewPublicRaffle &&
+    (!ticketPriceConfigured ||
+      !ticketRangeConfigured ||
+      !drawDateConfigured ||
+      !legalQuestionEnabled ||
+      !postalEntryEnabled ||
+      (!isFiftyFifty && !prizesConfigured));
 
   const readinessItems: ReadinessItem[] = [
     {
@@ -557,7 +575,9 @@ export default async function AdminRafflePage({
         : String(raffle.status || "Draft"),
       tone: canViewPublicRaffle ? "good" : "warning",
       detail: canViewPublicRaffle
-        ? "Supporters can open the public raffle page."
+        ? publishedNeedsAttention
+          ? "This raffle is public, but one or more launch checks need attention."
+          : "Supporters can open the public raffle page."
         : "Draft, closed and drawn raffles are not open for public entries.",
     },
     {
@@ -570,7 +590,11 @@ export default async function AdminRafflePage({
       detail:
         ticketRangeConfigured && ticketPriceConfigured
           ? `${remainingTickets} tickets remain available.`
-          : "Set a ticket price and ticket range before selling entries.",
+          : !ticketPriceConfigured && !ticketRangeConfigured
+            ? "Set a ticket price and ticket range before selling entries."
+            : !ticketPriceConfigured
+              ? "Set a valid ticket price before selling entries."
+              : "Set a valid ticket range before selling entries.",
     },
     {
       label: "Draw",
@@ -578,23 +602,43 @@ export default async function AdminRafflePage({
       tone: drawDateConfigured ? "good" : "warning",
       detail: drawDateConfigured
         ? "Draw date is set for the raffle."
-        : "Add a draw date before publishing or promoting the raffle.",
+        : canViewPublicRaffle
+          ? "This raffle is published without a draw date. Add one before sharing widely."
+          : "Add a draw date before publishing or promoting the raffle.",
     },
     {
       label: "Legal question",
-      value: legalQuestionEnabled ? "Configured" : "Missing",
+      value: legalQuestionEnabled
+        ? "Configured"
+        : legalQuestionPartiallyConfigured
+          ? "Incomplete"
+          : "Missing",
       tone: legalQuestionEnabled ? "good" : "warning",
       detail: legalQuestionEnabled
         ? "Public entrants must answer the skill question before checkout."
-        : "Add the entry question and correct answer for compliance.",
+        : legalQuestionPartiallyConfigured
+          ? "Complete both the entry question and correct answer before launch."
+          : "Add the entry question and correct answer for compliance.",
     },
     {
       label: "Postal entry",
-      value: postalEntryEnabled ? "Configured" : "Missing",
-      tone: postalEntryEnabled ? "good" : "warning",
-      detail: postalEntryEnabled
-        ? "Free postal entry details are available on the public page."
-        : "Add the free postal entry address and instructions.",
+      value: postalEntryEnabled
+        ? postalEntryClosingConfigured
+          ? "Configured"
+          : "Closing date missing"
+        : postalEntryPartiallyConfigured
+          ? "Incomplete"
+          : "Missing",
+      tone:
+        postalEntryEnabled && postalEntryClosingConfigured ? "good" : "warning",
+      detail:
+        postalEntryEnabled && postalEntryClosingConfigured
+          ? "Free postal entry details and closing date are available."
+          : postalEntryEnabled
+            ? "Free postal entry address and instructions are present. Add a postal closing date if required before launch."
+            : postalEntryPartiallyConfigured
+              ? "Complete both the free postal entry address and instructions."
+              : "Add the free postal entry address and instructions.",
     },
     {
       label: isFiftyFifty ? "Prize pot" : "Prizes",
@@ -608,7 +652,9 @@ export default async function AdminRafflePage({
         ? "Winner and cause shares are calculated from paid ticket sales."
         : prizesConfigured
           ? "Prize rows are configured for the draw."
-          : "Add prize rows before promoting the raffle.",
+          : canViewPublicRaffle
+            ? "This raffle is published without prize rows. Add prizes before promoting it."
+            : "Add prize rows before promoting the raffle.",
     },
   ];
 
@@ -687,7 +733,8 @@ export default async function AdminRafflePage({
           </p>
         </section>
       ) : null}
-            {invalidDrawDateTime ||
+
+      {invalidDrawDateTime ||
       invalidPostalDateTime ||
       saveFailed ||
       payoutSaveFailed ? (
@@ -785,8 +832,7 @@ export default async function AdminRafflePage({
           />
         </div>
       </section>
-
-      <section className="raffle-readiness-panel" style={styles.readinessPanel}>
+            <section className="raffle-readiness-panel" style={styles.readinessPanel}>
         <div style={styles.readinessHeader}>
           <div>
             <div style={styles.readinessEyebrow}>Campaign readiness</div>
@@ -795,7 +841,8 @@ export default async function AdminRafflePage({
 
             <p style={styles.readinessIntro}>
               A quick operational check before sharing the raffle, taking paid
-              entries or running the draw.
+              entries or running the draw. Published raffles with incomplete
+              legal, postal, pricing or prize setup are highlighted here.
             </p>
           </div>
 
@@ -905,7 +952,8 @@ export default async function AdminRafflePage({
           </div>
         </section>
       ) : null}
-            {isFiftyFifty && fiftyFiftySnapshotWinner ? (
+
+      {isFiftyFifty && fiftyFiftySnapshotWinner ? (
         <section style={styles.fiftyFiftySnapshotCard}>
           <div style={styles.fiftyFiftySnapshotHeader}>
             <div>
@@ -1530,7 +1578,8 @@ export default async function AdminRafflePage({
                   </>
                 )}
               </section>
-                            <section style={styles.innerPanel}>
+
+              <section style={styles.innerPanel}>
                 <div style={styles.innerHeader}>
                   <div>
                     <div style={styles.innerEyebrow}>Compliance</div>
@@ -1620,8 +1669,7 @@ export default async function AdminRafflePage({
                   be contacted if they win.
                 </p>
               </section>
-
-              <section style={styles.innerPanel}>
+                            <section style={styles.innerPanel}>
                 <div style={styles.innerHeader}>
                   <div>
                     <div style={styles.innerEyebrow}>Draw system</div>
@@ -1777,7 +1825,8 @@ export default async function AdminRafflePage({
                         #{winner.ticket_number}
                       </div>
                     </div>
-                                        <div>
+
+                    <div>
                       <div style={styles.winnerLabel}>Colour</div>
 
                       <div style={styles.winnerValue}>
@@ -1995,7 +2044,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
     </label>
   );
 }
-
 const responsiveStyles = `
   .raffle-admin-page,
   .raffle-admin-page * {
@@ -2115,6 +2163,7 @@ const responsiveStyles = `
     }
   }
 `;
+
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -2517,7 +2566,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 750,
     overflowWrap: "anywhere",
   },
-    summaryGrid: {
+  summaryGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
     gap: 12,
