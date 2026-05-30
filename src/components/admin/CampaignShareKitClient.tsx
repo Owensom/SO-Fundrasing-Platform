@@ -977,6 +977,17 @@ export default function CampaignShareKitClient({
             raffle, squares game, event and auction in one branded place.
           </p>
 
+          <div style={styles.socialWorkflowNote}>
+            <strong style={styles.socialWorkflowTitle}>
+              Best social workflow
+            </strong>
+            <span style={styles.socialWorkflowText}>
+              Download the social tile, upload it to Facebook, Instagram,
+              LinkedIn or WhatsApp, then paste the public hub link into the post
+              caption so supporters have both a tappable link and a scannable QR.
+            </span>
+          </div>
+
           <div style={styles.linkBlock}>
             <span style={styles.linkLabel}>Public hub link</span>
             <strong style={styles.linkValue}>{publicHubUrl}</strong>
@@ -1065,6 +1076,12 @@ export default function CampaignShareKitClient({
             donation links, captions, campaign cards or QR codes for that one
             raffle, squares game, event or auction.
           </p>
+
+          <div style={styles.campaignSpecificNote}>
+            These assets are intentionally separate from the public hub assets
+            above. The selector below affects only this campaign-specific
+            section.
+          </div>
         </div>
 
         <label style={styles.field}>
@@ -1287,6 +1304,45 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
     minWidth: 0,
     overflow: "hidden",
+  },
+
+  socialWorkflowNote: {
+    display: "grid",
+    gap: 5,
+    padding: 13,
+    borderRadius: 18,
+    background: "#eff6ff",
+    border: "1px solid #bfdbfe",
+    minWidth: 0,
+  },
+
+  socialWorkflowTitle: {
+    color: "#1d4ed8",
+    fontSize: 13,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  socialWorkflowText: {
+    color: "#334155",
+    fontSize: 14,
+    lineHeight: 1.5,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  campaignSpecificNote: {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 16,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    color: "#475569",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 800,
+    overflowWrap: "anywhere",
   },
 
   logoRow: {
