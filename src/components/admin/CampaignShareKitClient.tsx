@@ -32,7 +32,7 @@ type CampaignShareKitClientProps = {
   appBaseUrl: string;
 };
 
-type QrTarget = "campaign" | "support" | "hub";
+type QrTarget = "hub" | "campaign" | "support";
 
 function cleanText(value: unknown, fallback = "") {
   const clean = String(value ?? "").trim();
@@ -264,7 +264,7 @@ export default function CampaignShareKitClient({
     campaigns[0]?.id || "",
   );
   const [copied, setCopied] = useState("");
-  const [qrTarget, setQrTarget] = useState<QrTarget>("campaign");
+  const [qrTarget, setQrTarget] = useState<QrTarget>("hub");
 
   const selectedCampaign = useMemo(() => {
     return (
@@ -299,13 +299,17 @@ export default function CampaignShareKitClient({
   });
 
   const qrDetails = useMemo(() => {
-    if (qrTarget === "hub") {
+    if (qrTarget === "campaign" && selectedCampaign) {
       return {
-        label: "Public hub QR",
-        title: branding.displayName,
-        eyebrow: "PUBLIC HUB",
-        action: "Scan to view all live campaigns",
-        url: publicHubUrl,
+        label: "Individual selected campaign QR",
+        title: selectedCampaign.title,
+        eyebrow: campaignTypeLabel(selectedCampaign.type).toUpperCase(),
+        action: `Scan to ${campaignActionLabel(
+          selectedCampaign.type,
+        ).toLowerCase()}`,
+        url: campaignUrl,
+        helper:
+          "Use this when you want a QR code for one specific raffle, squares game, event or auction.",
       };
     }
 
@@ -316,27 +320,19 @@ export default function CampaignShareKitClient({
         eyebrow: "DONATION LINK",
         action: "Scan to support this campaign",
         url: supportUrl,
-      };
-    }
-
-    if (selectedCampaign) {
-      return {
-        label: "Full campaign page QR",
-        title: selectedCampaign.title,
-        eyebrow: campaignTypeLabel(selectedCampaign.type).toUpperCase(),
-        action: `Scan to ${campaignActionLabel(
-          selectedCampaign.type,
-        ).toLowerCase()}`,
-        url: campaignUrl,
+        helper:
+          "Use this when you want supporters to go straight to the donation/support page for the selected campaign.",
       };
     }
 
     return {
-      label: "Public hub QR",
+      label: "Default public campaign hub QR",
       title: branding.displayName,
-      eyebrow: "PUBLIC HUB",
+      eyebrow: "PUBLIC CAMPAIGN HUB",
       action: "Scan to view all live campaigns",
       url: publicHubUrl,
+      helper:
+        "Best for posters, flyers, QR boards, social posts and general promotion. Supporters can browse all active campaigns in one place.",
     };
   }, [
     branding.displayName,
@@ -975,9 +971,13 @@ export default function CampaignShareKitClient({
                   }
                   style={styles.input}
                 >
-                  <option value="campaign">Full campaign page</option>
-                  <option value="support">Donation/support page</option>
-                  <option value="hub">Public campaign hub</option>
+                  <option value="hub">Default public campaign hub</option>
+                  <option value="campaign">
+                    Individual selected campaign page
+                  </option>
+                  <option value="support">
+                    Donation/support page for selected campaign
+                  </option>
                 </select>
               </label>
 
@@ -988,6 +988,8 @@ export default function CampaignShareKitClient({
                   style={styles.qrImage}
                 />
               </div>
+
+              <p style={styles.qrHelpText}>{qrDetails.helper}</p>
 
               <p style={styles.qrHelpText}>
                 {qrDetails.action}. The QR code points to:
