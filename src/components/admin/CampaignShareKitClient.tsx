@@ -21,6 +21,9 @@ export type ShareKitBranding = {
   tagline: string;
   primaryColour: string;
   accentColour: string;
+  logoUrl?: string;
+  logoMarkUrl?: string;
+  platformLogoUrl?: string;
 };
 
 type CampaignShareKitClientProps = {
@@ -77,6 +80,27 @@ function absoluteUrl(baseUrl: string, path: string) {
   return `${base}${cleanPath.startsWith("/") ? cleanPath : `/${cleanPath}`}`;
 }
 
+function getBestLogoSrc(branding: ShareKitBranding) {
+  return (
+    cleanText(branding.logoMarkUrl) ||
+    cleanText(branding.logoUrl) ||
+    cleanText(branding.platformLogoUrl) ||
+    "/brand/so-logo-mark.png"
+  );
+}
+
+function getInitials(value: string) {
+  return (
+    cleanText(value)
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((word) => word[0])
+      .join("")
+      .toUpperCase() || "SO"
+  );
+}
+
 function buildCaption(params: {
   campaign: ShareKitCampaign;
   branding: ShareKitBranding;
@@ -86,10 +110,10 @@ function buildCaption(params: {
   const description = cleanText(params.campaign.description);
 
   return [
-    `We’re supporting ${params.branding.displayName}.`,
+    `${params.branding.displayName} is fundraising.`,
     "",
     `${params.campaign.title}`,
-    description ? description : campaignTypeLabel(params.campaign.type),
+    description || campaignTypeLabel(params.campaign.type),
     "",
     `${action}: ${params.campaignUrl}`,
   ].join("\n");
@@ -102,7 +126,10 @@ function buildPublicHubCaption(params: {
   return [
     `${params.branding.displayName} has live fundraising campaigns ready to support.`,
     "",
-    cleanText(params.branding.tagline, "Browse the latest campaigns and choose how you would like to help."),
+    cleanText(
+      params.branding.tagline,
+      "Browse the latest campaigns and choose how you would like to help.",
+    ),
     "",
     `View all live campaigns: ${params.publicHubUrl}`,
   ].join("\n");
@@ -181,6 +208,23 @@ function downloadDataUrl(dataUrl: string, filename: string) {
   link.remove();
 }
 
+function loadImage(src: string) {
+  return new Promise<HTMLImageElement | null>((resolve) => {
+    if (!src) {
+      resolve(null);
+      return;
+    }
+
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+
+    image.onload = () => resolve(image);
+    image.onerror = () => resolve(null);
+
+    image.src = src;
+  });
+}
+
 export default function CampaignShareKitClient({
   campaigns,
   branding,
@@ -200,6 +244,7 @@ export default function CampaignShareKitClient({
   }, [campaigns, selectedCampaignId]);
 
   const publicHubUrl = absoluteUrl(appBaseUrl, `/c/${branding.tenantSlug}`);
+  const logoSrc = getBestLogoSrc(branding);
 
   const campaignUrl = selectedCampaign
     ? absoluteUrl(appBaseUrl, selectedCampaign.publicUrl)
@@ -248,7 +293,7 @@ export default function CampaignShareKitClient({
         url: campaignUrl,
       });
     } catch {
-      // User cancelled native share; no action needed.
+      // User cancelled native share.
     }
   }
 
@@ -265,11 +310,11 @@ export default function CampaignShareKitClient({
         url: publicHubUrl,
       });
     } catch {
-      // User cancelled native share; no action needed.
+      // User cancelled native share.
     }
   }
 
-  function handleDownloadCard() {
+  async function handleDownloadCard() {
     if (!selectedCampaign) return;
 
     const canvas = document.createElement("canvas");
@@ -290,6 +335,7 @@ export default function CampaignShareKitClient({
 
     const primary = branding.primaryColour || "#1683F8";
     const accent = branding.accentColour || "#FACC15";
+    const loadedLogo = await loadImage(logoSrc);
 
     const gradient = context.createLinearGradient(0, 0, width, height);
     gradient.addColorStop(0, "#020617");
@@ -299,74 +345,81 @@ export default function CampaignShareKitClient({
     context.fillStyle = gradient;
     context.fillRect(0, 0, width, height);
 
-    context.globalAlpha = 0.2;
+    context.globalAlpha = 0.22;
     context.fillStyle = primary;
     context.beginPath();
-    context.arc(1030, 90, 250, 0, Math.PI * 2);
+    context.arc(1050, 90, 260, 0, Math.PI * 2);
     context.fill();
 
-    context.globalAlpha = 0.14;
+    context.globalAlpha = 0.16;
     context.strokeStyle = accent;
     context.lineWidth = 3;
     context.beginPath();
-    context.arc(130, 580, 250, 0, Math.PI * 2);
+    context.arc(110, 570, 245, 0, Math.PI * 2);
     context.stroke();
 
     context.globalAlpha = 1;
 
-    drawRoundedRect(context, 64, 62, 1072, 506, 42);
-    context.fillStyle = "rgba(255,255,255,0.08)";
+    drawRoundedRect(context, 64, 56, 1072, 518, 44);
+    context.fillStyle = "rgba(255,255,255,0.09)";
     context.fill();
     context.strokeStyle = "rgba(255,255,255,0.18)";
     context.lineWidth = 2;
     context.stroke();
 
-    drawRoundedRect(context, 96, 96, 98, 98, 28);
-    context.fillStyle = primary;
+    drawRoundedRect(context, 96, 92, 104, 104, 30);
+    context.fillStyle = "#ffffff";
     context.fill();
     context.strokeStyle = accent;
     context.lineWidth = 3;
     context.stroke();
 
-    context.fillStyle = "#ffffff";
-    context.font =
-      "900 34px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    context.textAlign = "center";
-    context.textBaseline = "middle";
-    context.fillText(
-      branding.displayName
-        .split(/\s+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((word) => word[0])
-        .join("")
-        .toUpperCase() || "SO",
-      145,
-      145,
-    );
+    if (loadedLogo) {
+      const imagePadding = 14;
+      context.save();
+      drawRoundedRect(context, 96, 92, 104, 104, 30);
+      context.clip();
+      context.fillStyle = "#ffffff";
+      context.fillRect(96, 92, 104, 104);
+      context.drawImage(
+        loadedLogo,
+        96 + imagePadding,
+        92 + imagePadding,
+        104 - imagePadding * 2,
+        104 - imagePadding * 2,
+      );
+      context.restore();
+    } else {
+      context.fillStyle = primary;
+      context.font =
+        "900 34px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.fillText(getInitials(branding.displayName), 148, 144);
+    }
 
     context.textAlign = "left";
     context.textBaseline = "alphabetic";
 
     context.fillStyle = accent;
     context.font =
-      "900 25px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      "900 24px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     context.fillText(
       campaignTypeLabel(selectedCampaign.type).toUpperCase(),
       224,
-      126,
+      122,
     );
 
     context.fillStyle = "#dbeafe";
     context.font =
-      "800 30px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    context.fillText(branding.displayName, 224, 168);
+      "800 29px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    context.fillText(branding.displayName, 224, 164);
 
     context.fillStyle = "#ffffff";
     context.font =
       "950 58px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
-    const titleLines = wrapCanvasText(context, selectedCampaign.title, 900).slice(
+    const titleLines = wrapCanvasText(context, selectedCampaign.title, 920).slice(
       0,
       3,
     );
@@ -375,7 +428,7 @@ export default function CampaignShareKitClient({
 
     for (const line of titleLines) {
       context.fillText(line, 96, titleY);
-      titleY += 66;
+      titleY += 64;
     }
 
     const description = cleanText(
@@ -385,14 +438,14 @@ export default function CampaignShareKitClient({
 
     context.fillStyle = "#bfdbfe";
     context.font =
-      "800 30px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      "800 28px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
-    const descriptionLines = wrapCanvasText(context, description, 790).slice(0, 2);
-    let descriptionY = Math.min(titleY + 12, 430);
+    const descriptionLines = wrapCanvasText(context, description, 800).slice(0, 2);
+    let descriptionY = Math.min(titleY + 10, 430);
 
     for (const line of descriptionLines) {
       context.fillText(line, 96, descriptionY);
-      descriptionY += 38;
+      descriptionY += 36;
     }
 
     drawRoundedRect(context, 96, 494, 330, 58, 29);
@@ -426,8 +479,7 @@ export default function CampaignShareKitClient({
 
     downloadDataUrl(dataUrl, filename);
   }
-
-  if (campaigns.length === 0) {
+    if (campaigns.length === 0) {
     return (
       <section style={styles.emptyState}>
         <h2 style={styles.emptyTitle}>No active campaigns available to share</h2>
@@ -438,20 +490,34 @@ export default function CampaignShareKitClient({
       </section>
     );
   }
-    return (
+
+  return (
     <section className="share-kit-shell" style={styles.shell}>
-      <section style={styles.publicHubPanel}>
+      <section className="share-public-hub-panel" style={styles.publicHubPanel}>
         <div style={styles.publicHubCopy}>
-          <p style={styles.kicker}>Share the full public hub</p>
-          <h2 style={styles.title}>Promote all active campaigns</h2>
+          <div style={styles.logoRow}>
+            <div style={styles.logoWrap}>
+              <img
+                src={logoSrc}
+                alt={branding.displayName}
+                style={styles.logoImage}
+              />
+            </div>
+
+            <div style={styles.logoCopy}>
+              <p style={styles.kicker}>Share the full public hub</p>
+              <h2 style={styles.title}>Promote all active campaigns</h2>
+            </div>
+          </div>
+
           <p style={styles.text}>
-            Use this when you want to share the tenant’s main public campaign
-            page rather than one specific raffle, squares game, event or
-            auction.
+            Share the tenant’s main public campaign hub when you want supporters
+            to browse every active raffle, squares game, event or auction in one
+            place.
           </p>
         </div>
 
-        <div style={styles.publicHubActions}>
+        <div className="share-hub-actions" style={styles.publicHubActions}>
           <button
             type="button"
             onClick={() => handleCopy("hub-link", publicHubUrl)}
@@ -487,7 +553,7 @@ export default function CampaignShareKitClient({
         </div>
       </section>
 
-      <div style={styles.selectorPanel}>
+      <section className="share-selector-panel" style={styles.selectorPanel}>
         <div>
           <p style={styles.kicker}>Share an active campaign</p>
           <h2 style={styles.title}>Create campaign-specific social assets</h2>
@@ -512,33 +578,54 @@ export default function CampaignShareKitClient({
             ))}
           </select>
         </label>
-      </div>
+      </section>
 
       {selectedCampaign ? (
         <div className="share-kit-grid" style={styles.grid}>
           <article style={styles.previewCard}>
-            <div style={styles.previewTop}>
-              <span
-                style={{
-                  ...styles.typePill,
-                  background: `${branding.accentColour}22`,
-                  borderColor: `${branding.accentColour}88`,
-                }}
-              >
-                {campaignTypeLabel(selectedCampaign.type)}
-              </span>
+            <div style={styles.previewHeader}>
+              <div style={styles.logoWrapLarge}>
+                <img
+                  src={logoSrc}
+                  alt={branding.displayName}
+                  style={styles.logoImage}
+                />
+              </div>
 
-              <span style={styles.livePill}>Active campaign</span>
+              <div style={styles.previewHeaderCopy}>
+                <span
+                  style={{
+                    ...styles.typePill,
+                    background: `${branding.accentColour}22`,
+                    borderColor: `${branding.accentColour}88`,
+                  }}
+                >
+                  {campaignTypeLabel(selectedCampaign.type)}
+                </span>
+
+                <span style={styles.livePill}>Active campaign</span>
+              </div>
             </div>
 
-            <h3 style={styles.previewTitle}>{selectedCampaign.title}</h3>
+            <div style={styles.previewBody}>
+              <p style={styles.organisationName}>{branding.displayName}</p>
 
-            <p style={styles.previewText}>
-              {selectedCampaign.description ||
-                campaignActionLabel(selectedCampaign.type)}
-            </p>
+              <h3 style={styles.previewTitle}>{selectedCampaign.title}</h3>
 
-            <div style={styles.previewActions}>
+              <p style={styles.previewText}>
+                {selectedCampaign.description ||
+                  campaignActionLabel(selectedCampaign.type)}
+              </p>
+            </div>
+
+            <div style={styles.previewCallout}>
+              <span style={styles.previewCalloutLabel}>Support action</span>
+              <strong style={styles.previewCalloutValue}>
+                {campaignActionLabel(selectedCampaign.type)}
+              </strong>
+            </div>
+
+            <div className="share-preview-actions" style={styles.previewActions}>
               <button
                 type="button"
                 onClick={() => handleCopy("campaign", campaignUrl)}
@@ -624,12 +711,13 @@ export default function CampaignShareKitClient({
     </section>
   );
 }
-
 const styles: Record<string, CSSProperties> = {
   shell: {
     display: "grid",
     gap: 18,
     minWidth: 0,
+    width: "100%",
+    overflow: "hidden",
   },
 
   publicHubPanel: {
@@ -643,24 +731,76 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #fde68a",
     boxShadow: "0 14px 34px rgba(217,119,6,0.08)",
     minWidth: 0,
+    overflow: "hidden",
   },
 
   publicHubCopy: {
     display: "grid",
-    gap: 2,
+    gap: 10,
     minWidth: 0,
   },
 
   publicHubActions: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 190px), 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
     gap: 10,
+    minWidth: 0,
+  },
+
+  logoRow: {
+    display: "grid",
+    gridTemplateColumns: "64px minmax(0, 1fr)",
+    gap: 13,
+    alignItems: "center",
+    minWidth: 0,
+  },
+
+  logoWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 10px 24px rgba(15,23,42,0.08)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    flexShrink: 0,
+  },
+
+  logoWrapLarge: {
+    width: 78,
+    height: 78,
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid #dbeafe",
+    boxShadow: "0 14px 30px rgba(15,23,42,0.09)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    flexShrink: 0,
+  },
+
+  logoImage: {
+    display: "block",
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+    padding: 8,
+    boxSizing: "border-box",
+  },
+
+  logoCopy: {
+    display: "grid",
+    gap: 2,
     minWidth: 0,
   },
 
   selectorPanel: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(260px, 0.42fr)",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
     gap: 16,
     alignItems: "end",
     padding: 22,
@@ -670,10 +810,11 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #dbeafe",
     boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
     minWidth: 0,
+    overflow: "hidden",
   },
 
   kicker: {
-    margin: "0 0 7px",
+    margin: "0 0 6px",
     color: "#2563eb",
     fontSize: 12,
     fontWeight: 950,
@@ -684,7 +825,7 @@ const styles: Record<string, CSSProperties> = {
   title: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 32,
+    fontSize: "clamp(24px, 4vw, 32px)",
     lineHeight: 1.05,
     letterSpacing: "-0.055em",
     overflowWrap: "anywhere",
@@ -727,14 +868,15 @@ const styles: Record<string, CSSProperties> = {
 
   grid: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(300px, 0.72fr)",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(280px, 0.68fr)",
     gap: 16,
     minWidth: 0,
+    width: "100%",
   },
 
   previewCard: {
     display: "grid",
-    gap: 14,
+    gap: 16,
     padding: 22,
     borderRadius: 30,
     background:
@@ -742,20 +884,46 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #bfdbfe",
     boxShadow: "0 16px 36px rgba(22,131,248,0.10)",
     minWidth: 0,
+    overflow: "hidden",
   },
 
-  previewTop: {
+  previewHeader: {
+    display: "grid",
+    gridTemplateColumns: "78px minmax(0, 1fr)",
+    gap: 14,
+    alignItems: "center",
+    minWidth: 0,
+  },
+
+  previewHeaderCopy: {
     display: "flex",
     gap: 8,
     flexWrap: "wrap",
-    justifyContent: "space-between",
     alignItems: "center",
+    minWidth: 0,
+  },
+
+  previewBody: {
+    display: "grid",
+    gap: 8,
+    minWidth: 0,
+  },
+
+  organisationName: {
+    margin: 0,
+    color: "#2563eb",
+    fontSize: 13,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    overflowWrap: "anywhere",
   },
 
   typePill: {
     display: "inline-flex",
     alignItems: "center",
     width: "fit-content",
+    maxWidth: "100%",
     padding: "7px 10px",
     borderRadius: 999,
     border: "1px solid",
@@ -764,12 +932,14 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.06em",
+    overflowWrap: "anywhere",
   },
 
   livePill: {
     display: "inline-flex",
     alignItems: "center",
     width: "fit-content",
+    maxWidth: "100%",
     padding: "7px 10px",
     borderRadius: 999,
     background: "#dcfce7",
@@ -777,30 +947,61 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #bbf7d0",
     fontSize: 12,
     fontWeight: 950,
+    overflowWrap: "anywhere",
   },
 
   previewTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: "clamp(32px, 5vw, 52px)",
-    lineHeight: 0.98,
-    letterSpacing: "-0.07em",
+    fontSize: "clamp(34px, 6vw, 58px)",
+    lineHeight: 0.96,
+    letterSpacing: "-0.075em",
     overflowWrap: "anywhere",
   },
 
   previewText: {
     margin: 0,
     color: "#475569",
-    lineHeight: 1.55,
+    lineHeight: 1.5,
     fontWeight: 750,
+    maxWidth: 760,
+    overflowWrap: "anywhere",
+  },
+
+  previewCallout: {
+    display: "grid",
+    gap: 3,
+    width: "fit-content",
+    maxWidth: "100%",
+    padding: "11px 14px",
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #dbeafe",
+    boxShadow: "0 8px 18px rgba(15,23,42,0.04)",
+    minWidth: 0,
+  },
+
+  previewCalloutLabel: {
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  previewCalloutValue: {
+    color: "#0f172a",
+    fontSize: 16,
+    fontWeight: 950,
     overflowWrap: "anywhere",
   },
 
   previewActions: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 190px), 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))",
     gap: 10,
-    marginTop: 4,
+    marginTop: 2,
+    minWidth: 0,
   },
 
   primaryButton: {
@@ -812,6 +1013,9 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     cursor: "pointer",
     textAlign: "center",
+    lineHeight: 1.2,
+    whiteSpace: "normal",
+    overflowWrap: "anywhere",
   },
 
   secondaryButton: {
@@ -824,6 +1028,9 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     cursor: "pointer",
     textAlign: "center",
+    lineHeight: 1.2,
+    whiteSpace: "normal",
+    overflowWrap: "anywhere",
   },
 
   darkButton: {
@@ -836,6 +1043,9 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     cursor: "pointer",
     textAlign: "center",
+    lineHeight: 1.2,
+    whiteSpace: "normal",
+    overflowWrap: "anywhere",
   },
 
   copyNotice: {
@@ -846,6 +1056,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #bbf7d0",
     fontWeight: 900,
     textAlign: "center",
+    overflowWrap: "anywhere",
   },
 
   copyError: {
@@ -864,6 +1075,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     minWidth: 0,
+    overflow: "hidden",
   },
 
   linkBlock: {
@@ -874,6 +1086,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     minWidth: 0,
+    overflow: "hidden",
   },
 
   linkLabel: {
@@ -900,6 +1113,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#fffbeb",
     border: "1px solid #fde68a",
     minWidth: 0,
+    overflow: "hidden",
   },
 
   captionText: {
