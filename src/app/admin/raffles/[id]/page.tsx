@@ -463,7 +463,8 @@ export default async function AdminRafflePage({
     Number(raffle.ticket_price_cents) > 0
       ? (Number(raffle.ticket_price_cents) / 100).toFixed(2)
       : "";
-    const winners = await query<WinnerRow>(
+
+  const winners = await query<WinnerRow>(
     `
       select
         id,
@@ -666,8 +667,7 @@ export default async function AdminRafflePage({
     legalQuestionEnabled &&
     postalEntryEnabled &&
     (isFiftyFifty || prizesConfigured);
-
-  return (
+    return (
     <main className="raffle-admin-page" style={styles.page}>
       <style>{responsiveStyles}</style>
 
@@ -832,7 +832,11 @@ export default async function AdminRafflePage({
           />
         </div>
       </section>
-            <section className="raffle-readiness-panel" style={styles.readinessPanel}>
+
+      <section
+        className="raffle-readiness-panel"
+        style={styles.readinessPanel}
+      >
         <div style={styles.readinessHeader}>
           <div>
             <div style={styles.readinessEyebrow}>Campaign readiness</div>
@@ -861,7 +865,14 @@ export default async function AdminRafflePage({
             <div
               key={item.label}
               className="raffle-readiness-item"
-              style={styles.readinessItem}
+              style={{
+                ...styles.readinessItem,
+                ...(item.tone === "good"
+                  ? styles.readinessItemGood
+                  : item.tone === "warning"
+                    ? styles.readinessItemWarning
+                    : styles.readinessItemNeutral),
+              }}
             >
               <div
                 style={{
@@ -1095,8 +1106,7 @@ export default async function AdminRafflePage({
                 />
               </Field>
             </div>
-
-            <Field label="Internal note">
+                        <Field label="Internal note">
               <textarea
                 name="payout_note"
                 rows={3}
@@ -1250,7 +1260,8 @@ export default async function AdminRafflePage({
                     style={styles.textarea}
                   />
                 </Field>
-                                <div className="raffle-media-box" style={styles.mediaBox}>
+
+                <div className="raffle-media-box" style={styles.mediaBox}>
                   <div style={styles.mediaControls}>
                     <h3 style={styles.subTitle}>Raffle image</h3>
 
@@ -1534,8 +1545,7 @@ export default async function AdminRafflePage({
                               raffle.ticket_price_cents,
                             )}
                           </div>
-
-                          <div
+                                                    <div
                             className="raffle-offer-inputs"
                             style={styles.offerInputs}
                           >
@@ -1669,7 +1679,8 @@ export default async function AdminRafflePage({
                   be contacted if they win.
                 </p>
               </section>
-                            <section style={styles.innerPanel}>
+
+              <section style={styles.innerPanel}>
                 <div style={styles.innerHeader}>
                   <div>
                     <div style={styles.innerEyebrow}>Draw system</div>
@@ -2044,6 +2055,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
     </label>
   );
 }
+
 const responsiveStyles = `
   .raffle-admin-page,
   .raffle-admin-page * {
@@ -2163,7 +2175,6 @@ const responsiveStyles = `
     }
   }
 `;
-
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -2533,6 +2544,22 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     minWidth: 0,
+    boxShadow: "0 8px 20px rgba(15,23,42,0.04)",
+  },
+  readinessItemGood: {
+    background: "linear-gradient(135deg, #ecfdf5 0%, #ffffff 78%)",
+    borderColor: "#bbf7d0",
+    boxShadow: "0 10px 24px rgba(22,163,74,0.09)",
+  },
+  readinessItemWarning: {
+    background: "linear-gradient(135deg, #fff7ed 0%, #ffffff 78%)",
+    borderColor: "#fed7aa",
+    boxShadow: "0 10px 24px rgba(234,88,12,0.09)",
+  },
+  readinessItemNeutral: {
+    background: "linear-gradient(135deg, #f8fafc 0%, #ffffff 78%)",
+    borderColor: "#e2e8f0",
+    boxShadow: "0 8px 20px rgba(15,23,42,0.04)",
   },
   readinessToneDot: {
     width: 12,
