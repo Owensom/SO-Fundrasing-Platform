@@ -32,6 +32,8 @@ type CampaignShareKitClientProps = {
   appBaseUrl: string;
 };
 
+type QrTarget = "hub" | "campaign" | "support";
+
 function cleanText(value: unknown, fallback = "") {
   const clean = String(value ?? "").trim();
   return clean || fallback;
@@ -135,6 +137,24 @@ function buildPublicHubCaption(params: {
   ].join("\n");
 }
 
+function qrImageUrl(value: string, size = 700) {
+  const cleanValue = cleanText(value);
+
+  if (!cleanValue) return "";
+
+  const params = new URLSearchParams({
+    size: `${size}x${size}`,
+    data: cleanValue,
+    format: "png",
+    margin: "22",
+    color: "0f172a",
+    bgcolor: "ffffff",
+    ecc: "M",
+  });
+
+  return `https://api.qrserver.com/v1/create-qr-code/?${params.toString()}`;
+}
+
 async function copyToClipboard(value: string) {
   if (!navigator.clipboard) {
     throw new Error("Clipboard is not available in this browser.");
@@ -225,6 +245,16 @@ function loadImage(src: string) {
   });
 }
 
+function slugifyFilename(value: string, fallback: string) {
+  return (
+    cleanText(value)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "")
+      .slice(0, 60) || fallback
+  );
+}
+
 export default function CampaignShareKitClient({
   campaigns,
   branding,
@@ -234,6 +264,7 @@ export default function CampaignShareKitClient({
     campaigns[0]?.id || "",
   );
   const [copied, setCopied] = useState("");
+  const [qrTarget, setQrTarget] = useState<QrTarget>("campaign");
 
   const selectedCampaign = useMemo(() => {
     return (
@@ -266,6 +297,55 @@ export default function CampaignShareKitClient({
     branding,
     publicHubUrl,
   });
+
+  const qrDetails = useMemo(() => {
+    if (qrTarget === "hub") {
+      return {
+        label: "Public hub QR",
+        title: branding.displayName,
+        eyebrow: "PUBLIC HUB",
+        action: "Scan to view all live campaigns",
+        url: publicHubUrl,
+      };
+    }
+
+    if (qrTarget === "support" && selectedCampaign) {
+      return {
+        label: "Donation/support QR",
+        title: selectedCampaign.title,
+        eyebrow: "DONATION LINK",
+        action: "Scan to support this campaign",
+        url: supportUrl,
+      };
+    }
+
+    if (selectedCampaign) {
+      return {
+        label: "Campaign QR",
+        title: selectedCampaign.title,
+        eyebrow: campaignTypeLabel(selectedCampaign.type).toUpperCase(),
+        action: `Scan to ${campaignActionLabel(selectedCampaign.type).toLowerCase()}`,
+        url: campaignUrl,
+      };
+    }
+
+    return {
+      label: "Public hub QR",
+      title: branding.displayName,
+      eyebrow: "PUBLIC HUB",
+      action: "Scan to view all live campaigns",
+      url: publicHubUrl,
+    };
+  }, [
+    branding.displayName,
+    campaignUrl,
+    publicHubUrl,
+    qrTarget,
+    selectedCampaign,
+    supportUrl,
+  ]);
+
+  const qrPreviewUrl = qrImageUrl(qrDetails.url, 700);
 
   async function handleCopy(label: string, value: string) {
     try {
@@ -440,7 +520,10 @@ export default function CampaignShareKitClient({
     context.font =
       "800 28px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
-    const descriptionLines = wrapCanvasText(context, description, 800).slice(0, 2);
+    const descriptionLines = wrapCanvasText(context, description, 800).slice(
+      0,
+      2,
+    );
     let descriptionY = Math.min(titleY + 10, 430);
 
     for (const line of descriptionLines) {
@@ -471,21 +554,191 @@ export default function CampaignShareKitClient({
     context.fillText("Click the campaign link to support securely", 1102, 548);
 
     const dataUrl = canvas.toDataURL("image/png");
-    const filename = `${selectedCampaign.title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, "")
-      .slice(0, 60) || "campaign"}-share-card.png`;
+    const filename = `${slugifyFilename(
+      selectedCampaign.title,
+      "campaign",
+    )}-share-card.png`;
 
     downloadDataUrl(dataUrl, filename);
   }
-    if (campaigns.length === 0) {
+
+  async function handleDownloadQrCard() {
+    const qrUrl = qrImageUrl(qrDetails.url, 900);
+
+    if (!qrUrl) return;
+
+    const canvas = document.createElement("canvas");
+    const width = 1080;
+    const height = 1350;
+    const pixelRatio = window.devicePixelRatio || 1;
+
+    canvas.width = width * pixelRatio;
+    canvas.height = height * pixelRatio;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+
+    const context = canvas.getContext("2d");
+
+    if (!context) return;
+
+    context.scale(pixelRatio, pixelRatio);
+
+    const primary = branding.primaryColour || "#1683F8";
+    const accent = branding.accentColour || "#FACC15";
+
+    const [loadedLogo, loadedQr] = await Promise.all([
+      loadImage(logoSrc),
+      loadImage(qrUrl),
+    ]);
+
+    if (!loadedQr) {
+      setCopied("qr-error");
+      window.setTimeout(() => setCopied(""), 2600);
+      return;
+    }
+
+    const gradient = context.createLinearGradient(0, 0, width, height);
+    gradient.addColorStop(0, "#020617");
+    gradient.addColorStop(0.54, "#0f172a");
+    gradient.addColorStop(1, "#172554");
+
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, width, height);
+
+    context.globalAlpha = 0.24;
+    context.fillStyle = primary;
+    context.beginPath();
+    context.arc(930, 110, 300, 0, Math.PI * 2);
+    context.fill();
+
+    context.globalAlpha = 0.18;
+    context.strokeStyle = accent;
+    context.lineWidth = 5;
+    context.beginPath();
+    context.arc(120, 1240, 280, 0, Math.PI * 2);
+    context.stroke();
+
+    context.globalAlpha = 1;
+
+    drawRoundedRect(context, 64, 64, 952, 1222, 54);
+    context.fillStyle = "rgba(255,255,255,0.10)";
+    context.fill();
+    context.strokeStyle = "rgba(255,255,255,0.22)";
+    context.lineWidth = 2;
+    context.stroke();
+
+    drawRoundedRect(context, 110, 104, 124, 124, 34);
+    context.fillStyle = "#ffffff";
+    context.fill();
+    context.strokeStyle = accent;
+    context.lineWidth = 4;
+    context.stroke();
+
+    if (loadedLogo) {
+      const logoPadding = 17;
+      context.save();
+      drawRoundedRect(context, 110, 104, 124, 124, 34);
+      context.clip();
+      context.fillStyle = "#ffffff";
+      context.fillRect(110, 104, 124, 124);
+      context.drawImage(
+        loadedLogo,
+        110 + logoPadding,
+        104 + logoPadding,
+        124 - logoPadding * 2,
+        124 - logoPadding * 2,
+      );
+      context.restore();
+    } else {
+      context.fillStyle = primary;
+      context.font =
+        "900 40px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.fillText(getInitials(branding.displayName), 172, 166);
+    }
+
+    context.textAlign = "left";
+    context.textBaseline = "alphabetic";
+
+    context.fillStyle = accent;
+    context.font =
+      "950 28px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    context.fillText(qrDetails.eyebrow, 262, 150);
+
+    context.fillStyle = "#dbeafe";
+    context.font =
+      "850 31px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    context.fillText(branding.displayName, 262, 194);
+
+    context.fillStyle = "#ffffff";
+    context.font =
+      "950 62px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
+    const titleLines = wrapCanvasText(context, qrDetails.title, 850).slice(0, 3);
+
+    let titleY = 330;
+
+    for (const line of titleLines) {
+      context.fillText(line, 110, titleY);
+      titleY += 70;
+    }
+
+    context.fillStyle = "#bfdbfe";
+    context.font =
+      "850 31px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
+    const actionLines = wrapCanvasText(context, qrDetails.action, 820).slice(
+      0,
+      2,
+    );
+
+    let actionY = Math.min(titleY + 8, 535);
+
+    for (const line of actionLines) {
+      context.fillText(line, 110, actionY);
+      actionY += 40;
+    }
+
+    const qrBoxSize = 560;
+    const qrBoxX = 260;
+    const qrBoxY = 612;
+
+    drawRoundedRect(context, qrBoxX - 28, qrBoxY - 28, qrBoxSize + 56, qrBoxSize + 56, 42);
+    context.fillStyle = "#ffffff";
+    context.fill();
+    context.strokeStyle = accent;
+    context.lineWidth = 5;
+    context.stroke();
+
+    context.drawImage(loadedQr, qrBoxX, qrBoxY, qrBoxSize, qrBoxSize);
+
+    context.textAlign = "center";
+    context.fillStyle = "#ffffff";
+    context.font =
+      "950 28px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    context.fillText("Scan to support securely", width / 2, 1232);
+
+    context.fillStyle = "#bfdbfe";
+    context.font =
+      "750 20px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
+    const hostText = qrDetails.url ? new URL(qrDetails.url).host : "";
+    context.fillText(hostText, width / 2, 1264);
+
+    const dataUrl = canvas.toDataURL("image/png");
+    const filename = `${slugifyFilename(qrDetails.title, "campaign")}-qr-card.png`;
+
+    downloadDataUrl(dataUrl, filename);
+  }
+
+  if (campaigns.length === 0) {
     return (
       <section style={styles.emptyState}>
         <h2 style={styles.emptyTitle}>No active campaigns available to share</h2>
         <p style={styles.emptyText}>
           Publish a campaign first, then return here to create a share kit for
-          social posts, WhatsApp messages, emails and posters.
+          social posts, WhatsApp messages, emails, QR codes and posters.
         </p>
       </section>
     );
@@ -560,7 +813,8 @@ export default function CampaignShareKitClient({
           <p style={styles.text}>
             Choose any published campaign from this tenant, then copy the public
             campaign link, donation link or ready-made caption. You can also
-            download a branded PNG card for social posts.
+            download branded PNG cards and QR assets for social posts or printed
+            promotion.
           </p>
         </div>
 
@@ -675,17 +929,78 @@ export default function CampaignShareKitClient({
               <div
                 style={{
                   ...styles.copyNotice,
-                  ...(copied === "copy-error" ? styles.copyError : {}),
+                  ...(copied === "copy-error" || copied === "qr-error"
+                    ? styles.copyError
+                    : {}),
                 }}
               >
                 {copied === "copy-error"
                   ? "Copy failed. Please copy the text manually."
-                  : "Copied to clipboard."}
+                  : copied === "qr-error"
+                    ? "QR download failed. The QR preview can still be saved manually from the browser."
+                    : "Copied to clipboard."}
               </div>
             ) : null}
           </article>
 
           <aside style={styles.linkPanel}>
+            <section style={styles.qrPanel}>
+              <div style={styles.qrHeader}>
+                <div>
+                  <span style={styles.linkLabel}>QR code</span>
+                  <h3 style={styles.qrTitle}>{qrDetails.label}</h3>
+                </div>
+
+                <span style={styles.qrBadge}>Print-ready</span>
+              </div>
+
+              <label style={styles.field}>
+                <span style={styles.label}>QR destination</span>
+                <select
+                  value={qrTarget}
+                  onChange={(event) =>
+                    setQrTarget(event.target.value as QrTarget)
+                  }
+                  style={styles.input}
+                >
+                  <option value="campaign">Selected campaign</option>
+                  <option value="support">Donation/support link</option>
+                  <option value="hub">Public hub</option>
+                </select>
+              </label>
+
+              <div style={styles.qrPreviewBox}>
+                <img
+                  src={qrPreviewUrl}
+                  alt={`${qrDetails.label} for ${qrDetails.title}`}
+                  style={styles.qrImage}
+                />
+              </div>
+
+              <p style={styles.qrHelpText}>
+                {qrDetails.action}. The QR code points to the same secure public
+                route used by the copy/share tools.
+              </p>
+
+              <div className="share-qr-actions" style={styles.qrActions}>
+                <button
+                  type="button"
+                  onClick={() => handleCopy("qr-link", qrDetails.url)}
+                  style={styles.secondaryButton}
+                >
+                  Copy QR link
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadQrCard}
+                  style={styles.darkButton}
+                >
+                  Download QR PNG
+                </button>
+              </div>
+            </section>
+
             <div style={styles.linkBlock}>
               <span style={styles.linkLabel}>Campaign link</span>
               <strong style={styles.linkValue}>{campaignUrl}</strong>
@@ -711,6 +1026,7 @@ export default function CampaignShareKitClient({
     </section>
   );
 }
+
 const styles: Record<string, CSSProperties> = {
   shell: {
     display: "grid",
@@ -1076,6 +1392,90 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     minWidth: 0,
     overflow: "hidden",
+  },
+
+  qrPanel: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    borderRadius: 22,
+    background:
+      "radial-gradient(circle at top right, rgba(22,131,248,0.08), transparent 34%), #f8fafc",
+    border: "1px solid #dbeafe",
+    minWidth: 0,
+    overflow: "hidden",
+  },
+
+  qrHeader: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
+    minWidth: 0,
+  },
+
+  qrTitle: {
+    margin: "4px 0 0",
+    color: "#0f172a",
+    fontSize: 22,
+    lineHeight: 1.08,
+    letterSpacing: "-0.045em",
+    overflowWrap: "anywhere",
+  },
+
+  qrBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    maxWidth: "100%",
+    padding: "7px 9px",
+    borderRadius: 999,
+    background: "#fffbeb",
+    color: "#92400e",
+    border: "1px solid #fde68a",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    whiteSpace: "nowrap",
+  },
+
+  qrPreviewBox: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 14,
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 10px 22px rgba(15,23,42,0.05)",
+    minWidth: 0,
+  },
+
+  qrImage: {
+    display: "block",
+    width: "100%",
+    maxWidth: 260,
+    height: "auto",
+    borderRadius: 16,
+    background: "#ffffff",
+  },
+
+  qrHelpText: {
+    margin: 0,
+    color: "#475569",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  qrActions: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
+    minWidth: 0,
   },
 
   linkBlock: {
