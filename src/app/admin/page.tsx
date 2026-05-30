@@ -318,7 +318,8 @@ export default async function AdminDashboardPage() {
           />
         </div>
       </section>
-            <section className="admin-plan-panel" style={styles.planPanel}>
+
+      <section className="admin-plan-panel" style={styles.planPanel}>
         <div>
           <p style={styles.planKicker}>Subscription status</p>
 
@@ -419,8 +420,8 @@ export default async function AdminDashboardPage() {
           </h2>
 
           <p style={styles.sectionText}>
-            Start with readiness, then review orders, finance, support and
-            billing from the key operational dashboards.
+            Start with readiness, then review orders, finance, support,
+            sharing and billing from the key operational dashboards.
           </p>
         </div>
       </section>
@@ -438,6 +439,16 @@ export default async function AdminDashboardPage() {
           tone="blue"
           compact
           featured
+        />
+
+        <DashboardCard
+          href="/admin/share"
+          badgeText="SHARE"
+          title="Campaign Share Kit"
+          description="Create branded campaign links, donation links, captions and share cards for the public hub and live campaigns."
+          stats="Campaign sharing centre"
+          tone="gold"
+          compact
         />
 
         <DashboardCard
@@ -545,7 +556,8 @@ export default async function AdminDashboardPage() {
           lockText="Professional required"
         />
       </section>
-            <section style={styles.sectionHeader}>
+
+      <section style={styles.sectionHeader}>
         <div>
           <p style={styles.kicker}>Public setup</p>
 
@@ -911,6 +923,7 @@ function DashboardCard({
     </Link>
   );
 }
+
 const responsiveStyles = `
 .admin-dashboard-page,
 .admin-dashboard-page * {
@@ -1324,7 +1337,8 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
     marginBottom: 18,
   },
-    focusCard: {
+
+  focusCard: {
     display: "grid",
     gap: 8,
     padding: 16,
