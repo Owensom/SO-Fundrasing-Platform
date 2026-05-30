@@ -32,7 +32,7 @@ type CampaignShareKitClientProps = {
   appBaseUrl: string;
 };
 
-type QrTarget = "hub" | "campaign" | "support";
+type QrTarget = "campaign" | "support" | "hub";
 
 function cleanText(value: unknown, fallback = "") {
   const clean = String(value ?? "").trim();
@@ -321,10 +321,12 @@ export default function CampaignShareKitClient({
 
     if (selectedCampaign) {
       return {
-        label: "Campaign QR",
+        label: "Full campaign page QR",
         title: selectedCampaign.title,
         eyebrow: campaignTypeLabel(selectedCampaign.type).toUpperCase(),
-        action: `Scan to ${campaignActionLabel(selectedCampaign.type).toLowerCase()}`,
+        action: `Scan to ${campaignActionLabel(
+          selectedCampaign.type,
+        ).toLowerCase()}`,
         url: campaignUrl,
       };
     }
@@ -704,7 +706,14 @@ export default function CampaignShareKitClient({
     const qrBoxX = 260;
     const qrBoxY = 612;
 
-    drawRoundedRect(context, qrBoxX - 28, qrBoxY - 28, qrBoxSize + 56, qrBoxSize + 56, 42);
+    drawRoundedRect(
+      context,
+      qrBoxX - 28,
+      qrBoxY - 28,
+      qrBoxSize + 56,
+      qrBoxSize + 56,
+      42,
+    );
     context.fillStyle = "#ffffff";
     context.fill();
     context.strokeStyle = accent;
@@ -727,7 +736,10 @@ export default function CampaignShareKitClient({
     context.fillText(hostText, width / 2, 1264);
 
     const dataUrl = canvas.toDataURL("image/png");
-    const filename = `${slugifyFilename(qrDetails.title, "campaign")}-qr-card.png`;
+    const filename = `${slugifyFilename(
+      qrDetails.title,
+      "campaign",
+    )}-qr-card.png`;
 
     downloadDataUrl(dataUrl, filename);
   }
@@ -963,9 +975,9 @@ export default function CampaignShareKitClient({
                   }
                   style={styles.input}
                 >
-                  <option value="campaign">Selected campaign</option>
-                  <option value="support">Donation/support link</option>
-                  <option value="hub">Public hub</option>
+                  <option value="campaign">Full campaign page</option>
+                  <option value="support">Donation/support page</option>
+                  <option value="hub">Public campaign hub</option>
                 </select>
               </label>
 
@@ -978,9 +990,10 @@ export default function CampaignShareKitClient({
               </div>
 
               <p style={styles.qrHelpText}>
-                {qrDetails.action}. The QR code points to the same secure public
-                route used by the copy/share tools.
+                {qrDetails.action}. The QR code points to:
               </p>
+
+              <strong style={styles.qrUrlText}>{qrDetails.url}</strong>
 
               <div className="share-qr-actions" style={styles.qrActions}>
                 <button
@@ -1184,8 +1197,9 @@ const styles: Record<string, CSSProperties> = {
 
   grid: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(280px, 0.68fr)",
+    gridTemplateColumns: "minmax(0, 0.9fr) minmax(320px, 1fr)",
     gap: 16,
+    alignItems: "start",
     minWidth: 0,
     width: "100%",
   },
@@ -1201,6 +1215,7 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 16px 36px rgba(22,131,248,0.10)",
     minWidth: 0,
     overflow: "hidden",
+    alignSelf: "start",
   },
 
   previewHeader: {
@@ -1269,9 +1284,9 @@ const styles: Record<string, CSSProperties> = {
   previewTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: "clamp(34px, 6vw, 58px)",
-    lineHeight: 0.96,
-    letterSpacing: "-0.075em",
+    fontSize: "clamp(30px, 4.6vw, 46px)",
+    lineHeight: 0.98,
+    letterSpacing: "-0.07em",
     overflowWrap: "anywhere",
   },
 
@@ -1392,6 +1407,7 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     minWidth: 0,
     overflow: "hidden",
+    alignSelf: "start",
   },
 
   qrPanel: {
@@ -1456,7 +1472,7 @@ const styles: Record<string, CSSProperties> = {
   qrImage: {
     display: "block",
     width: "100%",
-    maxWidth: 260,
+    maxWidth: 250,
     height: "auto",
     borderRadius: 16,
     background: "#ffffff",
@@ -1469,6 +1485,19 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
     fontWeight: 750,
     overflowWrap: "anywhere",
+  },
+
+  qrUrlText: {
+    display: "block",
+    padding: 10,
+    borderRadius: 14,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    color: "#0f172a",
+    fontSize: 12,
+    lineHeight: 1.4,
+    overflowWrap: "anywhere",
+    wordBreak: "break-word",
   },
 
   qrActions: {
