@@ -34,9 +34,11 @@ export default async function AdminLayout({
   return (
     <>
       {showAdminBar ? (
-        <div style={styles.adminBarShell}>
-          <div style={styles.adminBar}>
-            <div style={styles.adminIdentity}>
+        <div className="admin-top-shell" style={styles.adminBarShell}>
+          <style>{responsiveStyles}</style>
+
+          <div className="admin-top-bar" style={styles.adminBar}>
+            <div className="admin-top-identity" style={styles.adminIdentity}>
               <span style={styles.adminBadge}>Admin</span>
 
               <div style={styles.tenantBlock}>
@@ -47,44 +49,69 @@ export default async function AdminLayout({
               </div>
             </div>
 
-            <nav style={styles.adminActions} aria-label="Admin actions">
-              <Link href="/admin" style={styles.adminLink}>
+            <nav
+              className="admin-top-actions"
+              style={styles.adminActions}
+              aria-label="Admin actions"
+            >
+              <Link href="/admin" className="admin-top-pill" style={styles.adminLink}>
                 Dashboard
               </Link>
 
-              <Link href="/admin/launch-readiness" style={styles.launchLink}>
+              <Link
+                href="/admin/launch-readiness"
+                className="admin-top-pill admin-top-pill-feature"
+                style={styles.launchLink}
+              >
                 Launch Readiness
               </Link>
 
-              <Link href="/admin/orders" style={styles.adminLink}>
+              <Link href="/admin/orders" className="admin-top-pill" style={styles.adminLink}>
                 Orders
               </Link>
 
-              <Link href="/admin/events" style={styles.adminLink}>
+              <Link href="/admin/events" className="admin-top-pill" style={styles.adminLink}>
                 Events
               </Link>
 
-              <Link href={publicSiteHref} target="_blank" style={styles.adminLink}>
+              <Link
+                href={publicSiteHref}
+                target="_blank"
+                className="admin-top-pill"
+                style={styles.adminLink}
+              >
                 Public site
               </Link>
 
-              <Link href="/admin/support" style={styles.adminLink}>
+              <Link href="/admin/support" className="admin-top-pill" style={styles.adminLink}>
                 Support
               </Link>
 
               {tenantSlugs.length > 1 ? (
-                <Link href="/admin/select-tenant" style={styles.adminLink}>
+                <Link
+                  href="/admin/select-tenant"
+                  className="admin-top-pill"
+                  style={styles.adminLink}
+                >
                   Switch site
                 </Link>
               ) : null}
 
               {isPlatformOwner ? (
-                <Link href="/admin/platform" style={styles.ownerToolsLink}>
+                <Link
+                  href="/admin/platform"
+                  className="admin-top-pill admin-top-pill-owner"
+                  style={styles.ownerToolsLink}
+                >
                   Owner tools
                 </Link>
               ) : null}
 
-              <a href="/api/auth/signout" style={styles.signOutLink}>
+              <a
+                href="/api/auth/signout"
+                className="admin-top-pill admin-top-pill-signout"
+                style={styles.signOutLink}
+              >
                 Sign out
               </a>
             </nav>
@@ -96,6 +123,90 @@ export default async function AdminLayout({
     </>
   );
 }
+
+const responsiveStyles = `
+.admin-top-shell,
+.admin-top-shell * {
+  box-sizing: border-box;
+}
+
+.admin-top-shell {
+  overflow-x: hidden;
+}
+
+.admin-top-bar,
+.admin-top-identity,
+.admin-top-actions,
+.admin-top-pill {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 860px) {
+  .admin-top-bar {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    align-items: stretch !important;
+    justify-content: stretch !important;
+    gap: 8px !important;
+    padding: 9px 12px 10px !important;
+  }
+
+  .admin-top-identity {
+    width: 100% !important;
+    justify-content: flex-start !important;
+    gap: 10px !important;
+  }
+
+  .admin-top-actions {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    justify-content: flex-start !important;
+    gap: 7px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+    padding: 0 2px 3px !important;
+  }
+
+  .admin-top-actions::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .admin-top-pill {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    max-width: none !important;
+    min-height: 34px !important;
+    padding: 8px 11px !important;
+    border-radius: 999px !important;
+    font-size: 12px !important;
+    line-height: 1.1 !important;
+    white-space: nowrap !important;
+    text-align: center !important;
+  }
+
+  .admin-top-pill-feature {
+    min-width: max-content !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .admin-top-bar {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+
+  .admin-top-pill {
+    min-height: 32px !important;
+    padding: 7px 10px !important;
+    font-size: 11.5px !important;
+  }
+}
+`;
 
 const styles: Record<string, CSSProperties> = {
   adminBarShell: {
