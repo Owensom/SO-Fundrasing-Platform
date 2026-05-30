@@ -400,7 +400,6 @@ function getErrorMessage(value: string | undefined) {
 function isConfigured(value: unknown) {
   return String(value ?? "").trim().length > 0;
 }
-
 async function getAppBaseUrl() {
   const headerStore = await headers();
   const host = headerStore.get("host") || "";
@@ -545,6 +544,7 @@ function buildHighestBidMap(bids: SilentAuctionBid[]) {
 
   return winnerByItemId;
 }
+
 async function updateAuctionAction(formData: FormData) {
   "use server";
 
@@ -728,7 +728,6 @@ async function createAuctionItemAction(formData: FormData) {
 
   redirect(`/admin/auctions/${auction.id}#auction-items`);
 }
-
 async function updateAuctionItemAction(formData: FormData) {
   "use server";
 
@@ -1007,7 +1006,14 @@ export default async function AdminAuctionPage({
             <div
               key={item.label}
               className="auction-readiness-item"
-              style={styles.readinessItem}
+              style={{
+                ...styles.readinessItem,
+                ...(item.tone === "good"
+                  ? styles.readinessItemGood
+                  : item.tone === "warning"
+                    ? styles.readinessItemWarning
+                    : styles.readinessItemNeutral),
+              }}
             >
               <div
                 style={{
@@ -1415,8 +1421,7 @@ export default async function AdminAuctionPage({
 
                     <span style={styles.chevron}>Open</span>
                   </summary>
-
-                  {item.image_url ? (
+                                    {item.image_url ? (
                     <div style={styles.itemImagePreviewWrap}>
                       <img
                         src={item.image_url || DEFAULT_AUCTION_IMAGE}
@@ -1702,7 +1707,8 @@ export default async function AdminAuctionPage({
           )}
         </div>
       </section>
-            <section id="winner-tools" style={styles.sectionCard}>
+
+      <section id="winner-tools" style={styles.sectionCard}>
         <div style={styles.sectionHeader}>
           <div>
             <div style={styles.sectionEyebrow}>Winner tools</div>
@@ -1906,7 +1912,6 @@ function InfoCard({
     </div>
   );
 }
-
 const responsiveStyles = `
   .auction-admin-page,
   .auction-admin-page * {
@@ -2223,6 +2228,25 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     minWidth: 0,
+    boxShadow: "0 8px 20px rgba(15,23,42,0.04)",
+  },
+
+  readinessItemGood: {
+    background: "linear-gradient(135deg, #ecfdf5 0%, #ffffff 78%)",
+    borderColor: "#bbf7d0",
+    boxShadow: "0 10px 24px rgba(22,163,74,0.09)",
+  },
+
+  readinessItemWarning: {
+    background: "linear-gradient(135deg, #fff7ed 0%, #ffffff 78%)",
+    borderColor: "#fed7aa",
+    boxShadow: "0 10px 24px rgba(234,88,12,0.09)",
+  },
+
+  readinessItemNeutral: {
+    background: "linear-gradient(135deg, #f8fafc 0%, #ffffff 78%)",
+    borderColor: "#e2e8f0",
+    boxShadow: "0 8px 20px rgba(15,23,42,0.04)",
   },
 
   readinessToneDot: {
