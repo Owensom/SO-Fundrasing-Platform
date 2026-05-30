@@ -320,7 +320,7 @@ export default async function AdminPublicHubSettingsPage({
       ) : null}
 
       <section className="settings-grid" style={styles.settingsGrid}>
-        <section style={styles.formCard}>
+        <section className="form-card" style={styles.formCard}>
           <p style={styles.kicker}>Featured placement</p>
 
           <h2 style={styles.sectionTitle}>Choose highlighted campaign</h2>
@@ -360,7 +360,7 @@ export default async function AdminPublicHubSettingsPage({
           </form>
         </section>
 
-        <aside style={styles.previewCard}>
+        <aside className="preview-card" style={styles.previewCard}>
           <p style={styles.kicker}>Current selection</p>
 
           {selectedCampaign ? (
@@ -376,7 +376,7 @@ export default async function AdminPublicHubSettingsPage({
                 public campaign hub.
               </p>
 
-              <div style={styles.previewActions}>
+              <div className="preview-actions" style={styles.previewActions}>
                 <Link
                   href={getCampaignUrl(selectedCampaign)}
                   target="_blank"
@@ -417,7 +417,7 @@ export default async function AdminPublicHubSettingsPage({
         </aside>
       </section>
 
-      <section style={styles.infoPanel}>
+      <section className="info-panel" style={styles.infoPanel}>
         <p style={styles.infoTitle}>Safe behaviour</p>
 
         <div className="info-grid" style={styles.infoGrid}>
@@ -497,6 +497,14 @@ const responsiveStyles = `
   .public-hub-settings-page .info-grid,
   .public-hub-settings-page .preview-actions {
     grid-template-columns: 1fr !important;
+  }
+
+  .public-hub-settings-page .preview-actions a {
+    min-height: 46px !important;
+    border-radius: 18px !important;
+    justify-content: center !important;
+    text-align: center !important;
+    width: 100% !important;
   }
 }
 `;
@@ -769,7 +777,7 @@ const styles: Record<string, CSSProperties> = {
 
   previewCard: {
     display: "grid",
-    gap: 14,
+    gap: 12,
     alignContent: "start",
     padding: 22,
     borderRadius: 28,
@@ -781,31 +789,35 @@ const styles: Record<string, CSSProperties> = {
 
   previewType: {
     display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
     width: "fit-content",
-    padding: "8px 12px",
+    maxWidth: "100%",
+    padding: "6px 11px",
     borderRadius: 999,
     background: "#fffbeb",
     color: "#92400e",
     border: "1px solid #fde68a",
-    fontSize: 12,
+    fontSize: 11,
+    lineHeight: 1.1,
     fontWeight: 950,
     textTransform: "uppercase",
-    letterSpacing: "0.06em",
+    letterSpacing: "0.08em",
   },
 
   previewTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 30,
-    lineHeight: 1.05,
-    letterSpacing: "-0.05em",
+    fontSize: "clamp(28px, 7vw, 38px)",
+    lineHeight: 1,
+    letterSpacing: "-0.06em",
     overflowWrap: "anywhere",
   },
 
   previewText: {
     margin: 0,
     color: "#64748b",
-    lineHeight: 1.6,
+    lineHeight: 1.5,
     fontWeight: 700,
     overflowWrap: "anywhere",
   },
@@ -821,12 +833,14 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     minHeight: 44,
-    padding: "11px 14px",
-    borderRadius: 999,
+    padding: "10px 14px",
+    borderRadius: 18,
     background: "#0f172a",
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
+    lineHeight: 1.15,
+    textAlign: "center",
   },
 
   previewSecondaryLink: {
@@ -834,13 +848,15 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     minHeight: 44,
-    padding: "11px 14px",
-    borderRadius: 999,
+    padding: "10px 14px",
+    borderRadius: 18,
     background: "#ffffff",
     color: "#0f172a",
     border: "1px solid #cbd5e1",
     textDecoration: "none",
     fontWeight: 950,
+    lineHeight: 1.15,
+    textAlign: "center",
   },
 
   infoPanel: {
