@@ -32,7 +32,14 @@ type CampaignShareKitClientProps = {
   appBaseUrl: string;
 };
 
-type QrTarget = "hub" | "campaign" | "support";
+type QrCardDetails = {
+  label: string;
+  title: string;
+  eyebrow: string;
+  action: string;
+  url: string;
+  filenameSeed: string;
+};
 
 function cleanText(value: unknown, fallback = "") {
   const clean = String(value ?? "").trim();
@@ -264,7 +271,6 @@ export default function CampaignShareKitClient({
     campaigns[0]?.id || "",
   );
   const [copied, setCopied] = useState("");
-  const [qrTarget, setQrTarget] = useState<QrTarget>("hub");
 
   const selectedCampaign = useMemo(() => {
     return (
@@ -298,52 +304,40 @@ export default function CampaignShareKitClient({
     publicHubUrl,
   });
 
-  const qrDetails = useMemo(() => {
-    if (qrTarget === "campaign" && selectedCampaign) {
-      return {
-        label: "Individual selected campaign QR",
+  const hubQrDetails: QrCardDetails = {
+    label: "Public campaign hub QR",
+    title: branding.displayName,
+    eyebrow: "PUBLIC CAMPAIGN HUB",
+    action: "Scan to view all live campaigns",
+    url: publicHubUrl,
+    filenameSeed: `${branding.displayName}-public-hub`,
+  };
+
+  const campaignQrDetails: QrCardDetails | null = selectedCampaign
+    ? {
+        label: "Selected campaign QR",
         title: selectedCampaign.title,
         eyebrow: campaignTypeLabel(selectedCampaign.type).toUpperCase(),
         action: `Scan to ${campaignActionLabel(
           selectedCampaign.type,
         ).toLowerCase()}`,
         url: campaignUrl,
-        helper:
-          "Use this when you want a QR code for one specific raffle, squares game, event or auction.",
-      };
-    }
+        filenameSeed: `${selectedCampaign.title}-campaign`,
+      }
+    : null;
 
-    if (qrTarget === "support" && selectedCampaign) {
-      return {
+  const supportQrDetails: QrCardDetails | null = selectedCampaign
+    ? {
         label: "Donation/support QR",
         title: selectedCampaign.title,
         eyebrow: "DONATION LINK",
         action: "Scan to support this campaign",
         url: supportUrl,
-        helper:
-          "Use this when you want supporters to go straight to the donation/support page for the selected campaign.",
-      };
-    }
+        filenameSeed: `${selectedCampaign.title}-support`,
+      }
+    : null;
 
-    return {
-      label: "Default public campaign hub QR",
-      title: branding.displayName,
-      eyebrow: "PUBLIC CAMPAIGN HUB",
-      action: "Scan to view all live campaigns",
-      url: publicHubUrl,
-      helper:
-        "Best for posters, flyers, QR boards, social posts and general promotion. Supporters can browse all active campaigns in one place.",
-    };
-  }, [
-    branding.displayName,
-    campaignUrl,
-    publicHubUrl,
-    qrTarget,
-    selectedCampaign,
-    supportUrl,
-  ]);
-
-  const qrPreviewUrl = qrImageUrl(qrDetails.url, 700);
+  const hubQrPreviewUrl = qrImageUrl(publicHubUrl, 700);
 
   async function handleCopy(label: string, value: string) {
     try {
@@ -560,8 +554,8 @@ export default function CampaignShareKitClient({
     downloadDataUrl(dataUrl, filename);
   }
 
-  async function handleDownloadQrCard() {
-    const qrUrl = qrImageUrl(qrDetails.url, 900);
+  async function handleDownloadQrCard(details: QrCardDetails) {
+    const qrUrl = qrImageUrl(details.url, 900);
 
     if (!qrUrl) return;
 
@@ -662,7 +656,7 @@ export default function CampaignShareKitClient({
     context.fillStyle = accent;
     context.font =
       "950 28px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    context.fillText(qrDetails.eyebrow, 262, 150);
+    context.fillText(details.eyebrow, 262, 150);
 
     context.fillStyle = "#dbeafe";
     context.font =
@@ -673,7 +667,7 @@ export default function CampaignShareKitClient({
     context.font =
       "950 62px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
-    const titleLines = wrapCanvasText(context, qrDetails.title, 850).slice(0, 3);
+    const titleLines = wrapCanvasText(context, details.title, 850).slice(0, 3);
 
     let titleY = 330;
 
@@ -686,10 +680,7 @@ export default function CampaignShareKitClient({
     context.font =
       "850 31px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
-    const actionLines = wrapCanvasText(context, qrDetails.action, 820).slice(
-      0,
-      2,
-    );
+    const actionLines = wrapCanvasText(context, details.action, 820).slice(0, 2);
 
     let actionY = Math.min(titleY + 8, 535);
 
@@ -728,14 +719,223 @@ export default function CampaignShareKitClient({
     context.font =
       "750 20px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
-    const hostText = qrDetails.url ? new URL(qrDetails.url).host : "";
+    const hostText = details.url ? new URL(details.url).host : "";
     context.fillText(hostText, width / 2, 1264);
 
     const dataUrl = canvas.toDataURL("image/png");
     const filename = `${slugifyFilename(
-      qrDetails.title,
+      details.filenameSeed,
       "campaign",
     )}-qr-card.png`;
+
+    downloadDataUrl(dataUrl, filename);
+  }
+
+  async function handleDownloadPublicHubSocialTile() {
+    const qrUrl = qrImageUrl(publicHubUrl, 720);
+
+    if (!qrUrl) return;
+
+    const canvas = document.createElement("canvas");
+    const width = 1080;
+    const height = 1080;
+    const pixelRatio = window.devicePixelRatio || 1;
+
+    canvas.width = width * pixelRatio;
+    canvas.height = height * pixelRatio;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+
+    const context = canvas.getContext("2d");
+
+    if (!context) return;
+
+    context.scale(pixelRatio, pixelRatio);
+
+    const primary = branding.primaryColour || "#1683F8";
+    const accent = branding.accentColour || "#FACC15";
+
+    const [loadedLogo, loadedQr] = await Promise.all([
+      loadImage(logoSrc),
+      loadImage(qrUrl),
+    ]);
+
+    if (!loadedQr) {
+      setCopied("qr-error");
+      window.setTimeout(() => setCopied(""), 2600);
+      return;
+    }
+
+    const gradient = context.createLinearGradient(0, 0, width, height);
+    gradient.addColorStop(0, "#020617");
+    gradient.addColorStop(0.55, "#0f172a");
+    gradient.addColorStop(1, "#172554");
+
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, width, height);
+
+    context.globalAlpha = 0.22;
+    context.fillStyle = primary;
+    context.beginPath();
+    context.arc(930, 120, 290, 0, Math.PI * 2);
+    context.fill();
+
+    context.globalAlpha = 0.2;
+    context.strokeStyle = accent;
+    context.lineWidth = 5;
+    context.beginPath();
+    context.arc(120, 1000, 260, 0, Math.PI * 2);
+    context.stroke();
+
+    context.globalAlpha = 1;
+
+    drawRoundedRect(context, 60, 60, 960, 960, 56);
+    context.fillStyle = "rgba(255,255,255,0.10)";
+    context.fill();
+    context.strokeStyle = "rgba(255,255,255,0.22)";
+    context.lineWidth = 2;
+    context.stroke();
+
+    drawRoundedRect(context, 106, 100, 128, 128, 34);
+    context.fillStyle = "#ffffff";
+    context.fill();
+    context.strokeStyle = accent;
+    context.lineWidth = 4;
+    context.stroke();
+
+    if (loadedLogo) {
+      const logoPadding = 17;
+      context.save();
+      drawRoundedRect(context, 106, 100, 128, 128, 34);
+      context.clip();
+      context.fillStyle = "#ffffff";
+      context.fillRect(106, 100, 128, 128);
+      context.drawImage(
+        loadedLogo,
+        106 + logoPadding,
+        100 + logoPadding,
+        128 - logoPadding * 2,
+        128 - logoPadding * 2,
+      );
+      context.restore();
+    } else {
+      context.fillStyle = primary;
+      context.font =
+        "900 40px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.fillText(getInitials(branding.displayName), 170, 164);
+    }
+
+    context.textAlign = "left";
+    context.textBaseline = "alphabetic";
+
+    context.fillStyle = accent;
+    context.font =
+      "950 27px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    context.fillText("PUBLIC CAMPAIGN HUB", 266, 146);
+
+    context.fillStyle = "#dbeafe";
+    context.font =
+      "850 31px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    context.fillText(branding.displayName, 266, 190);
+
+    context.fillStyle = "#ffffff";
+    context.font =
+      "950 64px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
+    const titleLines = wrapCanvasText(
+      context,
+      "Support our live fundraising campaigns",
+      850,
+    ).slice(0, 3);
+
+    let titleY = 325;
+
+    for (const line of titleLines) {
+      context.fillText(line, 106, titleY);
+      titleY += 72;
+    }
+
+    context.fillStyle = "#bfdbfe";
+    context.font =
+      "800 28px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
+    const taglineLines = wrapCanvasText(
+      context,
+      cleanText(
+        branding.tagline,
+        "Browse the latest campaigns and choose how you would like to help.",
+      ),
+      820,
+    ).slice(0, 2);
+
+    let taglineY = Math.min(titleY + 12, 540);
+
+    for (const line of taglineLines) {
+      context.fillText(line, 106, taglineY);
+      taglineY += 38;
+    }
+
+    const qrBoxSize = 330;
+    const qrBoxX = 106;
+    const qrBoxY = 650;
+
+    drawRoundedRect(
+      context,
+      qrBoxX - 20,
+      qrBoxY - 20,
+      qrBoxSize + 40,
+      qrBoxSize + 40,
+      34,
+    );
+    context.fillStyle = "#ffffff";
+    context.fill();
+    context.strokeStyle = accent;
+    context.lineWidth = 4;
+    context.stroke();
+
+    context.drawImage(loadedQr, qrBoxX, qrBoxY, qrBoxSize, qrBoxSize);
+
+    context.textAlign = "left";
+    context.fillStyle = "#ffffff";
+    context.font =
+      "950 34px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    context.fillText("Scan the QR code", 486, 720);
+
+    context.fillStyle = "#bfdbfe";
+    context.font =
+      "800 24px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
+    const instructionLines = wrapCanvasText(
+      context,
+      "Or tap the public hub link in the post to support securely.",
+      430,
+    ).slice(0, 3);
+
+    let instructionY = 768;
+
+    for (const line of instructionLines) {
+      context.fillText(line, 486, instructionY);
+      instructionY += 34;
+    }
+
+    drawRoundedRect(context, 486, 900, 420, 64, 32);
+    context.fillStyle = primary;
+    context.fill();
+
+    context.fillStyle = "#ffffff";
+    context.font =
+      "950 24px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText("View all live campaigns", 696, 932);
+
+    const dataUrl = canvas.toDataURL("image/png");
+    const filename = `${slugifyFilename(
+      branding.displayName,
+      "public-hub",
+    )}-public-hub-social-tile.png`;
 
     downloadDataUrl(dataUrl, filename);
   }
@@ -766,63 +966,104 @@ export default function CampaignShareKitClient({
             </div>
 
             <div style={styles.logoCopy}>
-              <p style={styles.kicker}>Share the full public hub</p>
+              <p style={styles.kicker}>Public hub share kit</p>
               <h2 style={styles.title}>Promote all active campaigns</h2>
             </div>
           </div>
 
           <p style={styles.text}>
-            Share the tenant’s main public campaign hub when you want supporters
-            to browse every active raffle, squares game, event or auction in one
-            place.
+            Use the public campaign hub for posters, flyers, QR boards, social
+            posts and general promotion. Supporters can browse every active
+            raffle, squares game, event and auction in one branded place.
           </p>
+
+          <div style={styles.linkBlock}>
+            <span style={styles.linkLabel}>Public hub link</span>
+            <strong style={styles.linkValue}>{publicHubUrl}</strong>
+          </div>
+
+          <div className="share-hub-actions" style={styles.publicHubActions}>
+            <button
+              type="button"
+              onClick={() => handleCopy("hub-link", publicHubUrl)}
+              style={{
+                ...styles.primaryButton,
+                background: branding.primaryColour,
+                borderColor: branding.primaryColour,
+              }}
+            >
+              Copy public hub link
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleCopy("hub-caption", publicHubCaption)}
+              style={styles.secondaryButton}
+            >
+              Copy hub caption
+            </button>
+
+            <button
+              type="button"
+              onClick={handlePublicHubShare}
+              style={styles.secondaryButton}
+            >
+              Share public hub
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleDownloadQrCard(hubQrDetails)}
+              style={styles.darkButton}
+            >
+              Download hub QR PNG
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDownloadPublicHubSocialTile}
+              style={styles.darkButton}
+            >
+              Download social tile
+            </button>
+          </div>
         </div>
 
-        <div className="share-hub-actions" style={styles.publicHubActions}>
-          <button
-            type="button"
-            onClick={() => handleCopy("hub-link", publicHubUrl)}
-            style={{
-              ...styles.primaryButton,
-              background: branding.primaryColour,
-              borderColor: branding.primaryColour,
-            }}
-          >
-            Copy public hub link
-          </button>
+        <aside style={styles.hubQrPanel}>
+          <div style={styles.qrHeader}>
+            <div>
+              <span style={styles.linkLabel}>QR code</span>
+              <h3 style={styles.qrTitle}>Public campaign hub QR</h3>
+            </div>
 
-          <button
-            type="button"
-            onClick={() => handleCopy("hub-caption", publicHubCaption)}
-            style={styles.secondaryButton}
-          >
-            Copy hub caption
-          </button>
+            <span style={styles.qrBadge}>Best default</span>
+          </div>
 
-          <button
-            type="button"
-            onClick={handlePublicHubShare}
-            style={styles.darkButton}
-          >
-            Share public hub
-          </button>
-        </div>
+          <div style={styles.qrPreviewBox}>
+            <img
+              src={hubQrPreviewUrl}
+              alt={`Public campaign hub QR for ${branding.displayName}`}
+              style={styles.qrImage}
+            />
+          </div>
 
-        <div style={styles.linkBlock}>
-          <span style={styles.linkLabel}>Public hub link</span>
-          <strong style={styles.linkValue}>{publicHubUrl}</strong>
-        </div>
+          <p style={styles.qrHelpText}>
+            This QR sends supporters to the public hub, not a single selected
+            campaign.
+          </p>
+
+          <strong style={styles.qrUrlText}>{publicHubUrl}</strong>
+        </aside>
       </section>
 
       <section className="share-selector-panel" style={styles.selectorPanel}>
         <div>
-          <p style={styles.kicker}>Share an active campaign</p>
-          <h2 style={styles.title}>Create campaign-specific social assets</h2>
+          <p style={styles.kicker}>Campaign-specific assets</p>
+          <h2 style={styles.title}>Create assets for one campaign</h2>
           <p style={styles.text}>
-            Choose any published campaign from this tenant, then copy the public
-            campaign link, donation link or ready-made caption. You can also
-            download branded PNG cards and QR assets for social posts or printed
-            promotion.
+            Choose a published campaign only when you want individual links,
+            donation links, captions, campaign cards or QR codes for that one
+            raffle, squares game, event or auction.
           </p>
         </div>
 
@@ -931,6 +1172,26 @@ export default function CampaignShareKitClient({
               >
                 Download PNG card
               </button>
+
+              {campaignQrDetails ? (
+                <button
+                  type="button"
+                  onClick={() => handleDownloadQrCard(campaignQrDetails)}
+                  style={styles.darkButton}
+                >
+                  Download campaign QR
+                </button>
+              ) : null}
+
+              {supportQrDetails ? (
+                <button
+                  type="button"
+                  onClick={() => handleDownloadQrCard(supportQrDetails)}
+                  style={styles.darkButton}
+                >
+                  Download donation QR
+                </button>
+              ) : null}
             </div>
 
             {copied ? (
@@ -952,70 +1213,6 @@ export default function CampaignShareKitClient({
           </article>
 
           <aside style={styles.linkPanel}>
-            <section style={styles.qrPanel}>
-              <div style={styles.qrHeader}>
-                <div>
-                  <span style={styles.linkLabel}>QR code</span>
-                  <h3 style={styles.qrTitle}>{qrDetails.label}</h3>
-                </div>
-
-                <span style={styles.qrBadge}>Print-ready</span>
-              </div>
-
-              <label style={styles.field}>
-                <span style={styles.label}>QR destination</span>
-                <select
-                  value={qrTarget}
-                  onChange={(event) =>
-                    setQrTarget(event.target.value as QrTarget)
-                  }
-                  style={styles.input}
-                >
-                  <option value="hub">Default public campaign hub</option>
-                  <option value="campaign">
-                    Individual selected campaign page
-                  </option>
-                  <option value="support">
-                    Donation/support page for selected campaign
-                  </option>
-                </select>
-              </label>
-
-              <div style={styles.qrPreviewBox}>
-                <img
-                  src={qrPreviewUrl}
-                  alt={`${qrDetails.label} for ${qrDetails.title}`}
-                  style={styles.qrImage}
-                />
-              </div>
-
-              <p style={styles.qrHelpText}>{qrDetails.helper}</p>
-
-              <p style={styles.qrHelpText}>
-                {qrDetails.action}. The QR code points to:
-              </p>
-
-              <strong style={styles.qrUrlText}>{qrDetails.url}</strong>
-
-              <div className="share-qr-actions" style={styles.qrActions}>
-                <button
-                  type="button"
-                  onClick={() => handleCopy("qr-link", qrDetails.url)}
-                  style={styles.secondaryButton}
-                >
-                  Copy QR link
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleDownloadQrCard}
-                  style={styles.darkButton}
-                >
-                  Download QR PNG
-                </button>
-              </div>
-            </section>
-
             <div style={styles.linkBlock}>
               <span style={styles.linkLabel}>Campaign link</span>
               <strong style={styles.linkValue}>{campaignUrl}</strong>
@@ -1053,8 +1250,9 @@ const styles: Record<string, CSSProperties> = {
 
   publicHubPanel: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr)",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(280px, 0.45fr)",
     gap: 16,
+    alignItems: "start",
     padding: 22,
     borderRadius: 28,
     background:
@@ -1067,15 +1265,28 @@ const styles: Record<string, CSSProperties> = {
 
   publicHubCopy: {
     display: "grid",
-    gap: 10,
+    gap: 12,
     minWidth: 0,
   },
 
   publicHubActions: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 190px), 1fr))",
     gap: 10,
     minWidth: 0,
+  },
+
+  hubQrPanel: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    borderRadius: 22,
+    background:
+      "radial-gradient(circle at top right, rgba(22,131,248,0.08), transparent 34%), #ffffff",
+    border: "1px solid #dbeafe",
+    boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+    minWidth: 0,
+    overflow: "hidden",
   },
 
   logoRow: {
@@ -1167,7 +1378,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     lineHeight: 1.55,
     fontWeight: 750,
-    maxWidth: 760,
+    maxWidth: 820,
     overflowWrap: "anywhere",
   },
 
@@ -1412,18 +1623,6 @@ const styles: Record<string, CSSProperties> = {
     alignSelf: "start",
   },
 
-  qrPanel: {
-    display: "grid",
-    gap: 12,
-    padding: 14,
-    borderRadius: 22,
-    background:
-      "radial-gradient(circle at top right, rgba(22,131,248,0.08), transparent 34%), #f8fafc",
-    border: "1px solid #dbeafe",
-    minWidth: 0,
-    overflow: "hidden",
-  },
-
   qrHeader: {
     display: "flex",
     alignItems: "flex-start",
@@ -1500,13 +1699,6 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.4,
     overflowWrap: "anywhere",
     wordBreak: "break-word",
-  },
-
-  qrActions: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 10,
-    minWidth: 0,
   },
 
   linkBlock: {
