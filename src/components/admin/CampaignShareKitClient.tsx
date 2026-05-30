@@ -95,6 +95,19 @@ function buildCaption(params: {
   ].join("\n");
 }
 
+function buildPublicHubCaption(params: {
+  branding: ShareKitBranding;
+  publicHubUrl: string;
+}) {
+  return [
+    `${params.branding.displayName} has live fundraising campaigns ready to support.`,
+    "",
+    cleanText(params.branding.tagline, "Browse the latest campaigns and choose how you would like to help."),
+    "",
+    `View all live campaigns: ${params.publicHubUrl}`,
+  ].join("\n");
+}
+
 async function copyToClipboard(value: string) {
   if (!navigator.clipboard) {
     throw new Error("Clipboard is not available in this browser.");
@@ -186,6 +199,8 @@ export default function CampaignShareKitClient({
     );
   }, [campaigns, selectedCampaignId]);
 
+  const publicHubUrl = absoluteUrl(appBaseUrl, `/c/${branding.tenantSlug}`);
+
   const campaignUrl = selectedCampaign
     ? absoluteUrl(appBaseUrl, selectedCampaign.publicUrl)
     : "";
@@ -201,6 +216,11 @@ export default function CampaignShareKitClient({
         campaignUrl,
       })
     : "";
+
+  const publicHubCaption = buildPublicHubCaption({
+    branding,
+    publicHubUrl,
+  });
 
   async function handleCopy(label: string, value: string) {
     try {
@@ -226,6 +246,23 @@ export default function CampaignShareKitClient({
         title: selectedCampaign.title,
         text: caption,
         url: campaignUrl,
+      });
+    } catch {
+      // User cancelled native share; no action needed.
+    }
+  }
+
+  async function handlePublicHubShare() {
+    if (!navigator.share) {
+      await handleCopy("hub-caption", publicHubCaption);
+      return;
+    }
+
+    try {
+      await navigator.share({
+        title: branding.displayName,
+        text: publicHubCaption,
+        url: publicHubUrl,
       });
     } catch {
       // User cancelled native share; no action needed.
@@ -314,7 +351,11 @@ export default function CampaignShareKitClient({
     context.fillStyle = accent;
     context.font =
       "900 25px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    context.fillText(campaignTypeLabel(selectedCampaign.type).toUpperCase(), 224, 126);
+    context.fillText(
+      campaignTypeLabel(selectedCampaign.type).toUpperCase(),
+      224,
+      126,
+    );
 
     context.fillStyle = "#dbeafe";
     context.font =
@@ -389,7 +430,7 @@ export default function CampaignShareKitClient({
   if (campaigns.length === 0) {
     return (
       <section style={styles.emptyState}>
-        <h2 style={styles.emptyTitle}>No live campaigns available to share</h2>
+        <h2 style={styles.emptyTitle}>No active campaigns available to share</h2>
         <p style={styles.emptyText}>
           Publish a campaign first, then return here to create a share kit for
           social posts, WhatsApp messages, emails and posters.
@@ -397,21 +438,68 @@ export default function CampaignShareKitClient({
       </section>
     );
   }
-
-  return (
+    return (
     <section className="share-kit-shell" style={styles.shell}>
+      <section style={styles.publicHubPanel}>
+        <div style={styles.publicHubCopy}>
+          <p style={styles.kicker}>Share the full public hub</p>
+          <h2 style={styles.title}>Promote all active campaigns</h2>
+          <p style={styles.text}>
+            Use this when you want to share the tenant’s main public campaign
+            page rather than one specific raffle, squares game, event or
+            auction.
+          </p>
+        </div>
+
+        <div style={styles.publicHubActions}>
+          <button
+            type="button"
+            onClick={() => handleCopy("hub-link", publicHubUrl)}
+            style={{
+              ...styles.primaryButton,
+              background: branding.primaryColour,
+              borderColor: branding.primaryColour,
+            }}
+          >
+            Copy public hub link
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleCopy("hub-caption", publicHubCaption)}
+            style={styles.secondaryButton}
+          >
+            Copy hub caption
+          </button>
+
+          <button
+            type="button"
+            onClick={handlePublicHubShare}
+            style={styles.darkButton}
+          >
+            Share public hub
+          </button>
+        </div>
+
+        <div style={styles.linkBlock}>
+          <span style={styles.linkLabel}>Public hub link</span>
+          <strong style={styles.linkValue}>{publicHubUrl}</strong>
+        </div>
+      </section>
+
       <div style={styles.selectorPanel}>
         <div>
-          <p style={styles.kicker}>Campaign Share Kit</p>
-          <h2 style={styles.title}>Create a social-ready campaign link</h2>
+          <p style={styles.kicker}>Share an active campaign</p>
+          <h2 style={styles.title}>Create campaign-specific social assets</h2>
           <p style={styles.text}>
-            Choose a live campaign, copy the public campaign link or donation
-            link, then download a branded card for social posts.
+            Choose any published campaign from this tenant, then copy the public
+            campaign link, donation link or ready-made caption. You can also
+            download a branded PNG card for social posts.
           </p>
         </div>
 
         <label style={styles.field}>
-          <span style={styles.label}>Campaign</span>
+          <span style={styles.label}>Active campaign</span>
           <select
             value={selectedCampaign?.id || ""}
             onChange={(event) => setSelectedCampaignId(event.target.value)}
@@ -440,7 +528,7 @@ export default function CampaignShareKitClient({
                 {campaignTypeLabel(selectedCampaign.type)}
               </span>
 
-              <span style={styles.livePill}>Live campaign</span>
+              <span style={styles.livePill}>Active campaign</span>
             </div>
 
             <h3 style={styles.previewTitle}>{selectedCampaign.title}</h3>
@@ -484,7 +572,7 @@ export default function CampaignShareKitClient({
                 onClick={handleNativeShare}
                 style={styles.secondaryButton}
               >
-                Share
+                Share campaign
               </button>
 
               <button
@@ -522,8 +610,13 @@ export default function CampaignShareKitClient({
             </div>
 
             <div style={styles.captionBox}>
-              <span style={styles.linkLabel}>Suggested caption</span>
+              <span style={styles.linkLabel}>Suggested campaign caption</span>
               <pre style={styles.captionText}>{caption}</pre>
+            </div>
+
+            <div style={styles.captionBox}>
+              <span style={styles.linkLabel}>Suggested public hub caption</span>
+              <pre style={styles.captionText}>{publicHubCaption}</pre>
             </div>
           </aside>
         </div>
@@ -536,6 +629,32 @@ const styles: Record<string, CSSProperties> = {
   shell: {
     display: "grid",
     gap: 18,
+    minWidth: 0,
+  },
+
+  publicHubPanel: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr)",
+    gap: 16,
+    padding: 22,
+    borderRadius: 28,
+    background:
+      "radial-gradient(circle at top right, rgba(250,204,21,0.16), transparent 34%), linear-gradient(135deg, #ffffff 0%, #fffbeb 100%)",
+    border: "1px solid #fde68a",
+    boxShadow: "0 14px 34px rgba(217,119,6,0.08)",
+    minWidth: 0,
+  },
+
+  publicHubCopy: {
+    display: "grid",
+    gap: 2,
+    minWidth: 0,
+  },
+
+  publicHubActions: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 190px), 1fr))",
+    gap: 10,
     minWidth: 0,
   },
 
