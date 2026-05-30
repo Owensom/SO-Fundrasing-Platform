@@ -233,8 +233,8 @@ export default async function AdminDashboardPage() {
             </h1>
 
             <p className="admin-dashboard-subtitle" style={styles.subtitle}>
-              Manage campaigns, payments, supporters and operations across one
-              premium fundraising workspace.
+              Manage campaigns, launch confidence, payments and supporter
+              operations across one premium fundraising workspace.
             </p>
 
             <p className="admin-dashboard-tenant" style={styles.tenant}>
@@ -244,44 +244,28 @@ export default async function AdminDashboardPage() {
 
           <div className="admin-command-actions" style={styles.commandActions}>
             <Link
+              href="/admin/launch-readiness"
+              className="primaryButton"
+              style={styles.primaryButton}
+            >
+              Launch Readiness →
+            </Link>
+
+            <Link
               href={publicCampaignsHref}
               target="_blank"
               className="primaryButton"
               style={styles.primaryButton}
-             >
-           View public site →
-            </Link>
-
-          <Link
-            href="/admin/launch-readiness"
-            className="primaryButton"
-            style={styles.primaryButton}
-           >
-           Launch Readiness →
-           </Link>
-
-           <Link
-            href="/admin/orders"
-            className="secondaryButton"
-            style={styles.secondaryButton}
-           >
-    Orders →
-</Link>
-
-            <Link
-              href="/admin/donations"
-              className="secondaryButton"
-              style={styles.secondaryButton}
             >
-              Donations & Gift Aid →
+              View public site →
             </Link>
 
             <Link
-              href="/admin/customers"
+              href="/admin/orders"
               className="secondaryButton"
               style={styles.secondaryButton}
             >
-              Customers →
+              Orders →
             </Link>
 
             <Link
@@ -298,22 +282,6 @@ export default async function AdminDashboardPage() {
               style={styles.secondaryButton}
             >
               Help & Support →
-            </Link>
-
-            <Link
-              href="/admin/settings/public-hub"
-              className="secondaryButton"
-              style={styles.secondaryButton}
-            >
-              Public Hub →
-            </Link>
-
-            <Link
-              href="/admin/settings/branding"
-              className="secondaryButton"
-              style={styles.secondaryButton}
-            >
-              Branding →
             </Link>
 
             <Link
@@ -362,8 +330,9 @@ export default async function AdminDashboardPage() {
           </h2>
 
           <p style={styles.planText}>
-            Your dashboard reflects the current tenant plan and highlights which
-            campaign and branding features are available.
+            Your dashboard reflects the current tenant plan, campaign
+            capabilities, platform fee and launch readiness tools available to
+            this organisation.
           </p>
         </div>
 
@@ -399,7 +368,7 @@ export default async function AdminDashboardPage() {
             included={customDomainCapability.allowed}
             text={
               customDomainCapability.allowed
-                ? "Foundation required"
+                ? "Foundation enabled"
                 : "Foundation required"
             }
           />
@@ -440,6 +409,90 @@ export default async function AdminDashboardPage() {
 
       <section style={styles.sectionHeader}>
         <div>
+          <p style={styles.kicker}>Launch operations</p>
+
+          <h2
+            className="so-brand-card-title admin-section-title"
+            style={styles.sectionTitle}
+          >
+            Run the platform with confidence
+          </h2>
+
+          <p style={styles.sectionText}>
+            Start with readiness, then review orders, finance, support and
+            billing from the key operational dashboards.
+          </p>
+        </div>
+      </section>
+
+      <section
+        className="admin-operations-card-grid"
+        style={styles.operationsCardGrid}
+      >
+        <DashboardCard
+          href="/admin/launch-readiness"
+          badgeText="READY"
+          title="Launch Readiness"
+          description="Check branding, public hub, campaign warnings, payment readiness and final launch confidence."
+          stats="Read-only launch checklist"
+          tone="blue"
+          compact
+          featured
+        />
+
+        <DashboardCard
+          href="/admin/support"
+          badgeText="HELP"
+          title="Help & Support"
+          description="Report a problem, ask for help and send tenant context to platform support."
+          stats="Support requests"
+          tone="blue"
+          compact
+        />
+
+        <DashboardCard
+          href="/admin/orders"
+          badgeText="ORDERS"
+          title="Orders"
+          description="Review raffle sales, squares sales, event orders and auction bids."
+          stats="Unified activity dashboard"
+          tone="blue"
+          compact
+        />
+
+        <DashboardCard
+          href="/admin/metadata"
+          badgeText="FEES"
+          title="Finance"
+          description="Review payment metadata, platform fees, Stripe fees and organiser net estimates."
+          stats="Money breakdown"
+          tone="gold"
+          compact
+        />
+
+        <DashboardCard
+          href="/admin/donations"
+          badgeText="GIFT"
+          title="Donations & Gift Aid"
+          description="Review pure donations, donor details, payment status and Gift Aid declarations."
+          stats="Donation reporting"
+          tone="gold"
+          compact
+        />
+
+        <DashboardCard
+          href="/admin/settings/billing"
+          badgeText="PLAN"
+          title="Billing"
+          description="View subscription tier, platform commission, enabled capabilities and billing readiness."
+          stats="Subscription settings"
+          tone="blue"
+          compact
+        />
+      </section>
+
+      <section style={styles.sectionHeader}>
+        <div>
           <p style={styles.kicker}>Campaign workspaces</p>
 
           <h2
@@ -450,8 +503,9 @@ export default async function AdminDashboardPage() {
           </h2>
 
           <p style={styles.sectionText}>
-            Open the main campaign areas. Orders, finance, donations and support
-            are grouped separately below for a cleaner admin layout.
+            Open the main campaign areas for raffles, squares, events and
+            auctions. Each workspace now includes clearer readiness guidance
+            before launch.
           </p>
         </div>
       </section>
@@ -477,7 +531,7 @@ export default async function AdminDashboardPage() {
           href="/admin/events"
           image="/brand/so-default-events.png"
           title="Events"
-          description="Manage events, quiz nights, seating plans, tickets and guests."
+          description="Manage events, quiz nights, seating plans, tickets, guests and event add-ons."
           stats={`${events.length} total · ${publishedEvents.length} published`}
         />
 
@@ -489,89 +543,6 @@ export default async function AdminDashboardPage() {
           stats={`${auctions.length} total · ${publishedAuctions.length} published`}
           locked={!auctionCapability.allowed}
           lockText="Professional required"
-        />
-      </section>
-
-      <section style={styles.sectionHeader}>
-        <div>
-          <p style={styles.kicker}>Operations</p>
-
-          <h2
-            className="so-brand-card-title admin-section-title"
-            style={styles.sectionTitle}
-          >
-            Orders, supporters and finance
-          </h2>
-
-          <p style={styles.sectionText}>
-            Review supporter activity, event guests, donations, platform fees
-            and support requests from dedicated operational dashboards.
-          </p>
-        </div>
-      </section>
-
-      <section
-        className="admin-operations-card-grid"
-        style={styles.operationsCardGrid}
-      >
-        <DashboardCard
-          href="/admin/orders"
-          badgeText="ORDERS"
-          title="Orders"
-          description="Review raffle sales, squares sales, event orders and auction bids."
-          stats="Unified activity dashboard"
-          tone="blue"
-          compact
-        />
-
-        <DashboardCard
-          href="/admin/donations"
-          badgeText="GIFT"
-          title="Donations & Gift Aid"
-          description="Review pure donations, donor details, payment status and Gift Aid declarations."
-          stats="Donation reporting"
-          tone="gold"
-          compact
-        />
-
-        <DashboardCard
-          href="/admin/customers"
-          badgeText="CRM"
-          title="Customers"
-          description="View supporter profiles grouped from orders and campaign activity."
-          stats="Supporter intelligence"
-          tone="gold"
-          compact
-        />
-
-        <DashboardCard
-          href="/admin/metadata"
-          badgeText="FEES"
-          title="Finance"
-          description="Review payment metadata, platform fees, Stripe fees and organiser net estimates."
-          stats="Money breakdown"
-          tone="gold"
-          compact
-        />
-
-        <DashboardCard
-          href="/admin/support"
-          badgeText="HELP"
-          title="Help & Support"
-          description="Report a problem, ask for help and send tenant context to platform support."
-          stats="Support requests"
-          tone="blue"
-          compact
-        />
-
-        <DashboardCard
-          href="/admin/settings/billing"
-          badgeText="PLAN"
-          title="Billing"
-          description="View subscription tier, platform commission, enabled capabilities and billing readiness."
-          stats="Subscription settings"
-          tone="blue"
-          compact
         />
       </section>
             <section style={styles.sectionHeader}>
@@ -844,6 +815,7 @@ function DashboardCard({
   compact = false,
   locked = false,
   lockText,
+  featured = false,
 }: {
   href: string;
   image?: string;
@@ -855,6 +827,7 @@ function DashboardCard({
   compact?: boolean;
   locked?: boolean;
   lockText?: string;
+  featured?: boolean;
 }) {
   const badgeStyle =
     tone === "gold"
@@ -877,6 +850,7 @@ function DashboardCard({
               }
             : styles.card),
           ...(locked ? styles.lockedCard : {}),
+          ...(featured ? styles.featuredCard : {}),
         }}
       >
         <div style={styles.cardTop}>
@@ -1147,8 +1121,8 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 48,
-    padding: "12px 16px",
+    minHeight: 50,
+    padding: "13px 16px",
     borderRadius: 999,
     background: "linear-gradient(135deg, #1683f8 0%, #2563eb 100%)",
     color: "#ffffff",
@@ -1165,8 +1139,8 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 48,
-    padding: "12px 16px",
+    minHeight: 50,
+    padding: "13px 16px",
     borderRadius: 999,
     background: "rgba(255,255,255,0.06)",
     color: "#ffffff",
@@ -1234,7 +1208,8 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "-0.05em",
     overflowWrap: "anywhere",
   },
-    planPanel: {
+
+  planPanel: {
     display: "grid",
     gap: 18,
     padding: 22,
@@ -1349,8 +1324,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
     marginBottom: 18,
   },
-
-  focusCard: {
+    focusCard: {
     display: "grid",
     gap: 8,
     padding: 16,
@@ -1460,6 +1434,13 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
     height: "100%",
     minWidth: 0,
+  },
+
+  featuredCard: {
+    background:
+      "radial-gradient(circle at top right, rgba(22,131,248,0.10), transparent 34%), linear-gradient(135deg, #ffffff 0%, #eff6ff 100%)",
+    border: "1px solid #bfdbfe",
+    boxShadow: "0 16px 36px rgba(22,131,248,0.12)",
   },
 
   lockedCard: {
