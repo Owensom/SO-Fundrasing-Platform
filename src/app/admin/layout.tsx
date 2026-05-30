@@ -58,14 +58,6 @@ export default async function AdminLayout({
                 Dashboard
               </Link>
 
-              <Link
-                href="/admin/launch-readiness"
-                className="admin-top-pill admin-top-pill-feature"
-                style={styles.launchLink}
-              >
-                Launch Readiness
-              </Link>
-
               <Link href="/admin/orders" className="admin-top-pill" style={styles.adminLink}>
                 Orders
               </Link>
@@ -188,10 +180,6 @@ const responsiveStyles = `
     white-space: nowrap !important;
     text-align: center !important;
   }
-
-  .admin-top-pill-feature {
-    min-width: max-content !important;
-  }
 }
 
 @media (max-width: 420px) {
@@ -301,24 +289,6 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontSize: 13,
     fontWeight: 900,
-    boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
-    whiteSpace: "nowrap",
-  },
-
-  launchLink: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 34,
-    padding: "8px 12px",
-    borderRadius: 999,
-    background:
-      "linear-gradient(135deg, rgba(22,131,248,0.12), rgba(255,255,255,1))",
-    color: "#1d4ed8",
-    border: "1px solid #93c5fd",
-    textDecoration: "none",
-    fontSize: 13,
-    fontWeight: 950,
     boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
     whiteSpace: "nowrap",
   },
