@@ -198,6 +198,7 @@ async function safeListSquaresSales(gameId: string) {
     return [];
   }
 }
+
 export default async function AdminSquaresEditPage({
   params,
   searchParams,
@@ -293,27 +294,45 @@ export default async function AdminSquaresEditPage({
   const remainingSquares = Math.max(totalSquares - soldSquares, 0);
   const progress = getProgressPercent(soldSquares, totalSquares);
 
+  const legalQuestionTextConfigured = isConfigured(question.text);
+  const legalQuestionAnswerConfigured = isConfigured(question.answer);
   const legalQuestionEnabled =
-    isConfigured(question.text) && isConfigured(question.answer);
+    legalQuestionTextConfigured && legalQuestionAnswerConfigured;
+  const legalQuestionPartiallyConfigured =
+    legalQuestionTextConfigured !== legalQuestionAnswerConfigured;
 
+  const postalEntryAddressConfigured = isConfigured(freeEntry.address);
+  const postalEntryInstructionsConfigured = isConfigured(freeEntry.instructions);
+  const postalEntryClosingConfigured = isConfigured(freeEntry.closes_at);
   const postalEntryEnabled =
-    isConfigured(freeEntry.address) || isConfigured(freeEntry.instructions);
+    postalEntryAddressConfigured && postalEntryInstructionsConfigured;
+  const postalEntryPartiallyConfigured =
+    postalEntryAddressConfigured !== postalEntryInstructionsConfigured;
 
   const prizesConfigured = savedPrizes.length > 0;
   const priceConfigured = Number(game.price_per_square_cents || 0) > 0;
   const boardConfigured = totalSquares > 0;
   const drawDateConfigured = isConfigured(game.draw_at);
+  const publishedNeedsAttention =
+    canViewPublicSquares &&
+    (!priceConfigured ||
+      !boardConfigured ||
+      !drawDateConfigured ||
+      !legalQuestionEnabled ||
+      !postalEntryEnabled ||
+      !prizesConfigured);
 
   const autoDrawFromPrize = Number(config.auto_draw_from_prize || 1);
   const autoDrawToPrize = Number(config.auto_draw_to_prize || 999);
-
-  const readinessItems: ReadinessItem[] = [
+    const readinessItems: ReadinessItem[] = [
     {
       label: "Public page",
       value: canViewPublicSquares ? "Published" : status || "Draft",
       tone: canViewPublicSquares ? "good" : "warning",
       detail: canViewPublicSquares
-        ? "Supporters can open the public squares page."
+        ? publishedNeedsAttention
+          ? "This squares game is public, but one or more launch checks need attention."
+          : "Supporters can open the public squares page."
         : "Draft, closed and drawn squares games are not open for public entries.",
     },
     {
@@ -326,7 +345,11 @@ export default async function AdminSquaresEditPage({
       detail:
         boardConfigured && priceConfigured
           ? `${remainingSquares} squares remain available.`
-          : "Set the board size and price per square before selling.",
+          : !priceConfigured && !boardConfigured
+            ? "Set the board size and price per square before selling."
+            : !priceConfigured
+              ? "Set a valid price per square before selling."
+              : "Set a valid board size before selling.",
     },
     {
       label: "Draw",
@@ -334,23 +357,43 @@ export default async function AdminSquaresEditPage({
       tone: drawDateConfigured ? "good" : "warning",
       detail: drawDateConfigured
         ? "Draw date is set for this squares game."
-        : "Add a draw date before publishing or promoting the game.",
+        : canViewPublicSquares
+          ? "This squares game is published without a draw date. Add one before sharing widely."
+          : "Add a draw date before publishing or promoting the game.",
     },
     {
       label: "Legal question",
-      value: legalQuestionEnabled ? "Configured" : "Missing",
+      value: legalQuestionEnabled
+        ? "Configured"
+        : legalQuestionPartiallyConfigured
+          ? "Incomplete"
+          : "Missing",
       tone: legalQuestionEnabled ? "good" : "warning",
       detail: legalQuestionEnabled
         ? "Public entrants must answer the skill question before checkout."
-        : "Add the entry question and correct answer for compliance.",
+        : legalQuestionPartiallyConfigured
+          ? "Complete both the entry question and correct answer before launch."
+          : "Add the entry question and correct answer for compliance.",
     },
     {
       label: "Postal entry",
-      value: postalEntryEnabled ? "Configured" : "Missing",
-      tone: postalEntryEnabled ? "good" : "warning",
-      detail: postalEntryEnabled
-        ? "Free postal entry details are available on the public page."
-        : "Add the free postal entry address and instructions.",
+      value: postalEntryEnabled
+        ? postalEntryClosingConfigured
+          ? "Configured"
+          : "Closing date missing"
+        : postalEntryPartiallyConfigured
+          ? "Incomplete"
+          : "Missing",
+      tone:
+        postalEntryEnabled && postalEntryClosingConfigured ? "good" : "warning",
+      detail:
+        postalEntryEnabled && postalEntryClosingConfigured
+          ? "Free postal entry details and closing date are available."
+          : postalEntryEnabled
+            ? "Free postal entry address and instructions are present. Add a postal closing date if required before launch."
+            : postalEntryPartiallyConfigured
+              ? "Complete both the free postal entry address and instructions."
+              : "Add the free postal entry address and instructions.",
     },
     {
       label: "Prizes",
@@ -358,7 +401,9 @@ export default async function AdminSquaresEditPage({
       tone: prizesConfigured ? "good" : "warning",
       detail: prizesConfigured
         ? "Prize rows are configured for the draw."
-        : "Add prize rows before promoting the squares game.",
+        : canViewPublicSquares
+          ? "This squares game is published without prize rows. Add prizes before promoting it."
+          : "Add prize rows before promoting the squares game.",
     },
   ];
 
@@ -438,7 +483,8 @@ export default async function AdminSquaresEditPage({
           </p>
         </section>
       ) : null}
-            {invalidDrawDateTime || invalidPostalDateTime ? (
+
+      {invalidDrawDateTime || invalidPostalDateTime ? (
         <section style={styles.upgradeBanner}>
           <div style={styles.upgradeEyebrow}>Date format issue</div>
 
@@ -517,7 +563,8 @@ export default async function AdminSquaresEditPage({
 
             <p style={styles.readinessIntro}>
               A quick operational check before sharing the squares game, taking
-              paid entries or running the draw.
+              paid entries or running the draw. Published games with incomplete
+              legal, postal, pricing, board or prize setup are highlighted here.
             </p>
           </div>
 
@@ -803,9 +850,11 @@ export default async function AdminSquaresEditPage({
                 title="Legal & postal entry"
                 description="Add a skill-based question and the free postal entry route shown publicly."
                 badge={
-                  legalQuestionEnabled || postalEntryEnabled
+                  legalQuestionEnabled && postalEntryEnabled
                     ? "Configured"
-                    : "Not configured"
+                    : legalQuestionPartiallyConfigured || postalEntryPartiallyConfigured
+                      ? "Incomplete"
+                      : "Not configured"
                 }
               >
                 <div className="squares-two-column" style={styles.twoColumnNoMargin}>
@@ -955,8 +1004,7 @@ export default async function AdminSquaresEditPage({
           </button>
         </section>
       </form>
-
-      <section style={styles.section}>
+            <section style={styles.section}>
         <details style={styles.adminDetails}>
           <summary className="squares-admin-summary" style={styles.adminSummary}>
             <div>
@@ -1023,7 +1071,8 @@ export default async function AdminSquaresEditPage({
                 No winners have been drawn yet.
               </div>
             )}
-                        <details open style={styles.drawDetails}>
+
+            <details open style={styles.drawDetails}>
               <summary style={styles.drawSummary}>
                 <div>
                   <h3 style={styles.subTitle}>Live draw tools</h3>
@@ -1599,7 +1648,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 750,
     overflowWrap: "anywhere",
   },
-    summaryGrid: {
+  summaryGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
     gap: 12,
