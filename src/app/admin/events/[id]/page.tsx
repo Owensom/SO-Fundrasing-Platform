@@ -2895,10 +2895,17 @@ export default async function AdminEventManagePage({
         <div className="readinessGrid" style={styles.readinessGrid}>
           {readinessItems.map((item) => (
             <div
-              key={item.label}
-              className="readinessItem"
-              style={styles.readinessItem}
-            >
+         key={item.label}
+         className="readinessItem"
+         style={{
+         ...styles.readinessItem,
+         ...(item.tone === "good"
+         ? styles.readinessItemGood
+        : item.tone === "warning"
+         ? styles.readinessItemWarning
+         : styles.readinessItemNeutral),
+         }}
+         >
               <div
                 style={{
                   ...styles.readinessToneDot,
@@ -4636,6 +4643,20 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 24px 60px rgba(15,23,42,0.18)",
     overflow: "hidden",
   },
+  readinessItemGood: {
+  background: "linear-gradient(135deg, #ecfdf5 0%, #ffffff 76%)",
+  borderColor: "#bbf7d0",
+  boxShadow: "0 8px 20px rgba(22, 163, 74, 0.08)",
+},
+readinessItemWarning: {
+  background: "linear-gradient(135deg, #fff7ed 0%, #ffffff 76%)",
+  borderColor: "#fed7aa",
+  boxShadow: "0 8px 20px rgba(234, 88, 12, 0.08)",
+},
+readinessItemNeutral: {
+  background: "linear-gradient(135deg, #f8fafc 0%, #ffffff 76%)",
+  borderColor: "#e2e8f0",
+},
   heroContent: { minWidth: 0 },
   eyebrow: {
     display: "inline-flex",
