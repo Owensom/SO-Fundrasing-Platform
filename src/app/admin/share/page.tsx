@@ -249,7 +249,7 @@ export default async function AdminSharePage() {
 
         <InfoCard
           title="Create QR assets"
-          text="Generate a QR code for the public hub, selected campaign or donation link, then download a branded QR PNG card."
+          text="Generate QR and social assets for the public hub, selected campaign or donation/support link."
         />
       </section>
 
@@ -309,7 +309,8 @@ const responsiveStyles = `
 }
 
 @media (max-width: 1040px) {
-  .admin-share-page .share-hero {
+  .admin-share-page .share-hero,
+  .admin-share-page .share-public-hub-panel {
     grid-template-columns: 1fr !important;
   }
 
@@ -339,7 +340,8 @@ const responsiveStyles = `
   .admin-share-page .share-hero-stats,
   .admin-share-page .share-info-grid,
   .admin-share-page .share-kit-grid,
-  .admin-share-page .share-selector-panel {
+  .admin-share-page .share-selector-panel,
+  .admin-share-page .share-public-hub-panel {
     grid-template-columns: 1fr !important;
   }
 
