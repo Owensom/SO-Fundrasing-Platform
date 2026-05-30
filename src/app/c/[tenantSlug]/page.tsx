@@ -561,45 +561,62 @@ export default async function TenantCampaignsPage({
           <div style={styles.supportPanel}>
             <h2 style={styles.supportPanelTitle}>Support options</h2>
 
-            <div style={styles.supportOptionList}>
-              <div style={styles.supportOption}>
-                <div
-                  style={{
-                    ...styles.supportIcon,
-                    background: `${primaryColour}26`,
-                    borderColor: `${primaryColour}66`,
-                  }}
-                >
-                  →
-                </div>
+           <div style={styles.supportOptionList}>
+  <Link
+    href={
+      featuredCampaign
+        ? getCampaignUrl(featuredCampaign)
+        : "#live-campaigns"
+    }
+    style={styles.supportOptionLink}
+  >
+    <div
+      style={{
+        ...styles.supportIcon,
+        background: `${primaryColour}26`,
+        borderColor: `${primaryColour}66`,
+      }}
+    >
+      →
+    </div>
 
-                <div style={styles.supportOptionCopy}>
-                  <strong>See campaign</strong>
-                  <span>Open the campaign page to enter, buy, bid or book.</span>
-                </div>
-              </div>
+    <div style={styles.supportOptionCopy}>
+      <strong>See campaign</strong>
+      <span>Open the campaign page to enter, buy, bid or book.</span>
+    </div>
+  </Link>
 
-              <div style={styles.supportOption}>
-                <div
-                  style={{
-                    ...styles.supportIcon,
-                    background: `${accentColour}24`,
-                    borderColor: `${accentColour}78`,
-                  }}
-                >
-                  ♥
-                </div>
+  <Link
+    href={
+      featuredCampaign
+        ? getSupportUrl({
+            tenantSlug,
+            campaign: featuredCampaign,
+          })
+        : `/c/${tenantSlug}/support`
+    }
+    style={styles.supportOptionLink}
+  >
+    <div
+      style={{
+        ...styles.supportIcon,
+        background: `${accentColour}24`,
+        borderColor: `${accentColour}78`,
+      }}
+    >
+      ♥
+    </div>
 
-                <div style={styles.supportOptionCopy}>
-                  <strong>Support campaign</strong>
-                  <span>Make a simple donation without receiving an entry.</span>
-                </div>
-              </div>
+    <div style={styles.supportOptionCopy}>
+      <strong>Support campaign</strong>
+      <span>Make a simple donation without receiving an entry.</span>
+    </div>
+  </Link>
 
-              <Link
-                href={getContactUrl({ tenantSlug })}
-                style={styles.supportOptionLink}
-              >
+  <Link
+    href={getContactUrl({ tenantSlug })}
+    style={styles.supportOptionLink}
+  >
                 <div
                   style={{
                     ...styles.supportIcon,
@@ -807,7 +824,7 @@ export default async function TenantCampaignsPage({
           ) : null}
         </nav>
       </section>
-            <section className="campaignGrid" style={styles.campaignGrid}>
+            <section id="live-campaigns" className="campaignGrid" style={styles.campaignGrid}>
         {visibleCampaigns.length === 0 ? (
           <div style={styles.emptyCard}>
             <h2 style={styles.emptyTitle}>No live campaigns found</h2>
