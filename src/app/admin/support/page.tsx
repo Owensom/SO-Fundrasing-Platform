@@ -4,7 +4,7 @@
 // Tenant-isolated support request form
 // Functional Platform Cards help hub
 // Collapsible platform guide sections
-// Phase 5D.1 — added public platform status link
+// Phase 6F.4A — aligned cards with current live features and planned roadmap
 // ===============================
 
 import type { CSSProperties, ReactNode } from "react";
@@ -351,7 +351,7 @@ export default async function AdminSupportPage({
         <div className="support-hero-stats" style={styles.heroStats}>
           <StatCard label="Tenant context" value="Included" dark />
           <StatCard label="Support email" value="Automatic" dark />
-          <StatCard label="Help guide" value="Built in" dark />
+          <StatCard label="Request status" value="New" dark />
           <StatCard label="Platform status" value="Public" dark />
         </div>
       </section>
@@ -375,7 +375,7 @@ export default async function AdminSupportPage({
         <SupportOption
           label="Report a problem"
           title="Something is not working"
-          text="Send platform support a clear issue report with tenant, page and campaign context."
+          text="Send platform support a clear issue report with tenant, page, campaign and browser context."
         />
 
         <SupportOption
@@ -393,9 +393,11 @@ export default async function AdminSupportPage({
         />
 
         <SupportOption
-          label="Plan ideas"
-          title="Explore platform uses"
-          text="Use the collapsible function cards below to choose the right tool for raffles, events, donations, auctions and future games."
+          label="Launch confidence"
+          title="Review launch readiness"
+          text="Open the tenant launch checklist to check branding, campaign setup, payments, warnings and support readiness."
+          href="/admin/launch-readiness"
+          actionLabel="Open readiness"
         />
       </section>
 
@@ -424,6 +426,21 @@ export default async function AdminSupportPage({
 
           <FunctionCard
             status="Live"
+            label="50/50 Raffles"
+            title="Split-pot raffle fundraising"
+            text="Run a 50/50 raffle using the existing raffle legal framework, ticket checkout, draw tools, winner emails and manual payout tracking."
+            useCases={[
+              "Event-night cash-pot style draws",
+              "Club fundraisers",
+              "Simple prize-pot campaigns",
+              "Cause/winner split fundraising",
+            ]}
+            href="/admin/raffles/new"
+            actionLabel="Create raffle"
+          />
+
+          <FunctionCard
+            status="Live"
             label="Squares"
             title="Football cards and number-grid games"
             text="Run fixed-price square selections, paid entries, legal question checks, free postal entry information and live winner draws."
@@ -445,8 +462,53 @@ export default async function AdminSupportPage({
             useCases={[
               "Ceilidhs",
               "Charity dinners",
-              "Quiz nights",
               "Gala evenings",
+              "Community nights",
+            ]}
+            href="/admin/events"
+            actionLabel="Open events"
+          />
+
+          <FunctionCard
+            status="Live"
+            label="Quiz Night"
+            title="Quiz events with event-ticketing support"
+            text="Use the Events system for quiz nights, team/table style bookings, guest information, menu choices, checkout and receipt emails."
+            useCases={[
+              "Pub quizzes",
+              "School quiz nights",
+              "Team-table fundraising",
+              "Dinner-and-quiz events",
+            ]}
+            href="/admin/events/new"
+            actionLabel="Create event"
+          />
+
+          <FunctionCard
+            status="Live"
+            label="Heads or Tails"
+            title="Fast live event add-on"
+            text="Add Heads or Tails to supported events as an event-night fundraiser with public display, checkout collection and order reporting."
+            useCases={[
+              "Charity dinners",
+              "Ceilidhs",
+              "Sports club nights",
+              "Half-time fundraising",
+            ]}
+            href="/admin/events"
+            actionLabel="Open events"
+          />
+
+          <FunctionCard
+            status="Live"
+            label="Higher or Lower"
+            title="Live game and prize reveal add-on"
+            text="Add Higher or Lower to supported events with checkout collection, buyer answer capture, public prize reveal previews and live game controls."
+            useCases={[
+              "Live event games",
+              "Prize reveal campaigns",
+              "Ceilidh games",
+              "Social build-up fundraising",
             ]}
             href="/admin/events"
             actionLabel="Open events"
@@ -526,7 +588,16 @@ export default async function AdminSupportPage({
             href="/admin/settings/branding"
             actionLabel="Open branding"
           />
-
+        </div>
+      </SupportCollapsibleSection>
+            <SupportCollapsibleSection
+        eyebrow="Platform operations"
+        title="Admin, reporting and launch support"
+        text="Open this section for operational tools that help organisers manage orders, supporters, finance, launch checks and platform support."
+        defaultOpen={false}
+        tone="blue"
+      >
+        <div className="function-card-grid" style={styles.functionGrid}>
           <FunctionCard
             status="Live"
             label="Orders"
@@ -586,59 +657,104 @@ export default async function AdminSupportPage({
             href="/admin/settings/billing"
             actionLabel="Open billing"
           />
+
+          <FunctionCard
+            status="Live"
+            label="Launch Readiness"
+            title="Tenant launch confidence dashboard"
+            text="Review branding, public hub, campaigns, payments, campaign warnings and support readiness before sharing widely."
+            useCases={[
+              "Launch checklist",
+              "Campaign warnings",
+              "Readiness score",
+              "Final admin checks",
+            ]}
+            href="/admin/launch-readiness"
+            actionLabel="Open readiness"
+          />
+
+          <FunctionCard
+            status="Live"
+            label="Support"
+            title="Tenant support request workflow"
+            text="Create support requests with tenant, admin, page, campaign and browser context. Requests are saved first, then emailed to platform support."
+            useCases={[
+              "Bug reports",
+              "Campaign setup help",
+              "Payment questions",
+              "Admin access support",
+            ]}
+            href="#support-form"
+            actionLabel="Report issue"
+          />
+
+          <FunctionCard
+            status="Live"
+            label="Status Page"
+            title="Published incident updates"
+            text="View public platform status updates for incidents and monitoring notes that have been deliberately published by platform support."
+            useCases={[
+              "Known incidents",
+              "Monitoring updates",
+              "Resolved notices",
+              "Public transparency",
+            ]}
+            href="/status"
+            actionLabel="View status"
+          />
+
+          <FunctionCard
+            status="Planned owner workflow"
+            label="Support Dashboard"
+            title="Internal support handling"
+            text="Owner/support tools can later expand support request handling with status changes, internal notes, reply actions and incident linkage."
+            useCases={[
+              "Internal notes",
+              "Status updates",
+              "Reply to tenant",
+              "Incident linkage",
+            ]}
+            href="/admin/platform/support"
+            actionLabel="Owner support"
+            future
+          />
         </div>
       </SupportCollapsibleSection>
 
       <SupportCollapsibleSection
-        eyebrow="Future formats and subtypes"
-        title="Campaign ideas to build next"
-        text="Open this section to see planned campaign formats. These are roadmap ideas only and do not add new checkout or payment logic yet."
+        eyebrow="Roadmap formats"
+        title="Planned campaign formats"
+        text="Open this section to see future product ideas. These are roadmap items only and should not be treated as current live checkout flows."
         defaultOpen={false}
         tone="gold"
       >
         <div className="idea-card-grid" style={styles.ideaGrid}>
           <FunctionCard
-            status="Future raffle subtype"
-            label="50/50"
-            title="Split-pot raffle fundraiser"
-            text="A raffle format where the prize pot is calculated from ticket sales, with a winner share and organiser/charity share."
+            status="Future module"
+            label="Merchandise / Shop"
+            title="Tenant merchandise and pre-orders"
+            text="A simple shop module could support event-friendly merchandise, pre-orders, stock, variants, Stripe checkout, receipt emails and admin order exports."
             useCases={[
-              "Sports clubs",
-              "Event-night draws",
-              "Simple cash-pot fundraising",
-              "Fast community campaigns",
+              "Event t-shirts",
+              "Pre-order merchandise",
+              "Charity products",
+              "Limited stock sales",
             ]}
-            href="/admin/raffles"
-            actionLabel="Use raffles for now"
+            href="/admin"
+            actionLabel="Planned phase"
             future
           />
 
           <FunctionCard
-            status="Future event subtype"
-            label="Quiz Night"
-            title="Teams, tables and question-night fundraising"
-            text="A quiz-night layer could sit under Events, using tickets, tables, team names, menus and guest information."
+            status="Future squares subtype"
+            label="Mystery Squares"
+            title="Hidden outcomes under the Squares module"
+            text="A future Squares subtype where supporters buy numbered squares while hidden prizes, jackpot or thank-you outcomes remain concealed until reveal."
             useCases={[
-              "Pub quizzes",
-              "School quiz nights",
-              "Team tables",
-              "Dinner-and-quiz events",
-            ]}
-            href="/admin/events"
-            actionLabel="Use events for now"
-            future
-          />
-
-          <FunctionCard
-            status="Future games subtype"
-            label="Higher or Lower"
-            title="Card-style live elimination game"
-            text="A simple live game where supporters progress by guessing whether the next card, number or value is higher or lower."
-            useCases={[
-              "Live event games",
-              "Half-time fundraising",
-              "Ceilidh games",
-              "School fair games",
+              "Mystery prizes",
+              "Pick-a-square campaigns",
+              "Prize reveal games",
+              "Event-night games",
             ]}
             href="/admin/squares"
             actionLabel="Use squares for now"
@@ -646,18 +762,18 @@ export default async function AdminSupportPage({
           />
 
           <FunctionCard
-            status="Future games subtype"
-            label="Heads or Tails"
-            title="Fast live elimination fundraiser"
-            text="Supporters choose heads or tails each round until one winner remains. Ideal for quick, high-energy live fundraising moments."
+            status="Future extension"
+            label="Higher or Lower Prize Reveal"
+            title="Richer reveal mode"
+            text="A deeper Higher or Lower extension could add richer prize reveal workflows, sponsor storytelling and more controlled game-round content."
             useCases={[
-              "Charity dinners",
-              "Ceilidhs",
-              "Sports club nights",
-              "Half-time fundraising",
+              "Sponsor showcases",
+              "Social build-up",
+              "Prize storytelling",
+              "Premium live games",
             ]}
             href="/admin/events"
-            actionLabel="Use events for now"
+            actionLabel="Use Events add-ons"
             future
           />
 
@@ -692,9 +808,26 @@ export default async function AdminSupportPage({
             actionLabel="Use squares for now"
             future
           />
+
+          <FunctionCard
+            status="Future polish"
+            label="Advanced support"
+            title="Status, notes and reply workflow"
+            text="Support handling can later add owner-side reply shortcuts, internal notes, request history and status/incident linkage."
+            useCases={[
+              "Support history",
+              "Internal notes",
+              "Tenant replies",
+              "Incident tracking",
+            ]}
+            href="/admin/platform/support"
+            actionLabel="Owner support"
+            future
+          />
         </div>
       </SupportCollapsibleSection>
-            <section
+
+      <section
         id="support-form"
         className="support-layout"
         style={styles.layoutGrid}
@@ -717,7 +850,11 @@ export default async function AdminSupportPage({
             <div className="support-form-grid" style={styles.formGrid}>
               <label style={styles.field}>
                 <span style={styles.label}>Category</span>
-                <select name="category" defaultValue="general" style={styles.input}>
+                <select
+                  name="category"
+                  defaultValue="general"
+                  style={styles.input}
+                >
                   <option value="general">General support</option>
                   <option value="bug">Bug / something broken</option>
                   <option value="payment_or_finance">
@@ -732,7 +869,11 @@ export default async function AdminSupportPage({
 
               <label style={styles.field}>
                 <span style={styles.label}>Urgency</span>
-                <select name="urgency" defaultValue="normal" style={styles.input}>
+                <select
+                  name="urgency"
+                  defaultValue="normal"
+                  style={styles.input}
+                >
                   <option value="low">Low — question or suggestion</option>
                   <option value="normal">Normal — needs support</option>
                   <option value="high">High — blocking admin work</option>
@@ -779,7 +920,11 @@ export default async function AdminSupportPage({
 
               <label style={styles.field}>
                 <span style={styles.label}>Campaign type</span>
-                <select name="campaign_type" defaultValue="" style={styles.input}>
+                <select
+                  name="campaign_type"
+                  defaultValue=""
+                  style={styles.input}
+                >
                   <option value="">Not campaign-specific</option>
                   <option value="raffle">Raffle</option>
                   <option value="squares">Squares</option>
@@ -790,8 +935,7 @@ export default async function AdminSupportPage({
                 </select>
               </label>
             </div>
-
-            <label style={styles.field}>
+                        <label style={styles.field}>
               <span style={styles.label}>Campaign ID or slug</span>
               <input
                 name="campaign_id"
@@ -835,10 +979,17 @@ export default async function AdminSupportPage({
 
           <div style={styles.contextList}>
             <ContextItem label="Tenant" value={tenantSlug} />
-            <ContextItem label="Admin email" value={adminEmail || "Not recorded"} />
-            <ContextItem label="Admin name" value={adminName || "Not recorded"} />
+            <ContextItem
+              label="Admin email"
+              value={adminEmail || "Not recorded"}
+            />
+            <ContextItem
+              label="Admin name"
+              value={adminName || "Not recorded"}
+            />
             <ContextItem label="Request storage" value="support_requests" />
             <ContextItem label="Default status" value="New" />
+            <ContextItem label="Email status" value="Pending → Sent / Failed" />
           </div>
 
           <div style={styles.noticeBox}>
@@ -852,6 +1003,15 @@ export default async function AdminSupportPage({
             <Link href="/status" style={styles.noticeLink}>
               View platform status →
             </Link>
+          </div>
+
+          <div style={styles.plannedBox}>
+            <p style={styles.plannedTitle}>Planned owner-support workflow</p>
+            <p style={styles.plannedText}>
+              Owner tools can later expose support request status changes,
+              internal notes, tenant reply shortcuts and incident linkage. This
+              tenant page only creates requests.
+            </p>
           </div>
         </aside>
       </section>
@@ -963,7 +1123,10 @@ function FunctionCard({
       </div>
 
       <div style={styles.functionActions}>
-        <Link href={href} style={future ? styles.futureAction : styles.cardAction}>
+        <Link
+          href={href}
+          style={future ? styles.futureAction : styles.cardAction}
+        >
           {actionLabel} →
         </Link>
 
@@ -983,6 +1146,7 @@ function ContextItem({ label, value }: { label: string; value: ReactNode }) {
     </div>
   );
 }
+
 const responsiveStyles = `
 .admin-support-page,
 .admin-support-page * {
@@ -1099,7 +1263,6 @@ const responsiveStyles = `
   }
 }
 `;
-
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -1783,5 +1946,29 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     fontWeight: 950,
     textAlign: "center",
+  },
+
+  plannedBox: {
+    display: "grid",
+    gap: 10,
+    padding: 16,
+    borderRadius: 20,
+    background: "#fffbeb",
+    border: "1px solid #fde68a",
+  },
+
+  plannedTitle: {
+    margin: 0,
+    color: "#92400e",
+    fontSize: 15,
+    fontWeight: 950,
+  },
+
+  plannedText: {
+    margin: 0,
+    color: "#78350f",
+    lineHeight: 1.55,
+    fontSize: 14,
+    fontWeight: 750,
   },
 };
