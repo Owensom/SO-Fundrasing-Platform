@@ -77,10 +77,6 @@ type EventReadinessRow = {
   event_addons_json: unknown;
 };
 
-type CountRow = {
-  count: number | string;
-};
-
 type MoneyRow = {
   count: number | string;
   total_cents: number | string | null;
@@ -234,8 +230,16 @@ function hasLegalQuestionAnswer(config: JsonRecord) {
       "correct_answer",
       "answer",
     ]) ||
-      stringFromConfig(entryQuestion, ["answer", "correctAnswer", "correct_answer"]) ||
-      stringFromConfig(legalQuestion, ["answer", "correctAnswer", "correct_answer"]),
+      stringFromConfig(entryQuestion, [
+        "answer",
+        "correctAnswer",
+        "correct_answer",
+      ]) ||
+      stringFromConfig(legalQuestion, [
+        "answer",
+        "correctAnswer",
+        "correct_answer",
+      ]),
   );
 }
 
@@ -490,16 +494,23 @@ function buildRaffleWarnings(raffles: RaffleReadinessRow[]) {
   for (const raffle of raffles) {
     const href = `/admin/raffles/${encodeURIComponent(raffle.id)}`;
 
-    if (raffle.status === "published" && Number(raffle.ticket_price_cents || 0) <= 0) {
+    if (
+      raffle.status === "published" &&
+      Number(raffle.ticket_price_cents || 0) <= 0
+    ) {
       warnings.push({
         title: `${raffle.title}: ticket price missing`,
-        detail: "Published raffles should have a valid ticket price before sharing.",
+        detail:
+          "Published raffles should have a valid ticket price before sharing.",
         href,
         tone: "danger",
       });
     }
 
-    if (raffle.status === "published" && Number(raffle.total_tickets || 0) <= 0) {
+    if (
+      raffle.status === "published" &&
+      Number(raffle.total_tickets || 0) <= 0
+    ) {
       warnings.push({
         title: `${raffle.title}: ticket range missing`,
         detail: "Published raffles should have a valid ticket allocation.",
@@ -511,7 +522,8 @@ function buildRaffleWarnings(raffles: RaffleReadinessRow[]) {
     if (raffle.status === "published" && !raffle.draw_at) {
       warnings.push({
         title: `${raffle.title}: draw date not set`,
-        detail: "A visible draw date helps supporters understand when the raffle closes.",
+        detail:
+          "A visible draw date helps supporters understand when the raffle closes.",
         href,
         tone: "warning",
       });
@@ -524,16 +536,21 @@ function buildRaffleWarnings(raffles: RaffleReadinessRow[]) {
     ) {
       warnings.push({
         title: `${raffle.title}: legal question answer missing`,
-        detail: "The raffle has a legal question enabled, but no answer was found in the saved configuration.",
+        detail:
+          "The raffle has a legal question enabled, but no answer was found in the saved configuration.",
         href,
         tone: "danger",
       });
     }
 
-    if (raffle.status === "published" && !hasPostalEntryInfo(raffle.config_json || {})) {
+    if (
+      raffle.status === "published" &&
+      !hasPostalEntryInfo(raffle.config_json || {})
+    ) {
       warnings.push({
         title: `${raffle.title}: postal entry details not detected`,
-        detail: "Check that free postal entry information is present before launch.",
+        detail:
+          "Check that free postal entry information is present before launch.",
         href,
         tone: "warning",
       });
@@ -549,7 +566,10 @@ function buildSquaresWarnings(squares: SquaresReadinessRow[]) {
   for (const game of squares) {
     const href = `/admin/squares/${encodeURIComponent(game.id)}`;
 
-    if (game.status === "published" && Number(game.price_per_square_cents || 0) <= 0) {
+    if (
+      game.status === "published" &&
+      Number(game.price_per_square_cents || 0) <= 0
+    ) {
       warnings.push({
         title: `${game.title}: square price missing`,
         detail: "Published squares games should have a valid price per square.",
@@ -558,10 +578,14 @@ function buildSquaresWarnings(squares: SquaresReadinessRow[]) {
       });
     }
 
-    if (game.status === "published" && Number(game.total_squares || 0) <= 0) {
+    if (
+      game.status === "published" &&
+      Number(game.total_squares || 0) <= 0
+    ) {
       warnings.push({
         title: `${game.title}: grid size missing`,
-        detail: "Published squares games should have a valid number of squares.",
+        detail:
+          "Published squares games should have a valid number of squares.",
         href,
         tone: "danger",
       });
@@ -583,7 +607,8 @@ function buildSquaresWarnings(squares: SquaresReadinessRow[]) {
     ) {
       warnings.push({
         title: `${game.title}: legal question answer missing`,
-        detail: "The squares game has a legal question enabled, but no answer was found in the saved configuration.",
+        detail:
+          "The squares game has a legal question enabled, but no answer was found in the saved configuration.",
         href,
         tone: "danger",
       });
@@ -603,7 +628,8 @@ function buildEventWarnings(events: EventReadinessRow[]) {
     if (event.status === "published" && !event.starts_at) {
       warnings.push({
         title: `${event.title}: event start date missing`,
-        detail: "Published events should have a clear date and time before supporters book.",
+        detail:
+          "Published events should have a clear date and time before supporters book.",
         href,
         tone: "danger",
       });
@@ -612,7 +638,8 @@ function buildEventWarnings(events: EventReadinessRow[]) {
     if (event.status === "published" && isPastDate(event.starts_at)) {
       warnings.push({
         title: `${event.title}: event date is in the past`,
-        detail: "Check whether this event should remain published or be closed.",
+        detail:
+          "Check whether this event should remain published or be closed.",
         href,
         tone: "warning",
       });
@@ -629,10 +656,14 @@ function buildEventWarnings(events: EventReadinessRow[]) {
         addOnRecord.entryPriceCents ?? addOnRecord.entry_price_cents ?? 0,
       );
 
-      if (collectAtCheckout && (!Number.isFinite(entryPriceCents) || entryPriceCents <= 0)) {
+      if (
+        collectAtCheckout &&
+        (!Number.isFinite(entryPriceCents) || entryPriceCents <= 0)
+      ) {
         warnings.push({
           title: `${event.title}: ${addOnTitle} checkout price missing`,
-          detail: "This add-on is set to collect at checkout but does not have a valid entry price.",
+          detail:
+            "This add-on is set to collect at checkout but does not have a valid entry price.",
           href: `/admin/events/${encodeURIComponent(event.id)}/addons`,
           tone: "danger",
         });
@@ -651,7 +682,8 @@ function buildEventWarnings(events: EventReadinessRow[]) {
         if (prizeRevealEnabled && prizeRevealPrizes.length < 2) {
           warnings.push({
             title: `${event.title}: Higher or Lower needs more prizes`,
-            detail: "Prize reveal mode should have at least two valid prizes for one playable Higher or Lower round.",
+            detail:
+              "Prize reveal mode should have at least two valid prizes for one playable Higher or Lower round.",
             href: `/admin/events/${encodeURIComponent(event.id)}/addons`,
             tone: "warning",
           });
@@ -670,7 +702,9 @@ function buildAuctionWarnings(auctions: Array<Record<string, unknown>>) {
     const id = cleanText(auction.id);
     const title = cleanText(auction.title) || "Auction";
     const status = cleanText(auction.status);
-    const href = id ? `/admin/auctions/${encodeURIComponent(id)}` : "/admin/auctions";
+    const href = id
+      ? `/admin/auctions/${encodeURIComponent(id)}`
+      : "/admin/auctions";
 
     if (status === "published") {
       const closesAt = cleanText(auction.closes_at || auction.closesAt);
@@ -678,7 +712,8 @@ function buildAuctionWarnings(auctions: Array<Record<string, unknown>>) {
       if (closesAt && isPastDate(closesAt)) {
         warnings.push({
           title: `${title}: closing date is in the past`,
-          detail: "Check whether this auction should remain published or be closed.",
+          detail:
+            "Check whether this auction should remain published or be closed.",
           href,
           tone: "warning",
         });
@@ -702,9 +737,15 @@ function buildTenantReadinessItems(input: {
   campaignWarnings: CampaignWarning[];
 }): ReadinessItem[] {
   const settings = input.settings;
-  const publishedRaffles = input.raffles.filter((item) => item.status === "published");
-  const publishedSquares = input.squares.filter((item) => item.status === "published");
-  const publishedEvents = input.events.filter((item) => item.status === "published");
+  const publishedRaffles = input.raffles.filter(
+    (item) => item.status === "published",
+  );
+  const publishedSquares = input.squares.filter(
+    (item) => item.status === "published",
+  );
+  const publishedEvents = input.events.filter(
+    (item) => item.status === "published",
+  );
   const publishedAuctions = input.auctions.filter(
     (item) => cleanText(item.status) === "published",
   );
@@ -717,10 +758,12 @@ function buildTenantReadinessItems(input: {
 
   const hasDisplayName = Boolean(cleanText(settings?.public_display_name));
   const hasLogo = Boolean(
-    cleanText(settings?.public_logo_url) || cleanText(settings?.public_logo_mark_url),
+    cleanText(settings?.public_logo_url) ||
+      cleanText(settings?.public_logo_mark_url),
   );
   const hasBrandColours = Boolean(
-    cleanText(settings?.public_primary_colour) || cleanText(settings?.public_accent_colour),
+    cleanText(settings?.public_primary_colour) ||
+      cleanText(settings?.public_accent_colour),
   );
   const hasContactEmail = Boolean(cleanText(settings?.public_contact_email));
   const contactVerified = Boolean(settings?.public_contact_email_verified_at);
@@ -736,18 +779,35 @@ function buildTenantReadinessItems(input: {
   return [
     {
       title: "Public campaign hub",
-      status: totalPublishedCampaigns > 0 ? "Campaigns published" : "No published campaigns",
+      status:
+        totalPublishedCampaigns > 0
+          ? "Campaigns published"
+          : "No published campaigns",
       detail:
         totalPublishedCampaigns > 0
-          ? `${totalPublishedCampaigns} published campaign${totalPublishedCampaigns === 1 ? "" : "s"} are available from the public hub.`
+          ? `${totalPublishedCampaigns} published campaign${
+              totalPublishedCampaigns === 1 ? "" : "s"
+            } are available from the public hub.`
           : "Publish at least one campaign before sharing the public hub.",
       tone: totalPublishedCampaigns > 0 ? "good" : "warning",
-      href: `/c/${input.tenantSlug}?adminReturn=${encodeURIComponent("/admin/launch-readiness")}`,
+      href: `/c/${input.tenantSlug}?adminReturn=${encodeURIComponent(
+        "/admin/launch-readiness",
+      )}`,
       action: "View public hub",
     },
     {
+      title: "Campaign readiness UI",
+      status: "Platform-wide colour language complete",
+      detail:
+        "Events, Raffles, Squares and Auctions now share the same full-card readiness language: green for ready, amber for check, red for action and grey for info.",
+      tone: "good",
+    },
+    {
       title: "Brand identity",
-      status: hasDisplayName && hasLogo && hasBrandColours ? "Branding ready" : "Branding incomplete",
+      status:
+        hasDisplayName && hasLogo && hasBrandColours
+          ? "Branding ready"
+          : "Branding incomplete",
       detail:
         hasDisplayName && hasLogo && hasBrandColours
           ? "Public display name, logo and colour settings are present."
@@ -758,7 +818,11 @@ function buildTenantReadinessItems(input: {
     },
     {
       title: "Public contact email",
-      status: hasContactEmail ? (contactVerified ? "Verified" : "Email saved") : "Missing",
+      status: hasContactEmail
+        ? contactVerified
+          ? "Verified"
+          : "Email saved"
+        : "Missing",
       detail: hasContactEmail
         ? contactVerified
           ? "The public contact email has been verified."
@@ -803,7 +867,9 @@ function buildTenantReadinessItems(input: {
       status:
         input.campaignWarnings.length === 0
           ? "No launch blockers detected"
-          : `${input.campaignWarnings.length} warning${input.campaignWarnings.length === 1 ? "" : "s"}`,
+          : `${input.campaignWarnings.length} warning${
+              input.campaignWarnings.length === 1 ? "" : "s"
+            }`,
       detail:
         input.campaignWarnings.length === 0
           ? "Published campaign checks did not detect missing prices, dates or key configuration issues."
@@ -822,7 +888,11 @@ function buildTenantReadinessItems(input: {
           : "No paid transactions detected",
       detail:
         paidDonationCount + paidEventOrderCount > 0
-          ? `${paidDonationCount} paid donation${paidDonationCount === 1 ? "" : "s"} and ${paidEventOrderCount} paid event order${paidEventOrderCount === 1 ? "" : "s"} detected.`
+          ? `${paidDonationCount} paid donation${
+              paidDonationCount === 1 ? "" : "s"
+            } and ${paidEventOrderCount} paid event order${
+              paidEventOrderCount === 1 ? "" : "s"
+            } detected.`
           : "Complete at least one controlled live/test purchase before launch confidence sign-off.",
       tone: paidDonationCount + paidEventOrderCount > 0 ? "good" : "warning",
       href: "/admin/orders",
@@ -830,7 +900,12 @@ function buildTenantReadinessItems(input: {
     },
     {
       title: "Support channel",
-      status: openSupportCount > 0 ? `${openSupportCount} open request${openSupportCount === 1 ? "" : "s"}` : "Ready",
+      status:
+        openSupportCount > 0
+          ? `${openSupportCount} open request${
+              openSupportCount === 1 ? "" : "s"
+            }`
+          : "Ready",
       detail:
         openSupportCount > 0
           ? "There are open support requests to review before launch."
@@ -841,7 +916,6 @@ function buildTenantReadinessItems(input: {
     },
   ];
 }
-
 export default async function AdminLaunchReadinessPage() {
   const tenantSlug = await requireTenantAccess();
 
@@ -911,7 +985,7 @@ export default async function AdminLaunchReadinessPage() {
 
       <section className="launch-hero" style={styles.hero}>
         <div>
-          <div style={styles.eyebrow}>Phase 6F.1</div>
+          <div style={styles.eyebrow}>Phase 6F.3</div>
 
           <h1 className="launch-title" style={styles.title}>
             Launch Readiness
@@ -1105,7 +1179,18 @@ function MetricCard({
 
 function ReadinessCard({ item }: { item: ReadinessItem }) {
   return (
-    <article style={styles.readinessCard}>
+    <article
+      style={{
+        ...styles.readinessCard,
+        ...(item.tone === "good"
+          ? styles.readinessCardGood
+          : item.tone === "warning"
+            ? styles.readinessCardWarning
+            : item.tone === "danger"
+              ? styles.readinessCardDanger
+              : styles.readinessCardNeutral),
+      }}
+    >
       <div style={styles.readinessTop}>
         <span
           style={{
@@ -1197,7 +1282,6 @@ const responsiveStyles = `
   }
 }
 `;
-
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -1402,7 +1486,31 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 22,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    boxShadow: "0 8px 20px rgba(15,23,42,0.04)",
+  },
+
+  readinessCardGood: {
+    background: "linear-gradient(135deg, #ecfdf5 0%, #ffffff 78%)",
+    borderColor: "#bbf7d0",
+    boxShadow: "0 10px 24px rgba(22,163,74,0.09)",
+  },
+
+  readinessCardWarning: {
+    background: "linear-gradient(135deg, #fffbeb 0%, #ffffff 78%)",
+    borderColor: "#fde68a",
+    boxShadow: "0 10px 24px rgba(217,119,6,0.09)",
+  },
+
+  readinessCardDanger: {
+    background: "linear-gradient(135deg, #fef2f2 0%, #ffffff 78%)",
+    borderColor: "#fecaca",
+    boxShadow: "0 10px 24px rgba(220,38,38,0.09)",
+  },
+
+  readinessCardNeutral: {
+    background: "linear-gradient(135deg, #f8fafc 0%, #ffffff 78%)",
+    borderColor: "#e2e8f0",
+    boxShadow: "0 8px 20px rgba(15,23,42,0.04)",
   },
 
   readinessTop: {
