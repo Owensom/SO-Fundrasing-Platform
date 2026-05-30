@@ -324,7 +324,8 @@ export default async function AdminSquaresEditPage({
 
   const autoDrawFromPrize = Number(config.auto_draw_from_prize || 1);
   const autoDrawToPrize = Number(config.auto_draw_to_prize || 999);
-    const readinessItems: ReadinessItem[] = [
+
+  const readinessItems: ReadinessItem[] = [
     {
       label: "Public page",
       value: canViewPublicSquares ? "Published" : status || "Draft",
@@ -415,8 +416,7 @@ export default async function AdminSquaresEditPage({
     legalQuestionEnabled &&
     postalEntryEnabled &&
     prizesConfigured;
-
-  return (
+    return (
     <main className="squares-admin-page" style={styles.page}>
       <style>{responsiveStyles}</style>
 
@@ -583,7 +583,14 @@ export default async function AdminSquaresEditPage({
             <div
               key={item.label}
               className="squares-readiness-item"
-              style={styles.readinessItem}
+              style={{
+                ...styles.readinessItem,
+                ...(item.tone === "good"
+                  ? styles.readinessItemGood
+                  : item.tone === "warning"
+                    ? styles.readinessItemWarning
+                    : styles.readinessItemNeutral),
+              }}
             >
               <div
                 style={{
@@ -646,7 +653,8 @@ export default async function AdminSquaresEditPage({
           <div style={{ ...styles.progressFill, width: `${progress}%` }} />
         </div>
       </section>
-            <form
+
+      <form
         action={`/api/admin/squares/${game.id}`}
         method="post"
         style={styles.form}
@@ -761,8 +769,7 @@ export default async function AdminSquaresEditPage({
                   </div>
                 </div>
               </section>
-
-              <CompactDetails
+                            <CompactDetails
                 eyebrow="Squares setup"
                 title="Board, pricing & status"
                 description="Configure board size, pricing, draw date and publication status."
@@ -852,7 +859,8 @@ export default async function AdminSquaresEditPage({
                 badge={
                   legalQuestionEnabled && postalEntryEnabled
                     ? "Configured"
-                    : legalQuestionPartiallyConfigured || postalEntryPartiallyConfigured
+                    : legalQuestionPartiallyConfigured ||
+                        postalEntryPartiallyConfigured
                       ? "Incomplete"
                       : "Not configured"
                 }
@@ -1004,7 +1012,8 @@ export default async function AdminSquaresEditPage({
           </button>
         </section>
       </form>
-            <section style={styles.section}>
+
+      <section style={styles.section}>
         <details style={styles.adminDetails}>
           <summary className="squares-admin-summary" style={styles.adminSummary}>
             <div>
@@ -1194,7 +1203,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
     </label>
   );
 }
-
 const responsiveStyles = `
   .squares-admin-page,
   .squares-admin-page * {
@@ -1296,6 +1304,7 @@ const responsiveStyles = `
     }
   }
 `;
+
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -1615,6 +1624,22 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     minWidth: 0,
+    boxShadow: "0 8px 20px rgba(15,23,42,0.04)",
+  },
+  readinessItemGood: {
+    background: "linear-gradient(135deg, #ecfdf5 0%, #ffffff 78%)",
+    borderColor: "#bbf7d0",
+    boxShadow: "0 10px 24px rgba(22,163,74,0.09)",
+  },
+  readinessItemWarning: {
+    background: "linear-gradient(135deg, #fff7ed 0%, #ffffff 78%)",
+    borderColor: "#fed7aa",
+    boxShadow: "0 10px 24px rgba(234,88,12,0.09)",
+  },
+  readinessItemNeutral: {
+    background: "linear-gradient(135deg, #f8fafc 0%, #ffffff 78%)",
+    borderColor: "#e2e8f0",
+    boxShadow: "0 8px 20px rgba(15,23,42,0.04)",
   },
   readinessToneDot: {
     width: 12,
@@ -1648,7 +1673,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 750,
     overflowWrap: "anywhere",
   },
-  summaryGrid: {
+    summaryGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
     gap: 12,
