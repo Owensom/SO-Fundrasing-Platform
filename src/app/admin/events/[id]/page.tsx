@@ -4618,7 +4618,7 @@ function InfoTile({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-cconst styles: Record<string, CSSProperties> = {
+const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
     maxWidth: 1180,
