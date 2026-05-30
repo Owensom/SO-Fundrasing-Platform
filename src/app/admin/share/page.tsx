@@ -36,6 +36,8 @@ type TenantShareSettings = {
   platform_owner_bypass?: boolean | null;
   public_display_name?: string | null;
   public_tagline?: string | null;
+  public_logo_url?: string | null;
+  public_logo_mark_url?: string | null;
   public_primary_colour?: string | null;
   public_accent_colour?: string | null;
 };
@@ -191,6 +193,9 @@ export default async function AdminSharePage() {
       tenantSettings?.public_accent_colour,
       "#FACC15",
     ),
+    logoUrl: cleanText(tenantSettings?.public_logo_url),
+    logoMarkUrl: cleanText(tenantSettings?.public_logo_mark_url),
+    platformLogoUrl: "/brand/so-logo-mark.png",
   };
 
   return (
@@ -205,7 +210,7 @@ export default async function AdminSharePage() {
 
           <div style={styles.badgeRow}>
             <span style={styles.badge}>Campaign Share Kit</span>
-            <span style={styles.softBadge}>Social-ready links</span>
+            <span style={styles.softBadge}>Social-ready assets</span>
           </div>
 
           <h1 className="so-brand-heading share-title" style={styles.title}>
@@ -213,9 +218,9 @@ export default async function AdminSharePage() {
           </h1>
 
           <p style={styles.subtitle}>
-            Create campaign links, donation links, ready-made captions and
-            branded PNG cards for social posts, WhatsApp, email and printed
-            promotion.
+            Create public hub links, campaign links, donation links, ready-made
+            captions and branded PNG cards for social posts, WhatsApp, email and
+            printed promotion.
           </p>
 
           <p style={styles.tenantLine}>
@@ -224,8 +229,8 @@ export default async function AdminSharePage() {
         </div>
 
         <div className="share-hero-stats" style={styles.heroStats}>
-          <StatCard label="Live campaigns" value={campaigns.length} dark />
-          <StatCard label="Social caption" value="Ready" dark />
+          <StatCard label="Active campaigns" value={campaigns.length} dark />
+          <StatCard label="Public hub" value="Share" dark />
           <StatCard label="Campaign link" value="Copy" dark />
           <StatCard label="PNG card" value="Download" dark />
         </div>
@@ -233,18 +238,18 @@ export default async function AdminSharePage() {
 
       <section className="share-info-grid" style={styles.infoGrid}>
         <InfoCard
-          title="Post on social media"
-          text="Copy a public campaign link and suggested caption for Facebook, Instagram captions, WhatsApp or email."
+          title="Share the public hub"
+          text="Promote the tenant’s main public campaign page when you want supporters to browse every active campaign in one place."
         />
 
         <InfoCard
-          title="Drive donations"
-          text="Copy a separate donation link that supports the campaign without issuing tickets, bids, seats or entries."
+          title="Share one campaign"
+          text="Choose any active campaign and copy the public campaign link, donation link and suggested caption."
         />
 
         <InfoCard
-          title="Create a visual card"
-          text="Download a branded PNG campaign card that organisers can post, send or use in simple promotional material."
+          title="Download a branded card"
+          text="Create a premium PNG share card using tenant branding first, with platform branding as the fallback."
         />
       </section>
 
@@ -311,7 +316,7 @@ const responsiveStyles = `
   .admin-share-page .share-hero-stats,
   .admin-share-page .share-info-grid,
   .admin-share-page .share-kit-grid,
-  .admin-share-page .share-kit-shell > div:first-child {
+  .admin-share-page .share-selector-panel {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
@@ -334,7 +339,18 @@ const responsiveStyles = `
   .admin-share-page .share-hero-stats,
   .admin-share-page .share-info-grid,
   .admin-share-page .share-kit-grid,
-  .admin-share-page .share-kit-shell > div:first-child {
+  .admin-share-page .share-selector-panel {
+    grid-template-columns: 1fr !important;
+  }
+
+  .admin-share-page .share-public-hub-panel,
+  .admin-share-page .share-selector-panel {
+    padding: 18px !important;
+    border-radius: 24px !important;
+  }
+
+  .admin-share-page .share-preview-actions,
+  .admin-share-page .share-hub-actions {
     grid-template-columns: 1fr !important;
   }
 
