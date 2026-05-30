@@ -2895,17 +2895,17 @@ export default async function AdminEventManagePage({
         <div className="readinessGrid" style={styles.readinessGrid}>
           {readinessItems.map((item) => (
             <div
-         key={item.label}
-         className="readinessItem"
-         style={{
-         ...styles.readinessItem,
-         ...(item.tone === "good"
-         ? styles.readinessItemGood
-        : item.tone === "warning"
-         ? styles.readinessItemWarning
-         : styles.readinessItemNeutral),
-         }}
-         >
+  key={item.label}
+  className="readinessItem"
+  style={{
+    ...styles.readinessItem,
+    ...(item.tone === "good"
+      ? styles.readinessItemGood
+      : item.tone === "warning"
+        ? styles.readinessItemWarning
+        : styles.readinessItemNeutral),
+  }}
+>
               <div
                 style={{
                   ...styles.readinessToneDot,
@@ -5052,7 +5052,7 @@ readinessItemNeutral: {
     gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: 10,
   },
-  readinessItem: {
+    readinessItem: {
     display: "grid",
     gridTemplateColumns: "auto minmax(0, 1fr)",
     gap: 10,
@@ -5062,6 +5062,22 @@ readinessItemNeutral: {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     minWidth: 0,
+    boxShadow: "0 8px 20px rgba(15,23,42,0.04)",
+  },
+  readinessItemGood: {
+    background: "linear-gradient(135deg, #ecfdf5 0%, #ffffff 78%)",
+    borderColor: "#bbf7d0",
+    boxShadow: "0 10px 24px rgba(22,163,74,0.09)",
+  },
+  readinessItemWarning: {
+    background: "linear-gradient(135deg, #fff7ed 0%, #ffffff 78%)",
+    borderColor: "#fed7aa",
+    boxShadow: "0 10px 24px rgba(234,88,12,0.09)",
+  },
+  readinessItemNeutral: {
+    background: "linear-gradient(135deg, #f8fafc 0%, #ffffff 78%)",
+    borderColor: "#e2e8f0",
+    boxShadow: "0 8px 20px rgba(15,23,42,0.04)",
   },
   readinessToneDot: {
     width: 12,
