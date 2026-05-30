@@ -248,17 +248,25 @@ export default async function AdminDashboardPage() {
               target="_blank"
               className="primaryButton"
               style={styles.primaryButton}
-            >
-              View public site →
+             >
+           View public site →
             </Link>
 
-            <Link
-              href="/admin/orders"
-              className="secondaryButton"
-              style={styles.secondaryButton}
-            >
-              Orders →
-            </Link>
+          <Link
+            href="/admin/launch-readiness"
+            className="primaryButton"
+            style={styles.primaryButton}
+           >
+           Launch Readiness →
+           </Link>
+
+           <Link
+            href="/admin/orders"
+            className="secondaryButton"
+            style={styles.secondaryButton}
+           >
+    Orders →
+</Link>
 
             <Link
               href="/admin/donations"
