@@ -32,10 +32,21 @@ type CheckoutItem = {
   tableName?: string;
 };
 
+type CheckoutAddOnPlayer = {
+  name?: string;
+  email?: string;
+};
+
 type CheckoutAddOnItem = {
   type?: string;
   quantity?: number;
   buyerAnswer?: string;
+  players?: CheckoutAddOnPlayer[];
+};
+
+type ValidatedCheckoutAddOnPlayer = {
+  name: string;
+  email: string;
 };
 
 type ValidatedCheckoutAddOn = {
@@ -45,6 +56,7 @@ type ValidatedCheckoutAddOn = {
   unitAmount: number;
   totalAmount: number;
   buyerAnswer: string | null;
+  players: ValidatedCheckoutAddOnPlayer[];
   legalQuestionEnabled: boolean;
   legalQuestionText: string | null;
   legalQuestionHelperText: string | null;
@@ -107,6 +119,16 @@ function cleanAccessCode(value: unknown) {
     .toUpperCase()
     .replace(/[^A-Z0-9-]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function cleanEmail(value: unknown) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isValidEmail(value: unknown) {
+  const email = cleanEmail(value);
+
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 function positiveQuantity(value: unknown) {
@@ -513,6 +535,27 @@ function complimentarySuccessUrl(req: Request, slug: string) {
   return `${siteUrl(req)}/e/${slug}?checkout=success&access=complimentary`;
 }
 
+function normaliseSubmittedPlayers(rawPlayers: unknown) {
+  if (!Array.isArray(rawPlayers)) {
+    return [];
+  }
+
+  return rawPlayers
+    .map((player) => {
+      if (!player || typeof player !== "object" || Array.isArray(player)) {
+        return null;
+      }
+
+      const current = player as CheckoutAddOnPlayer;
+
+      return {
+        name: cleanText(current.name).slice(0, 160),
+        email: cleanEmail(current.email).slice(0, 254),
+      };
+    })
+    .filter(Boolean) as ValidatedCheckoutAddOnPlayer[];
+}
+
 function normaliseEventAddOns(rawAddOns: unknown): CheckoutAddOnItem[] {
   if (!Array.isArray(rawAddOns)) {
     return [];
@@ -529,6 +572,7 @@ function normaliseEventAddOns(rawAddOns: unknown): CheckoutAddOnItem[] {
     const type = cleanText(item.type);
     const quantity = positiveQuantity(item.quantity);
     const buyerAnswer = cleanText(item.buyerAnswer).slice(0, 500);
+    const players = normaliseSubmittedPlayers(item.players);
 
     if (!type || quantity <= 0) {
       continue;
@@ -538,6 +582,7 @@ function normaliseEventAddOns(rawAddOns: unknown): CheckoutAddOnItem[] {
       type,
       quantity,
       buyerAnswer,
+      players,
     });
   }
 
@@ -559,6 +604,38 @@ function getConfiguredCheckoutAddOn(input: {
       truthy(current.collectAtCheckout)
     );
   }) as Record<string, unknown> | undefined;
+}
+
+function validateHigherOrLowerPlayers(input: {
+  quantity: number;
+  players?: ValidatedCheckoutAddOnPlayer[];
+}) {
+  const players = Array.isArray(input.players) ? input.players : [];
+
+  if (players.length !== input.quantity) {
+    throw new Error(
+      "Please add player details for every Higher or Lower entry.",
+    );
+  }
+
+  for (const player of players) {
+    if (!cleanText(player.name) || !cleanText(player.email)) {
+      throw new Error(
+        "Please enter a name and email for every Higher or Lower player.",
+      );
+    }
+
+    if (!isValidEmail(player.email)) {
+      throw new Error(
+        "Please enter a valid email for every Higher or Lower player.",
+      );
+    }
+  }
+
+  return players.map((player) => ({
+    name: cleanText(player.name).slice(0, 160),
+    email: cleanEmail(player.email).slice(0, 254),
+  }));
 }
 
 function validateCheckoutAddOns(input: {
@@ -632,6 +709,14 @@ function validateCheckoutAddOns(input: {
       );
     }
 
+    const players =
+      type === "higher_or_lower"
+        ? validateHigherOrLowerPlayers({
+            quantity,
+            players: normaliseSubmittedPlayers(submittedAddOn.players),
+          })
+        : [];
+
     const prizeValueRangeEnabled = Boolean(
       type === "higher_or_lower" &&
         truthy(configuredAddOn.prizeValueRangeEnabled),
@@ -652,6 +737,7 @@ function validateCheckoutAddOns(input: {
       unitAmount: entryPriceCents,
       totalAmount: entryPriceCents * quantity,
       buyerAnswer: buyerAnswer || null,
+      players,
       legalQuestionEnabled,
       legalQuestionText: cleanNullableText(configuredAddOn.legalQuestionText),
       legalQuestionHelperText: cleanNullableText(
@@ -685,6 +771,8 @@ function addOnOrderItemMetadata(addOn: ValidatedCheckoutAddOn) {
     addOnType: addOn.type,
     addOnTitle: addOn.title,
     buyerAnswer: addOn.buyerAnswer,
+    players: addOn.players,
+    playerCount: addOn.players.length,
     legalQuestionEnabled: addOn.legalQuestionEnabled,
     legalQuestionText: addOn.legalQuestionText,
     legalQuestionHelperText: addOn.legalQuestionHelperText,
@@ -710,7 +798,10 @@ async function createEventAddOnOrderItems(input: {
       label: `Event add-on — ${addOn.title}`,
       quantity: addOn.quantity,
       unitAmount: addOn.unitAmount,
-      guest_name: input.buyerName,
+      guest_name:
+        addOn.type === "higher_or_lower" && addOn.players[0]?.name
+          ? addOn.players[0].name
+          : input.buyerName,
       dietary_requirements: null,
       menu_choice: null,
       metadata: addOnOrderItemMetadata(addOn),
@@ -730,7 +821,12 @@ function createEventAddOnStripeLineItems(input: {
       unit_amount: addOn.unitAmount,
       product_data: {
         name: `${input.eventTitle} — ${addOn.title}`,
-        description: "Event-night fundraising add-on.",
+        description:
+          addOn.type === "higher_or_lower" && addOn.players.length > 0
+            ? `${addOn.players.length} Higher or Lower player entr${
+                addOn.players.length === 1 ? "y" : "ies"
+              }.`
+            : "Event-night fundraising add-on.",
       },
     },
   }));
