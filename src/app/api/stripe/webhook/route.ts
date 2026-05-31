@@ -397,11 +397,21 @@ function normaliseHigherOrLowerPlayer(value: unknown): HigherOrLowerPlayer | nul
 }
 
 function higherOrLowerPlayersFromMetadata(value: unknown): HigherOrLowerPlayer[] {
-  if (!isObjectRecord(value)) {
+  let metadata: unknown = value;
+
+  if (typeof metadata === "string") {
+    try {
+      metadata = JSON.parse(metadata);
+    } catch {
+      metadata = null;
+    }
+  }
+
+  if (!isObjectRecord(metadata)) {
     return [];
   }
 
-  const rawPlayers = value.players;
+  const rawPlayers = metadata.players;
 
   if (!Array.isArray(rawPlayers)) {
     return [];
