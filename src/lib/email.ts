@@ -354,41 +354,10 @@ function renderDonationHeartHero(label = "Donation confirmation") {
 }
 
 function renderHigherOrLowerHero(label = "Higher or Lower") {
-  return `
-    <div style="
-      margin:0 auto 26px;
-      max-width:320px;
-      border-radius:24px;
-      background:
-        radial-gradient(circle at top, rgba(250,204,21,0.18), transparent 58%),
-        linear-gradient(135deg,#020617 0%,#0f172a 58%,#172554 100%);
-      border:1px solid rgba(250,204,21,0.32);
-      box-shadow:
-        0 18px 38px rgba(15,23,42,0.18),
-        inset 0 1px 0 rgba(255,255,255,0.06);
-      padding:18px;
-      text-align:center;
-    ">
-      <img
-        src="${HIGHER_OR_LOWER_IMAGE_URL}"
-        alt="${escapeHtml(label)}"
-        width="260"
-        style="
-          display:block;
-          width:100%;
-          max-width:260px;
-          height:auto;
-          margin:0 auto;
-          border:0;
-          outline:none;
-          text-decoration:none;
-          filter:
-            drop-shadow(0 10px 24px rgba(250,204,21,0.26))
-            drop-shadow(0 0 18px rgba(250,204,21,0.14));
-        "
-      />
-    </div>
-  `;
+  return renderStandardHero({
+    imageUrl: HIGHER_OR_LOWER_IMAGE_URL,
+    label,
+  });
 }
 
 function renderWinnerTrophyHero(label = "Winner trophy") {
