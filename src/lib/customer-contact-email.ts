@@ -3,7 +3,7 @@
 // Public customer/supporter → tenant contact email helper
 // Phase 5E.1C
 // Separate from platform-owner support emails
-// Includes branded contact-email test helper
+// Includes Foundation-only branded contact-email test helper
 // ===============================
 
 import { Resend } from "resend";
@@ -11,6 +11,26 @@ import { Resend } from "resend";
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 const CONTACT_EMAIL_LOGO_PATH = "/brand/contact-emails-gold.png";
+const PLATFORM_LOGO_PATH = "/brand/contact-emails-gold.png";
+
+type ContactEmailBranding = {
+  advancedBranding?: boolean | null;
+  displayName?: string | null;
+  logoUrl?: string | null;
+  logoMarkUrl?: string | null;
+  primaryColour?: string | null;
+  accentColour?: string | null;
+  footerText?: string | null;
+};
+
+type ResolvedEmailBranding = {
+  advancedBranding: boolean;
+  displayName: string;
+  logoUrl: string;
+  primaryColour: string;
+  accentColour: string;
+  footerText: string;
+};
 
 function escapeHtml(value: unknown) {
   return String(value ?? "")
@@ -68,6 +88,75 @@ function getAssetUrl(path: string) {
   return `${getBaseUrl()}${cleanPath}`;
 }
 
+function resolveImageUrl(value: unknown, fallbackPath: string) {
+  const clean = cleanOptionalText(value);
+
+  if (!clean) {
+    return getAssetUrl(fallbackPath);
+  }
+
+  if (clean.startsWith("https://") || clean.startsWith("http://")) {
+    return clean;
+  }
+
+  if (clean.startsWith("/")) {
+    return getAssetUrl(clean);
+  }
+
+  return getAssetUrl(fallbackPath);
+}
+
+function normaliseHexColour(value: unknown, fallback: string) {
+  const clean = cleanOptionalText(value).toUpperCase();
+
+  if (/^#[0-9A-F]{6}$/.test(clean)) {
+    return clean;
+  }
+
+  return fallback;
+}
+
+function resolveEmailBranding({
+  tenantDisplayName,
+  branding,
+}: {
+  tenantDisplayName: string;
+  branding?: ContactEmailBranding;
+}): ResolvedEmailBranding {
+  const advancedBranding = Boolean(branding?.advancedBranding);
+
+  if (!advancedBranding) {
+    return {
+      advancedBranding: false,
+      displayName: "SO Fundraising Platform",
+      logoUrl: getAssetUrl(PLATFORM_LOGO_PATH),
+      primaryColour: "#1683F8",
+      accentColour: "#FACC15",
+      footerText: "",
+    };
+  }
+
+  const displayName =
+    cleanOptionalText(branding?.displayName) ||
+    cleanOptionalText(tenantDisplayName) ||
+    "Tenant organiser";
+
+  const logoUrl = resolveImageUrl(
+    cleanOptionalText(branding?.logoMarkUrl) ||
+      cleanOptionalText(branding?.logoUrl),
+    PLATFORM_LOGO_PATH,
+  );
+
+  return {
+    advancedBranding: true,
+    displayName,
+    logoUrl,
+    primaryColour: normaliseHexColour(branding?.primaryColour, "#1683F8"),
+    accentColour: normaliseHexColour(branding?.accentColour, "#FACC15"),
+    footerText: cleanOptionalText(branding?.footerText),
+  };
+}
+
 function formatLabel(value: unknown) {
   const clean = cleanText(value, "general").toLowerCase();
 
@@ -78,29 +167,50 @@ function formatLabel(value: unknown) {
     .join(" ");
 }
 
-function renderContactLogo() {
-  const logoUrl = getAssetUrl(CONTACT_EMAIL_LOGO_PATH);
+function renderContactLogo(brand: ResolvedEmailBranding) {
+  const heroBackground = brand.advancedBranding
+    ? `
+      radial-gradient(circle at 88% 92%, ${escapeHtml(brand.primaryColour)}58, transparent 30%),
+      radial-gradient(circle at 10% 12%, ${escapeHtml(brand.accentColour)}28, transparent 26%),
+      linear-gradient(135deg,#060816 0%,#0f172a 56%,#111827 100%)
+    `
+    : "linear-gradient(135deg,#020617 0%,#0f172a 58%,#172554 100%)";
+
+  const logoMaxWidth = brand.advancedBranding ? 220 : 260;
 
   return `
     <div style="
       text-align:center;
       padding:30px 22px 18px;
-      background:linear-gradient(135deg,#020617 0%,#0f172a 58%,#172554 100%);
+      background:${heroBackground};
     ">
-      <img
-        src="${escapeHtml(logoUrl)}"
-        alt="SO Fundraising Platform contact"
-        width="260"
-        style="
-          display:inline-block;
-          width:260px;
-          max-width:86%;
-          height:auto;
-          border:0;
-          outline:none;
-          text-decoration:none;
-        "
-      />
+      <div style="
+        display:inline-block;
+        max-width:${logoMaxWidth + 42}px;
+        border-radius:24px;
+        background:linear-gradient(135deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94));
+        border:1px solid rgba(226,232,240,0.96);
+        box-shadow:
+          0 18px 44px rgba(15,23,42,0.22),
+          inset 0 1px 0 rgba(255,255,255,0.92);
+        padding:16px 20px;
+      ">
+        <img
+          src="${escapeHtml(brand.logoUrl)}"
+          alt="${escapeHtml(brand.displayName)}"
+          width="${logoMaxWidth}"
+          style="
+            display:block;
+            width:${logoMaxWidth}px;
+            max-width:100%;
+            height:auto;
+            margin:0 auto;
+            border:0;
+            outline:none;
+            text-decoration:none;
+          "
+        />
+      </div>
     </div>
   `;
 }
@@ -140,6 +250,34 @@ function renderMetaCard(label: string, value: unknown) {
   `;
 }
 
+function renderSummaryPill({
+  label,
+  background,
+  border,
+  colour,
+}: {
+  label: string;
+  background: string;
+  border: string;
+  colour: string;
+}) {
+  return `
+    <span class="summary-pill" style="
+      display:inline-block;
+      padding:8px 11px;
+      border-radius:999px;
+      background:${background};
+      border:1px solid ${border};
+      color:${colour};
+      font-size:12px;
+      line-height:1.2;
+      font-weight:900;
+    ">
+      ${escapeHtml(label)}
+    </span>
+  `;
+}
+
 function renderEmailShell({
   preheader,
   eyebrow,
@@ -150,6 +288,7 @@ function renderEmailShell({
   messageHtml,
   noticeHtml,
   footer,
+  brand,
 }: {
   preheader: string;
   eyebrow: string;
@@ -160,7 +299,23 @@ function renderEmailShell({
   messageHtml: string;
   noticeHtml: string;
   footer: string;
+  brand: ResolvedEmailBranding;
 }) {
+  const topStripe = brand.advancedBranding
+    ? `linear-gradient(90deg,${escapeHtml(brand.primaryColour)},${escapeHtml(
+        brand.accentColour,
+      )})`
+    : "linear-gradient(90deg,#1683f8,#facc15)";
+
+  const eyebrowColour = brand.advancedBranding
+    ? brand.primaryColour
+    : "#2563eb";
+
+  const finalFooter =
+    brand.advancedBranding && brand.footerText
+      ? `${footer} ${brand.footerText}`
+      : footer;
+
   return `
     <!doctype html>
     <html>
@@ -246,17 +401,17 @@ function renderEmailShell({
             overflow:hidden;
             box-shadow:0 12px 34px rgba(15,23,42,0.08);
           ">
-            ${renderContactLogo()}
+            ${renderContactLogo(brand)}
 
             <div style="
               height:7px;
-              background:linear-gradient(90deg,#1683f8,#facc15);
+              background:${topStripe};
             "></div>
 
             <div class="email-content" style="padding:28px 26px;">
               <p style="
                 margin:0 0 8px;
-                color:#2563eb;
+                color:${escapeHtml(eyebrowColour)};
                 font-size:12px;
                 line-height:1.35;
                 font-weight:900;
@@ -301,7 +456,7 @@ function renderEmailShell({
                 font-size:13px;
                 line-height:1.6;
               ">
-                ${escapeHtml(footer)}
+                ${escapeHtml(finalFooter)}
               </div>
             </div>
           </div>
@@ -324,6 +479,7 @@ export async function sendCustomerContactEmail({
   campaignId,
   campaignTitle,
   pageUrl,
+  branding,
 }: {
   tenantSlug: string;
   tenantDisplayName: string;
@@ -337,6 +493,7 @@ export async function sendCustomerContactEmail({
   campaignId?: string | null;
   campaignTitle?: string | null;
   pageUrl?: string | null;
+  branding?: ContactEmailBranding;
 }) {
   if (!process.env.RESEND_API_KEY) {
     throw new Error("Missing RESEND_API_KEY");
@@ -365,6 +522,11 @@ export async function sendCustomerContactEmail({
   const safeCampaignTitle = cleanText(campaignTitle, "Not campaign-specific");
   const hasPageUrl = cleanOptionalText(pageUrl) !== "";
 
+  const brand = resolveEmailBranding({
+    tenantDisplayName: safeTenantDisplayName,
+    branding,
+  });
+
   const summaryHtml = `
     <div class="summary-row" style="
       display:flex;
@@ -372,47 +534,26 @@ export async function sendCustomerContactEmail({
       flex-wrap:wrap;
       margin:0 0 20px;
     ">
-      <span class="summary-pill" style="
-        display:inline-block;
-        padding:8px 11px;
-        border-radius:999px;
-        background:#eff6ff;
-        border:1px solid #bfdbfe;
-        color:#1d4ed8;
-        font-size:12px;
-        line-height:1.2;
-        font-weight:900;
-      ">
-        Tenant: ${escapeHtml(safeTenantSlug)}
-      </span>
+      ${renderSummaryPill({
+        label: `Tenant: ${safeTenantSlug}`,
+        background: brand.advancedBranding ? `${brand.primaryColour}14` : "#eff6ff",
+        border: brand.advancedBranding ? `${brand.primaryColour}40` : "#bfdbfe",
+        colour: brand.advancedBranding ? brand.primaryColour : "#1d4ed8",
+      })}
 
-      <span class="summary-pill" style="
-        display:inline-block;
-        padding:8px 11px;
-        border-radius:999px;
-        background:#fffbeb;
-        border:1px solid #fde68a;
-        color:#92400e;
-        font-size:12px;
-        line-height:1.2;
-        font-weight:900;
-      ">
-        ${escapeHtml(safeCampaignType)}
-      </span>
+      ${renderSummaryPill({
+        label: safeCampaignType,
+        background: brand.advancedBranding ? `${brand.accentColour}18` : "#fffbeb",
+        border: brand.advancedBranding ? `${brand.accentColour}55` : "#fde68a",
+        colour: brand.advancedBranding ? "#0f172a" : "#92400e",
+      })}
 
-      <span class="summary-pill" style="
-        display:inline-block;
-        padding:8px 11px;
-        border-radius:999px;
-        background:#f8fafc;
-        border:1px solid #e2e8f0;
-        color:#334155;
-        font-size:12px;
-        line-height:1.2;
-        font-weight:900;
-      ">
-        Supporter message
-      </span>
+      ${renderSummaryPill({
+        label: "Supporter message",
+        background: "#f8fafc",
+        border: "#e2e8f0",
+        colour: "#334155",
+      })}
     </div>
   `;
 
@@ -517,10 +658,15 @@ export async function sendCustomerContactEmail({
     noticeHtml,
     footer:
       "Sent automatically by the SO Fundraising Platform public contact system. This message was sent to the tenant contact email, not platform owner support.",
+    brand,
   });
 
+  const fromName = brand.advancedBranding
+    ? `${brand.displayName} via SO Fundraising`
+    : `${safeTenantDisplayName} via SO Fundraising`;
+
   const result = await resend.emails.send({
-    from: `${safeTenantDisplayName} via SO Fundraising <${fromEmail}>`,
+    from: `${fromName} <${fromEmail}>`,
     to,
     subject: `[${safeTenantDisplayName}] ${safeSubject}`,
     html,
@@ -543,11 +689,13 @@ export async function sendTenantContactTestEmail({
   tenantDisplayName,
   tenantContactEmail,
   tenantContactName,
+  branding,
 }: {
   tenantSlug: string;
   tenantDisplayName: string;
   tenantContactEmail: string;
   tenantContactName?: string | null;
+  branding?: ContactEmailBranding;
 }) {
   if (!process.env.RESEND_API_KEY) {
     throw new Error("Missing RESEND_API_KEY");
@@ -570,6 +718,11 @@ export async function sendTenantContactTestEmail({
     safeTenantDisplayName,
   );
 
+  const brand = resolveEmailBranding({
+    tenantDisplayName: safeTenantDisplayName,
+    branding,
+  });
+
   const summaryHtml = `
     <div class="summary-row" style="
       display:flex;
@@ -577,33 +730,19 @@ export async function sendTenantContactTestEmail({
       flex-wrap:wrap;
       margin:0 0 20px;
     ">
-      <span class="summary-pill" style="
-        display:inline-block;
-        padding:8px 11px;
-        border-radius:999px;
-        background:#eff6ff;
-        border:1px solid #bfdbfe;
-        color:#1d4ed8;
-        font-size:12px;
-        line-height:1.2;
-        font-weight:900;
-      ">
-        Tenant: ${escapeHtml(safeTenantSlug)}
-      </span>
+      ${renderSummaryPill({
+        label: `Tenant: ${safeTenantSlug}`,
+        background: brand.advancedBranding ? `${brand.primaryColour}14` : "#eff6ff",
+        border: brand.advancedBranding ? `${brand.primaryColour}40` : "#bfdbfe",
+        colour: brand.advancedBranding ? brand.primaryColour : "#1d4ed8",
+      })}
 
-      <span class="summary-pill" style="
-        display:inline-block;
-        padding:8px 11px;
-        border-radius:999px;
-        background:#fffbeb;
-        border:1px solid #fde68a;
-        color:#92400e;
-        font-size:12px;
-        line-height:1.2;
-        font-weight:900;
-      ">
-        Contact email test
-      </span>
+      ${renderSummaryPill({
+        label: "Contact email test",
+        background: brand.advancedBranding ? `${brand.accentColour}18` : "#fffbeb",
+        border: brand.advancedBranding ? `${brand.accentColour}55` : "#fde68a",
+        colour: brand.advancedBranding ? "#0f172a" : "#92400e",
+      })}
     </div>
   `;
 
@@ -701,10 +840,15 @@ export async function sendTenantContactTestEmail({
     noticeHtml,
     footer:
       "Sent automatically by the SO Fundraising Platform branding settings page.",
+    brand,
   });
 
+  const fromName = brand.advancedBranding
+    ? `${brand.displayName} Contact Test`
+    : "SO Fundraising Contact Test";
+
   const result = await resend.emails.send({
-    from: `SO Fundraising Contact Test <${fromEmail}>`,
+    from: `${fromName} <${fromEmail}>`,
     to,
     subject: `[SO Fundraising] Contact email test for ${safeTenantDisplayName}`,
     html,
