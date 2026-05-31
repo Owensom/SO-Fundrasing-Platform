@@ -43,6 +43,8 @@ type SessionUserWithTenants = {
 
 type TenantCampaignSettings = {
   subscription_tier?: string | null;
+  subscription_status?: string | null;
+  platform_owner_bypass?: boolean | null;
 };
 
 type HighlightedCampaignSettings = {
@@ -74,6 +76,23 @@ function normaliseHexColour(value: unknown, fallback: string) {
   return fallback;
 }
 
+function hexToRgb(hex: string) {
+  const clean = normaliseHexColour(hex, "#0F172A").replace("#", "");
+
+  return {
+    r: Number.parseInt(clean.slice(0, 2), 16),
+    g: Number.parseInt(clean.slice(2, 4), 16),
+    b: Number.parseInt(clean.slice(4, 6), 16),
+  };
+}
+
+function getReadableTextColour(background: string) {
+  const { r, g, b } = hexToRgb(background);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+  return luminance > 0.62 ? "#0f172a" : "#ffffff";
+}
+
 function normaliseFocus(value: number | null | undefined) {
   const number = Number(value);
 
@@ -91,7 +110,17 @@ function getDefaultImage(type: Campaign["type"]) {
   return "/brand/so-logo-full.png";
 }
 
-function getCampaignImageSrc(campaign: Campaign) {
+function getCampaignImageSrc({
+  campaign,
+  canUseCampaignImages,
+}: {
+  campaign: Campaign;
+  canUseCampaignImages: boolean;
+}) {
+  if (!canUseCampaignImages) {
+    return getDefaultImage(campaign.type);
+  }
+
   return cleanText(campaign.imageUrl) || getDefaultImage(campaign.type);
 }
 
@@ -101,9 +130,15 @@ function isDefaultBrandImage(imageUrl: string | null | undefined) {
   return !clean || clean.includes("/brand/so-default-");
 }
 
-function getImageStyle(campaign: Campaign): CSSProperties {
-  const imageUrl = cleanText(campaign.imageUrl);
-  const defaultImage = isDefaultBrandImage(imageUrl);
+function getImageStyle({
+  campaign,
+  canUseCampaignImages,
+}: {
+  campaign: Campaign;
+  canUseCampaignImages: boolean;
+}): CSSProperties {
+  const imageSrc = getCampaignImageSrc({ campaign, canUseCampaignImages });
+  const defaultImage = isDefaultBrandImage(imageSrc);
 
   return {
     width: "100%",
@@ -216,6 +251,15 @@ function getTypeStyle(type: Campaign["type"]): CSSProperties {
     color: "#92400e",
     borderColor: "#fde68a",
   };
+}
+
+function getTypeIcon(type: Campaign["type"]) {
+  if (type === "raffle") return "✦";
+  if (type === "squares") return "▦";
+  if (type === "event") return "◷";
+  if (type === "auction") return "⌁";
+
+  return "•";
 }
 
 function getSafeAdminReturn(value?: string) {
@@ -369,6 +413,14 @@ export default async function TenantCampaignsPage({
     tenantSettings?.subscription_tier,
   );
 
+  const advancedBrandingCapability = checkSubscriptionCapability(
+    tenantSettings,
+    "advanced_branding",
+  );
+
+  const canUseAdvancedBranding = advancedBrandingCapability.allowed;
+  const canUseCampaignImages = subscriptionTier !== "community";
+
   const maxPublicCampaigns = getMaximumActiveCampaignsForTier(subscriptionTier);
 
   const auctionCapability = checkSubscriptionCapability(
@@ -419,57 +471,109 @@ export default async function TenantCampaignsPage({
     cleanText(brandingSettings?.public_tagline) ||
     `Browse live ${campaignTypeNames} for this organisation. You can view a campaign to take part, or make a simple donation through the support flow.`;
 
-  const publicLogoUrl = cleanText(brandingSettings?.public_logo_url);
-  const publicLogoMarkUrl = cleanText(brandingSettings?.public_logo_mark_url);
-  const publicFooterText = cleanText(brandingSettings?.public_footer_text);
+  const publicFooterText = canUseAdvancedBranding
+    ? cleanText(brandingSettings?.public_footer_text)
+    : "";
 
-  const primaryColour = normaliseHexColour(
-    brandingSettings?.public_primary_colour,
-    "#1683F8",
-  );
+  const publicLogoUrl = canUseAdvancedBranding
+    ? cleanText(brandingSettings?.public_logo_url)
+    : "";
 
-  const accentColour = normaliseHexColour(
-    brandingSettings?.public_accent_colour,
-    "#FACC15",
-  );
+  const publicLogoMarkUrl = canUseAdvancedBranding
+    ? cleanText(brandingSettings?.public_logo_mark_url)
+    : "";
+
+  const primaryColour = canUseAdvancedBranding
+    ? normaliseHexColour(brandingSettings?.public_primary_colour, "#1683F8")
+    : "#1683F8";
+
+  const accentColour = canUseAdvancedBranding
+    ? normaliseHexColour(brandingSettings?.public_accent_colour, "#FACC15")
+    : "#FACC15";
 
   const brandLogoSrc = publicLogoMarkUrl || publicLogoUrl;
+  const primaryTextColour = getReadableTextColour(primaryColour);
+  const accentTextColour = getReadableTextColour(accentColour);
 
-  const brandedPageStyle: CSSProperties = {
-    ...styles.page,
-    background: `radial-gradient(circle at top left, ${primaryColour}16, transparent 34%), radial-gradient(circle at top right, ${accentColour}18, transparent 30%), #f8fafc`,
-  };
+  const brandedPageStyle: CSSProperties = canUseAdvancedBranding
+    ? {
+        ...styles.page,
+        background: `radial-gradient(circle at top left, ${primaryColour}12, transparent 32%), radial-gradient(circle at top right, ${accentColour}14, transparent 30%), linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%)`,
+      }
+    : {
+        ...styles.page,
+        background:
+          "radial-gradient(circle at top left, rgba(37,99,235,0.10), transparent 34%), radial-gradient(circle at top right, rgba(250,204,21,0.08), transparent 30%), #f8fafc",
+      };
 
-  const brandedHeroStyle: CSSProperties = {
-    ...styles.hero,
-    background: `radial-gradient(circle at bottom right, ${primaryColour}30, transparent 42%), radial-gradient(circle at top left, ${accentColour}14, transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #172554 100%)`,
-  };
+  const brandedHeroStyle: CSSProperties = canUseAdvancedBranding
+    ? {
+        ...styles.hero,
+        background: `
+          radial-gradient(circle at 88% 92%, ${primaryColour}72, transparent 31%),
+          radial-gradient(circle at 12% 14%, ${accentColour}3D, transparent 28%),
+          linear-gradient(126deg, #060816 0%, #0f172a 42%, ${primaryColour}72 100%)
+        `,
+      }
+    : {
+        ...styles.hero,
+        background:
+          "radial-gradient(circle at bottom right, rgba(37,99,235,0.28), transparent 42%), radial-gradient(circle at top left, rgba(250,204,21,0.12), transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #172554 100%)",
+      };
 
-  const brandedPrimaryActionStyle: CSSProperties = {
-    ...styles.primaryAction,
-    background: `linear-gradient(135deg, ${primaryColour} 0%, #2563eb 100%)`,
-    border: `1px solid ${primaryColour}`,
-    boxShadow: `0 12px 24px ${primaryColour}36`,
-  };
+  const brandedPrimaryActionStyle: CSSProperties = canUseAdvancedBranding
+    ? {
+        ...styles.primaryAction,
+        background: `linear-gradient(135deg, ${primaryColour} 0%, ${accentColour} 135%)`,
+        border: `1px solid ${primaryColour}`,
+        color: primaryTextColour,
+        boxShadow: `0 18px 34px ${primaryColour}36`,
+      }
+    : {
+        ...styles.primaryAction,
+        background: "linear-gradient(135deg, #1683F8 0%, #2563eb 100%)",
+        border: "1px solid #1683F8",
+        color: "#ffffff",
+        boxShadow: "0 18px 34px rgba(22,131,248,0.22)",
+      };
 
   const brandedGhostActionStyle: CSSProperties = {
     ...styles.secondaryAction,
-    borderColor: `${primaryColour}66`,
-  };
-
-  const brandedContactButtonStyle: CSSProperties = {
-    ...styles.contactStripButton,
-    background: `linear-gradient(135deg, ${primaryColour} 0%, #2563eb 100%)`,
-    border: `1px solid ${primaryColour}`,
-    boxShadow: `0 12px 24px ${primaryColour}28`,
-  };
-
-  const activeFilterStyle: CSSProperties = {
-    ...styles.filterButtonActive,
-    background: primaryColour,
-    borderColor: primaryColour,
+    borderColor: canUseAdvancedBranding ? `${primaryColour}55` : "#cbd5e1",
     color: "#0f172a",
   };
+
+  const brandedContactButtonStyle: CSSProperties = canUseAdvancedBranding
+    ? {
+        ...styles.contactStripButton,
+        background: `linear-gradient(135deg, ${primaryColour} 0%, ${accentColour} 130%)`,
+        border: `1px solid ${primaryColour}`,
+        color: primaryTextColour,
+        boxShadow: `0 18px 34px ${primaryColour}28`,
+      }
+    : {
+        ...styles.contactStripButton,
+        background: "linear-gradient(135deg, #1683F8 0%, #2563eb 100%)",
+        border: "1px solid #1683F8",
+        color: "#ffffff",
+        boxShadow: "0 18px 34px rgba(22,131,248,0.20)",
+      };
+
+  const activeFilterStyle: CSSProperties = canUseAdvancedBranding
+    ? {
+        ...styles.filterButtonActive,
+        background: `linear-gradient(135deg, ${primaryColour} 0%, ${accentColour} 135%)`,
+        borderColor: primaryColour,
+        color: primaryTextColour,
+        boxShadow: `0 14px 28px ${primaryColour}2E`,
+      }
+    : {
+        ...styles.filterButtonActive,
+        background: "#0f172a",
+        borderColor: "#0f172a",
+        color: "#ffffff",
+        boxShadow: "0 12px 24px rgba(15,23,42,0.16)",
+      };
 
   return (
     <main className="tenant-campaigns-page" style={brandedPageStyle}>
@@ -481,7 +585,9 @@ export default async function TenantCampaignsPage({
             className="brandLogoPlate"
             style={{
               ...styles.brandLogoPlate,
-              borderColor: `${accentColour}66`,
+              borderColor: canUseAdvancedBranding
+                ? `${accentColour}66`
+                : "rgba(226,232,240,0.96)",
             }}
           >
             {brandLogoSrc ? (
@@ -491,14 +597,18 @@ export default async function TenantCampaignsPage({
                 style={styles.brandLogo}
               />
             ) : (
-              <span style={styles.brandLogoFallback}>
-                {publicDisplayName.slice(0, 2).toUpperCase()}
-              </span>
+              <img
+                src="/brand/so-logo-mark.png"
+                alt="SO Fundraising Platform"
+                style={styles.brandLogo}
+              />
             )}
           </div>
 
           <div style={styles.brandCopy}>
-            <h1 style={styles.brandTitle}>{publicDisplayName}</h1>
+            <h1 className="brandTitle" style={styles.brandTitle}>
+              {publicDisplayName}
+            </h1>
             <p style={styles.brandTagline}>{publicTagline}</p>
           </div>
         </div>
@@ -507,36 +617,89 @@ export default async function TenantCampaignsPage({
           className="brandFeature"
           style={{
             ...styles.brandFeature,
-            borderColor: `${accentColour}78`,
-            background: `linear-gradient(135deg, ${accentColour}12, #ffffff 78%)`,
+            borderColor: canUseAdvancedBranding
+              ? `${accentColour}78`
+              : "rgba(191,219,254,0.72)",
+            background: canUseAdvancedBranding
+              ? `linear-gradient(135deg, ${accentColour}12, #ffffff 78%)`
+              : "linear-gradient(135deg, rgba(239,246,255,0.92), #ffffff 78%)",
           }}
         >
-          <span style={styles.brandFeatureKicker}>Campaign hub</span>
-
-          <strong style={styles.brandFeatureTitle}>
-            {pluralise(publicCampaigns.length, "live campaign", "live campaigns")}
-          </strong>
-
-          <span style={styles.brandFeatureText}>
-            {featuredCampaign
-              ? `Featuring ${featuredCampaign.title}.`
-              : "Published campaigns will appear here when available."}
+          <span
+            style={{
+              ...styles.brandFeatureIcon,
+              color: canUseAdvancedBranding ? primaryColour : "#2563eb",
+            }}
+          >
+            ✦
           </span>
+
+          <div style={styles.brandFeatureCopy}>
+            <span
+              style={{
+                ...styles.brandFeatureKicker,
+                color: canUseAdvancedBranding ? primaryColour : "#2563eb",
+              }}
+            >
+              Campaign hub
+            </span>
+
+            <strong style={styles.brandFeatureTitle}>
+              {pluralise(
+                publicCampaigns.length,
+                "live campaign",
+                "live campaigns",
+              )}
+            </strong>
+
+            <span style={styles.brandFeatureText}>
+              {featuredCampaign
+                ? `Featuring ${featuredCampaign.title}.`
+                : "Published campaigns will appear here when available."}
+            </span>
+          </div>
         </div>
       </section>
 
       <section className="campaigns-hero" style={brandedHeroStyle}>
         <div style={styles.heroGlow} />
-        <div style={styles.heroLineOne} />
-        <div style={styles.heroLineTwo} />
+        <div
+          style={{
+            ...styles.heroLineOne,
+            borderColor: canUseAdvancedBranding
+              ? `${accentColour}28`
+              : "rgba(250,204,21,0.18)",
+          }}
+        />
+        <div
+          style={{
+            ...styles.heroLineTwo,
+            borderColor: canUseAdvancedBranding
+              ? `${primaryColour}24`
+              : "rgba(37,99,235,0.18)",
+          }}
+        />
+        <div
+          style={{
+            ...styles.heroDotWash,
+            backgroundImage: `radial-gradient(${
+              canUseAdvancedBranding ? `${accentColour}55` : "rgba(250,204,21,0.38)"
+            } 1px, transparent 1px)`,
+          }}
+        />
 
         <div className="heroMainGrid" style={styles.heroMainGrid}>
           <div style={styles.heroCopy}>
             <div
               style={{
                 ...styles.eyebrow,
-                color: accentColour,
-                borderColor: `${accentColour}CC`,
+                color: canUseAdvancedBranding ? accentColour : "#facc15",
+                borderColor: canUseAdvancedBranding
+                  ? `${accentColour}B8`
+                  : "rgba(250,204,21,0.78)",
+                background: canUseAdvancedBranding
+                  ? `${primaryColour}20`
+                  : "rgba(15,23,42,0.34)",
               }}
             >
               Public campaign hub
@@ -550,18 +713,48 @@ export default async function TenantCampaignsPage({
             </p>
 
             <div className="heroStats" style={styles.heroStats}>
-              <HeroStat label="Live campaigns" value={publicCampaigns.length} />
-              <HeroStat label="Raffles" value={raffles.length} />
-              <HeroStat label="Squares" value={squares.length} />
-              <HeroStat label="Events" value={events.length} />
+              <HeroStat
+                label="Live campaigns"
+                value={publicCampaigns.length}
+                icon="↗"
+                accentColour={canUseAdvancedBranding ? accentColour : "#facc15"}
+              />
+              <HeroStat
+                label="Raffles"
+                value={raffles.length}
+                icon={getTypeIcon("raffle")}
+                accentColour={canUseAdvancedBranding ? accentColour : "#facc15"}
+              />
+              <HeroStat
+                label="Squares"
+                value={squares.length}
+                icon={getTypeIcon("squares")}
+                accentColour={canUseAdvancedBranding ? accentColour : "#facc15"}
+              />
+              <HeroStat
+                label="Events"
+                value={events.length}
+                icon={getTypeIcon("event")}
+                accentColour={canUseAdvancedBranding ? accentColour : "#facc15"}
+              />
               {auctionCapability.allowed ? (
-                <HeroStat label="Auctions" value={auctions.length} />
+                <HeroStat
+                  label="Auctions"
+                  value={auctions.length}
+                  icon={getTypeIcon("auction")}
+                  accentColour={
+                    canUseAdvancedBranding ? accentColour : "#facc15"
+                  }
+                />
               ) : null}
             </div>
           </div>
 
           <div style={styles.supportPanel}>
-            <h2 style={styles.supportPanelTitle}>Support options</h2>
+            <div style={styles.supportPanelHeader}>
+              <span style={styles.supportPanelKicker}>Ways to help</span>
+              <h2 style={styles.supportPanelTitle}>Support options</h2>
+            </div>
 
             <div style={styles.supportOptionList}>
               <Link
@@ -575,8 +768,13 @@ export default async function TenantCampaignsPage({
                 <div
                   style={{
                     ...styles.supportIcon,
-                    background: `${primaryColour}26`,
-                    borderColor: `${primaryColour}66`,
+                    background: canUseAdvancedBranding
+                      ? `linear-gradient(135deg, ${primaryColour}, ${accentColour})`
+                      : "linear-gradient(135deg, #1683F8, #2563eb)",
+                    borderColor: canUseAdvancedBranding
+                      ? `${primaryColour}55`
+                      : "rgba(147,197,253,0.45)",
+                    color: canUseAdvancedBranding ? primaryTextColour : "#ffffff",
                   }}
                 >
                   →
@@ -586,6 +784,8 @@ export default async function TenantCampaignsPage({
                   <strong>See campaign</strong>
                   <span>Open the campaign page to enter, buy, bid or book.</span>
                 </div>
+
+                <span style={styles.supportChevron}>›</span>
               </Link>
 
               <Link
@@ -602,8 +802,13 @@ export default async function TenantCampaignsPage({
                 <div
                   style={{
                     ...styles.supportIcon,
-                    background: `${accentColour}24`,
-                    borderColor: `${accentColour}78`,
+                    background: canUseAdvancedBranding
+                      ? `linear-gradient(135deg, ${accentColour}, ${primaryColour})`
+                      : "linear-gradient(135deg, #FACC15, #1683F8)",
+                    borderColor: canUseAdvancedBranding
+                      ? `${accentColour}66`
+                      : "rgba(250,204,21,0.50)",
+                    color: canUseAdvancedBranding ? accentTextColour : "#0f172a",
                   }}
                 >
                   ♥
@@ -613,6 +818,8 @@ export default async function TenantCampaignsPage({
                   <strong>Support campaign</strong>
                   <span>Make a simple donation without receiving an entry.</span>
                 </div>
+
+                <span style={styles.supportChevron}>›</span>
               </Link>
 
               <Link
@@ -623,7 +830,8 @@ export default async function TenantCampaignsPage({
                   style={{
                     ...styles.supportIcon,
                     background: "rgba(255,255,255,0.12)",
-                    borderColor: "rgba(191,219,254,0.42)",
+                    borderColor: "rgba(255,255,255,0.25)",
+                    color: "#ffffff",
                   }}
                 >
                   ✉
@@ -631,8 +839,12 @@ export default async function TenantCampaignsPage({
 
                 <div style={styles.supportOptionCopy}>
                   <strong>Contact organiser</strong>
-                  <span>Ask the charity or organiser a public support question.</span>
+                  <span>
+                    Ask the charity or organiser a public support question.
+                  </span>
                 </div>
+
+                <span style={styles.supportChevron}>›</span>
               </Link>
             </div>
           </div>
@@ -648,8 +860,28 @@ export default async function TenantCampaignsPage({
       </section>
 
       <section className="contactStrip" style={styles.contactStrip}>
+        <div
+          style={{
+            ...styles.contactStripIcon,
+            background: canUseAdvancedBranding
+              ? `${primaryColour}12`
+              : "rgba(37,99,235,0.10)",
+            color: canUseAdvancedBranding ? primaryColour : "#2563eb",
+            borderColor: canUseAdvancedBranding
+              ? `${primaryColour}24`
+              : "rgba(37,99,235,0.18)",
+          }}
+        >
+          ✉
+        </div>
+
         <div style={styles.contactStripCopy}>
-          <p style={{ ...styles.contactStripKicker, color: primaryColour }}>
+          <p
+            style={{
+              ...styles.contactStripKicker,
+              color: canUseAdvancedBranding ? primaryColour : "#2563eb",
+            }}
+          >
             Need help from the organiser?
           </p>
 
@@ -673,9 +905,15 @@ export default async function TenantCampaignsPage({
         <section className="featuredCard" style={styles.featuredCard}>
           <div style={styles.featuredImageWrap}>
             <img
-              src={getCampaignImageSrc(featuredCampaign)}
+              src={getCampaignImageSrc({
+                campaign: featuredCampaign,
+                canUseCampaignImages,
+              })}
               alt={featuredCampaign.title}
-              style={getImageStyle(featuredCampaign)}
+              style={getImageStyle({
+                campaign: featuredCampaign,
+                canUseCampaignImages,
+              })}
             />
           </div>
 
@@ -684,7 +922,7 @@ export default async function TenantCampaignsPage({
               <span
                 style={{
                   ...styles.featuredKicker,
-                  color: "#92400e",
+                  color: canUseAdvancedBranding ? primaryColour : "#2563eb",
                 }}
               >
                 ★ Featured campaign
@@ -693,8 +931,12 @@ export default async function TenantCampaignsPage({
               <span
                 style={{
                   ...styles.statusPill,
-                  background: `${accentColour}20`,
-                  borderColor: `${accentColour}78`,
+                  background: canUseAdvancedBranding
+                    ? `${accentColour}20`
+                    : "#dcfce7",
+                  borderColor: canUseAdvancedBranding
+                    ? `${accentColour}78`
+                    : "#bbf7d0",
                   color: "#0f172a",
                 }}
               >
@@ -755,7 +997,12 @@ export default async function TenantCampaignsPage({
       <section className="filtersCard" style={styles.filtersCard}>
         <div style={styles.filtersHeader}>
           <div>
-            <p style={{ ...styles.kicker, color: primaryColour }}>
+            <p
+              style={{
+                ...styles.kicker,
+                color: canUseAdvancedBranding ? primaryColour : "#2563eb",
+              }}
+            >
               Filter campaigns
             </p>
             <h2 style={styles.sectionTitle}>Live campaigns</h2>
@@ -764,8 +1011,12 @@ export default async function TenantCampaignsPage({
           <span
             style={{
               ...styles.countPill,
-              borderColor: `${accentColour}78`,
-              background: `${accentColour}1A`,
+              borderColor: canUseAdvancedBranding
+                ? `${accentColour}78`
+                : "#bfdbfe",
+              background: canUseAdvancedBranding
+                ? `${accentColour}1A`
+                : "#eff6ff",
             }}
           >
             {pluralise(visibleCampaigns.length, "campaign", "campaigns")}
@@ -780,7 +1031,7 @@ export default async function TenantCampaignsPage({
               ...(activeType === "all" ? activeFilterStyle : {}),
             }}
           >
-            All
+            <span>All</span>
           </Link>
 
           <Link
@@ -790,7 +1041,8 @@ export default async function TenantCampaignsPage({
               ...(activeType === "raffle" ? activeFilterStyle : {}),
             }}
           >
-            Raffles
+            <span>{getTypeIcon("raffle")}</span>
+            <span>Raffles</span>
           </Link>
 
           <Link
@@ -800,7 +1052,8 @@ export default async function TenantCampaignsPage({
               ...(activeType === "squares" ? activeFilterStyle : {}),
             }}
           >
-            Squares
+            <span>{getTypeIcon("squares")}</span>
+            <span>Squares</span>
           </Link>
 
           <Link
@@ -810,7 +1063,8 @@ export default async function TenantCampaignsPage({
               ...(activeType === "event" ? activeFilterStyle : {}),
             }}
           >
-            Events
+            <span>{getTypeIcon("event")}</span>
+            <span>Events</span>
           </Link>
 
           {auctionCapability.allowed ? (
@@ -821,7 +1075,8 @@ export default async function TenantCampaignsPage({
                 ...(activeType === "auction" ? activeFilterStyle : {}),
               }}
             >
-              Auctions
+              <span>{getTypeIcon("auction")}</span>
+              <span>Auctions</span>
             </Link>
           ) : null}
         </nav>
@@ -834,31 +1089,56 @@ export default async function TenantCampaignsPage({
       >
         {visibleCampaigns.length === 0 ? (
           <div style={styles.emptyCard}>
-            <h2 style={styles.emptyTitle}>No live campaigns found</h2>
-
-            <p style={styles.emptyText}>
-              There are no published campaigns in this category yet.
-            </p>
-
-            <Link
-              href={getContactUrl({ tenantSlug })}
+            <div
               style={{
-                ...styles.contactAction,
-                justifySelf: "center",
-                marginTop: 12,
+                ...styles.emptyIcon,
+                background: canUseAdvancedBranding
+                  ? `${primaryColour}12`
+                  : "rgba(37,99,235,0.10)",
+                color: canUseAdvancedBranding ? primaryColour : "#2563eb",
+                borderColor: canUseAdvancedBranding
+                  ? `${primaryColour}24`
+                  : "rgba(37,99,235,0.18)",
               }}
             >
-              Contact organiser
-            </Link>
+              ✦
+            </div>
+
+            <h2 style={styles.emptyTitle}>Campaigns coming soon</h2>
+
+            <p style={styles.emptyText}>
+              This organiser is preparing their next fundraising campaign. You
+              can contact the organiser or make a simple donation to support
+              them now.
+            </p>
+
+            <div className="emptyActions" style={styles.emptyActions}>
+              <Link
+                href={getContactUrl({ tenantSlug })}
+                style={brandedPrimaryActionStyle}
+              >
+                Contact organiser →
+              </Link>
+
+              <Link href={`/c/${tenantSlug}/support`} style={styles.emptyGhost}>
+                Make a donation
+              </Link>
+            </div>
           </div>
         ) : (
           visibleCampaigns.map((campaign) => (
             <article key={`${campaign.type}-${campaign.id}`} style={styles.card}>
               <div style={styles.cardImageWrap}>
                 <img
-                  src={getCampaignImageSrc(campaign)}
+                  src={getCampaignImageSrc({
+                    campaign,
+                    canUseCampaignImages,
+                  })}
                   alt={campaign.title}
-                  style={getImageStyle(campaign)}
+                  style={getImageStyle({
+                    campaign,
+                    canUseCampaignImages,
+                  })}
                 />
               </div>
 
@@ -870,7 +1150,7 @@ export default async function TenantCampaignsPage({
                       ...getTypeStyle(campaign.type),
                     }}
                   >
-                    {getTypeLabel(campaign.type)}
+                    {getTypeIcon(campaign.type)} {getTypeLabel(campaign.type)}
                   </span>
 
                   <span style={styles.statusPill}>Live</span>
@@ -926,9 +1206,20 @@ export default async function TenantCampaignsPage({
   );
 }
 
-function HeroStat({ label, value }: { label: string; value: number }) {
+function HeroStat({
+  label,
+  value,
+  icon,
+  accentColour,
+}: {
+  label: string;
+  value: number;
+  icon: string;
+  accentColour: string;
+}) {
   return (
     <div style={styles.heroStat}>
+      <span style={{ ...styles.heroStatIcon, color: accentColour }}>{icon}</span>
       <span style={styles.heroStatLabel}>{label}</span>
       <strong style={styles.heroStatValue}>{value}</strong>
     </div>
@@ -1032,7 +1323,7 @@ const responsiveStyles = `
 
   .tenant-campaigns-page .supportOptionLink,
   .tenant-campaigns-page .supportOption {
-    grid-template-columns: 44px minmax(0, 1fr) !important;
+    grid-template-columns: 44px minmax(0, 1fr) 18px !important;
   }
 
   .tenant-campaigns-page .featuredCard {
@@ -1044,7 +1335,8 @@ const responsiveStyles = `
     min-height: 210px !important;
   }
 
-  .tenant-campaigns-page .primaryActionRow {
+  .tenant-campaigns-page .primaryActionRow,
+  .tenant-campaigns-page .emptyActions {
     grid-template-columns: 1fr !important;
   }
 
@@ -1060,7 +1352,8 @@ const responsiveStyles = `
   .tenant-campaigns-page .contactAction,
   .tenant-campaigns-page .contactStripButton,
   .tenant-campaigns-page .adminReturnButton,
-  .tenant-campaigns-page .filterButton {
+  .tenant-campaigns-page .filterButton,
+  .tenant-campaigns-page .emptyGhost {
     width: 100% !important;
     justify-content: center !important;
     text-align: center !important;
@@ -1082,22 +1375,23 @@ const styles: Record<string, CSSProperties> = {
 
   brandHeader: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(250px, 0.34fr)",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(270px, 0.35fr)",
     gap: 14,
     alignItems: "stretch",
     padding: 14,
-    borderRadius: 24,
-    background: "rgba(255,255,255,0.94)",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 14px 38px rgba(15,23,42,0.07)",
-    marginBottom: 12,
+    borderRadius: 28,
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(248,250,252,0.94))",
+    border: "1px solid rgba(226,232,240,0.92)",
+    boxShadow: "0 18px 44px rgba(15,23,42,0.075)",
+    marginBottom: 14,
     backdropFilter: "blur(14px)",
   },
 
   brandIdentity: {
     display: "grid",
-    gridTemplateColumns: "72px minmax(0, 1fr)",
-    gap: 14,
+    gridTemplateColumns: "78px minmax(0, 1fr)",
+    gap: 16,
     alignItems: "center",
     minWidth: 0,
   },
@@ -1107,16 +1401,16 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    width: 72,
-    height: 72,
-    borderRadius: 20,
+    width: 78,
+    height: 78,
+    borderRadius: 22,
     padding: 8,
     overflow: "hidden",
     background:
       "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(248,250,252,0.94))",
     border: "1px solid rgba(226,232,240,0.96)",
     boxShadow:
-      "0 12px 28px rgba(15,23,42,0.12), inset 0 1px 0 rgba(255,255,255,0.92)",
+      "0 14px 30px rgba(15,23,42,0.12), inset 0 1px 0 rgba(255,255,255,0.92)",
     isolation: "isolate",
   },
 
@@ -1127,23 +1421,16 @@ const styles: Record<string, CSSProperties> = {
     objectFit: "contain",
   },
 
-  brandLogoFallback: {
-    color: "#0f172a",
-    fontSize: 22,
-    fontWeight: 950,
-    letterSpacing: "-0.05em",
-  },
-
   brandCopy: {
     display: "grid",
-    gap: 4,
+    gap: 5,
     minWidth: 0,
   },
 
   brandTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: "clamp(34px, 5vw, 54px)",
+    fontSize: "clamp(34px, 5vw, 56px)",
     lineHeight: 0.94,
     letterSpacing: "-0.075em",
     overflowWrap: "anywhere",
@@ -1160,16 +1447,36 @@ const styles: Record<string, CSSProperties> = {
 
   brandFeature: {
     display: "grid",
-    gap: 5,
-    alignContent: "center",
-    padding: 12,
-    borderRadius: 18,
+    gridTemplateColumns: "46px minmax(0, 1fr)",
+    gap: 11,
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 22,
     border: "1px solid",
+    minWidth: 0,
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.72)",
+  },
+
+  brandFeatureIcon: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.72)",
+    border: "1px solid rgba(226,232,240,0.82)",
+    fontSize: 18,
+    fontWeight: 950,
+  },
+
+  brandFeatureCopy: {
+    display: "grid",
+    gap: 4,
     minWidth: 0,
   },
 
   brandFeatureKicker: {
-    color: "#92400e",
     fontSize: 10,
     fontWeight: 950,
     textTransform: "uppercase",
@@ -1178,9 +1485,9 @@ const styles: Record<string, CSSProperties> = {
 
   brandFeatureTitle: {
     color: "#0f172a",
-    fontSize: 18,
-    lineHeight: 1.1,
-    letterSpacing: "-0.04em",
+    fontSize: 19,
+    lineHeight: 1.08,
+    letterSpacing: "-0.045em",
     overflowWrap: "anywhere",
   },
 
@@ -1188,20 +1495,20 @@ const styles: Record<string, CSSProperties> = {
     color: "#475569",
     fontSize: 12,
     lineHeight: 1.35,
-    fontWeight: 750,
+    fontWeight: 760,
   },
 
   hero: {
     position: "relative",
     display: "grid",
     gap: 16,
-    padding: 22,
-    borderRadius: 24,
+    padding: 24,
+    borderRadius: 30,
     color: "#ffffff",
     marginBottom: 0,
-    boxShadow: "0 22px 52px rgba(15,23,42,0.22)",
+    boxShadow: "0 28px 66px rgba(15,23,42,0.24)",
     overflow: "hidden",
-    border: "1px solid rgba(148,163,184,0.22)",
+    border: "1px solid rgba(255,255,255,0.16)",
   },
 
   heroGlow: {
@@ -1209,7 +1516,7 @@ const styles: Record<string, CSSProperties> = {
     inset: 0,
     pointerEvents: "none",
     background:
-      "radial-gradient(circle at 18% 24%, rgba(255,255,255,0.07), transparent 30%)",
+      "radial-gradient(circle at 20% 18%, rgba(255,255,255,0.09), transparent 30%)",
   },
 
   heroLineOne: {
@@ -1218,7 +1525,7 @@ const styles: Record<string, CSSProperties> = {
     bottom: -130,
     width: 330,
     height: 330,
-    border: "1px solid rgba(250,204,21,0.18)",
+    border: "1px solid",
     borderRadius: "999px",
     pointerEvents: "none",
   },
@@ -1229,17 +1536,29 @@ const styles: Record<string, CSSProperties> = {
     bottom: -180,
     width: 440,
     height: 440,
-    border: "1px solid rgba(250,204,21,0.09)",
+    border: "1px solid",
     borderRadius: "999px",
     pointerEvents: "none",
+  },
+
+  heroDotWash: {
+    position: "absolute",
+    right: -80,
+    bottom: -80,
+    width: 360,
+    height: 260,
+    backgroundSize: "14px 14px",
+    opacity: 0.42,
+    pointerEvents: "none",
+    maskImage: "radial-gradient(circle, black, transparent 70%)",
   },
 
   heroMainGrid: {
     position: "relative",
     zIndex: 1,
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.08fr) minmax(270px, 0.82fr)",
-    gap: 18,
+    gridTemplateColumns: "minmax(0, 1.08fr) minmax(280px, 0.82fr)",
+    gap: 20,
     alignItems: "stretch",
     minWidth: 0,
   },
@@ -1250,57 +1569,73 @@ const styles: Record<string, CSSProperties> = {
 
   eyebrow: {
     display: "inline-flex",
-    padding: "7px 12px",
+    padding: "8px 13px",
     borderRadius: 999,
-    background: "rgba(15,23,42,0.36)",
     border: "1px solid",
     fontSize: 11,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.1em",
-    marginBottom: 11,
+    marginBottom: 13,
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
   },
 
   heroTitle: {
     margin: 0,
-    maxWidth: 660,
-    fontSize: "clamp(38px, 6vw, 60px)",
-    lineHeight: 0.94,
-    letterSpacing: "-0.075em",
+    maxWidth: 670,
+    fontSize: "clamp(42px, 6vw, 66px)",
+    lineHeight: 0.92,
+    letterSpacing: "-0.078em",
     overflowWrap: "anywhere",
-    textShadow: "0 18px 45px rgba(0,0,0,0.22)",
+    textShadow: "0 18px 45px rgba(0,0,0,0.28)",
   },
 
   subtitle: {
-    margin: "11px 0 0",
-    maxWidth: 700,
-    color: "#dbeafe",
-    fontSize: 16,
-    lineHeight: 1.48,
-    fontWeight: 750,
+    margin: "13px 0 0",
+    maxWidth: 710,
+    color: "#e5edf8",
+    fontSize: 17,
+    lineHeight: 1.5,
+    fontWeight: 760,
     overflowWrap: "anywhere",
   },
 
   heroStats: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(112px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))",
     gap: 10,
-    marginTop: 16,
+    marginTop: 18,
   },
 
   heroStat: {
     display: "grid",
-    gap: 4,
-    padding: 11,
-    borderRadius: 16,
-    background: "rgba(255,255,255,0.09)",
-    border: "1px solid rgba(148,163,184,0.25)",
+    gridTemplateColumns: "26px minmax(0, 1fr)",
+    gridTemplateRows: "auto auto",
+    columnGap: 9,
+    rowGap: 3,
+    padding: 12,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.10)",
+    border: "1px solid rgba(255,255,255,0.16)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
     minWidth: 0,
-    overflowWrap: "normal",
+  },
+
+  heroStatIcon: {
+    gridRow: "1 / span 2",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 24,
+    height: 24,
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.10)",
+    fontSize: 13,
+    fontWeight: 950,
   },
 
   heroStatLabel: {
-    color: "#ffffff",
+    color: "#f8fafc",
     fontSize: 11,
     lineHeight: 1.15,
     fontWeight: 900,
@@ -1309,7 +1644,7 @@ const styles: Record<string, CSSProperties> = {
 
   heroStatValue: {
     color: "#ffffff",
-    fontSize: 22,
+    fontSize: 23,
     lineHeight: 1,
     fontWeight: 950,
     letterSpacing: "-0.04em",
@@ -1317,28 +1652,42 @@ const styles: Record<string, CSSProperties> = {
 
   supportPanel: {
     display: "grid",
-    gap: 11,
+    gap: 12,
     alignContent: "center",
-    padding: 17,
-    borderRadius: 22,
-    background: "rgba(255,255,255,0.08)",
-    border: "1px solid rgba(148,163,184,0.28)",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
-    backdropFilter: "blur(12px)",
+    padding: 19,
+    borderRadius: 26,
+    background: "rgba(255,255,255,0.105)",
+    border: "1px solid rgba(255,255,255,0.17)",
+    boxShadow:
+      "inset 0 1px 0 rgba(255,255,255,0.12), 0 18px 42px rgba(0,0,0,0.12)",
+    backdropFilter: "blur(14px)",
     minWidth: 0,
+  },
+
+  supportPanelHeader: {
+    display: "grid",
+    gap: 3,
+  },
+
+  supportPanelKicker: {
+    color: "#cbd5e1",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
   },
 
   supportPanelTitle: {
     margin: 0,
     color: "#ffffff",
-    fontSize: 22,
+    fontSize: 24,
     lineHeight: 1.05,
-    letterSpacing: "-0.04em",
+    letterSpacing: "-0.045em",
   },
 
   supportOptionList: {
     display: "grid",
-    gap: 9,
+    gap: 10,
   },
 
   supportOption: {
@@ -1355,15 +1704,17 @@ const styles: Record<string, CSSProperties> = {
 
   supportOptionLink: {
     display: "grid",
-    gridTemplateColumns: "48px minmax(0, 1fr)",
-    gap: 11,
+    gridTemplateColumns: "48px minmax(0, 1fr) 18px",
+    gap: 12,
     alignItems: "center",
-    padding: 12,
-    borderRadius: 16,
-    background: "rgba(255,255,255,0.13)",
-    border: "1px solid rgba(191,219,254,0.24)",
-    color: "#dbeafe",
+    padding: 13,
+    borderRadius: 18,
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.145), rgba(255,255,255,0.075))",
+    border: "1px solid rgba(255,255,255,0.18)",
+    color: "#e5edf8",
     textDecoration: "none",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
   },
 
   supportIcon: {
@@ -1372,11 +1723,11 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     width: 44,
     height: 44,
-    borderRadius: 14,
+    borderRadius: 16,
     border: "1px solid",
-    color: "#ffffff",
     fontSize: 18,
     fontWeight: 950,
+    boxShadow: "0 10px 22px rgba(0,0,0,0.16)",
   },
 
   supportOptionCopy: {
@@ -1387,6 +1738,13 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
   },
 
+  supportChevron: {
+    color: "rgba(255,255,255,0.72)",
+    fontSize: 25,
+    lineHeight: 1,
+    fontWeight: 700,
+  },
+
   heroActions: {
     position: "relative",
     zIndex: 1,
@@ -1394,8 +1752,8 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "flex-start",
     gap: 12,
     flexWrap: "wrap",
-    paddingTop: 14,
-    borderTop: "1px solid rgba(148,163,184,0.24)",
+    paddingTop: 15,
+    borderTop: "1px solid rgba(255,255,255,0.16)",
   },
 
   adminReturnButton: {
@@ -1403,28 +1761,40 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     minHeight: 42,
-    padding: "10px 15px",
+    padding: "10px 16px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.10)",
+    background: "rgba(255,255,255,0.11)",
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
-    border: "1px solid rgba(255,255,255,0.28)",
+    border: "1px solid rgba(255,255,255,0.26)",
   },
 
   contactStrip: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gridTemplateColumns: "52px minmax(0, 1fr) auto",
     gap: 14,
     alignItems: "center",
     padding: 16,
-    borderRadius: 22,
+    borderRadius: 24,
     background:
-      "linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.98) 62%, rgba(239,246,255,0.98) 100%)",
-    border: "1px solid #dbeafe",
-    boxShadow: "0 10px 28px rgba(15,23,42,0.055)",
+      "linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.98) 62%, rgba(241,245,249,0.98) 100%)",
+    border: "1px solid rgba(226,232,240,0.92)",
+    boxShadow: "0 16px 36px rgba(15,23,42,0.07)",
     margin: "14px 0 16px",
     minWidth: 0,
+  },
+
+  contactStripIcon: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 50,
+    height: 50,
+    borderRadius: 18,
+    border: "1px solid",
+    fontSize: 21,
+    fontWeight: 950,
   },
 
   contactStripCopy: {
@@ -1444,9 +1814,9 @@ const styles: Record<string, CSSProperties> = {
   contactStripTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 26,
+    fontSize: 27,
     lineHeight: 1.05,
-    letterSpacing: "-0.045em",
+    letterSpacing: "-0.05em",
     overflowWrap: "anywhere",
   },
 
@@ -1455,7 +1825,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     lineHeight: 1.5,
     fontSize: 14,
-    fontWeight: 750,
+    fontWeight: 760,
     overflowWrap: "anywhere",
   },
 
@@ -1463,10 +1833,9 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 44,
-    padding: "11px 16px",
+    minHeight: 46,
+    padding: "11px 17px",
     borderRadius: 999,
-    color: "#ffffff",
     textDecoration: "none",
     fontSize: 14,
     fontWeight: 950,
@@ -1478,10 +1847,10 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "minmax(300px, 0.96fr) minmax(0, 1.04fr)",
     gap: 18,
     padding: 15,
-    borderRadius: 26,
+    borderRadius: 28,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 16px 42px rgba(15,23,42,0.08)",
+    boxShadow: "0 18px 46px rgba(15,23,42,0.085)",
     margin: "12px 28px 16px",
     minWidth: 0,
     overflow: "hidden",
@@ -1492,7 +1861,7 @@ const styles: Record<string, CSSProperties> = {
   featuredImageWrap: {
     height: 230,
     minHeight: 230,
-    borderRadius: 20,
+    borderRadius: 22,
     overflow: "hidden",
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
@@ -1526,6 +1895,7 @@ const styles: Record<string, CSSProperties> = {
   typePill: {
     display: "inline-flex",
     alignItems: "center",
+    gap: 5,
     padding: "8px 12px",
     borderRadius: 999,
     border: "1px solid",
@@ -1560,7 +1930,7 @@ const styles: Record<string, CSSProperties> = {
     margin: 0,
     color: "#475569",
     lineHeight: 1.5,
-    fontWeight: 750,
+    fontWeight: 760,
     overflowWrap: "anywhere",
   },
 
@@ -1573,8 +1943,8 @@ const styles: Record<string, CSSProperties> = {
   miniMeta: {
     display: "grid",
     gap: 2,
-    padding: 9,
-    borderRadius: 13,
+    padding: 10,
+    borderRadius: 15,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     color: "#64748b",
@@ -1604,10 +1974,9 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     width: "100%",
     minWidth: 0,
-    minHeight: 42,
-    padding: "10px 12px",
+    minHeight: 44,
+    padding: "11px 13px",
     borderRadius: 999,
-    color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
     textAlign: "center",
@@ -1621,11 +1990,10 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     width: "100%",
     minWidth: 0,
-    minHeight: 42,
-    padding: "10px 12px",
+    minHeight: 44,
+    padding: "11px 13px",
     borderRadius: 999,
     background: "#ffffff",
-    color: "#0f172a",
     textDecoration: "none",
     fontWeight: 950,
     border: "1px solid #cbd5e1",
@@ -1655,12 +2023,13 @@ const styles: Record<string, CSSProperties> = {
 
   filtersCard: {
     display: "grid",
-    gap: 12,
-    padding: 16,
-    borderRadius: 22,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    gap: 14,
+    padding: 18,
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.99), rgba(248,250,252,0.96))",
+    border: "1px solid rgba(226,232,240,0.95)",
+    boxShadow: "0 14px 34px rgba(15,23,42,0.06)",
     marginBottom: 16,
     minWidth: 0,
   },
@@ -1685,8 +2054,8 @@ const styles: Record<string, CSSProperties> = {
   sectionTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 26,
-    letterSpacing: "-0.045em",
+    fontSize: 27,
+    letterSpacing: "-0.05em",
     overflowWrap: "anywhere",
   },
 
@@ -1713,19 +2082,21 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 38,
-    padding: "8px 13px",
+    gap: 6,
+    minHeight: 40,
+    padding: "9px 14px",
     borderRadius: 999,
-    background: "#f8fafc",
+    background: "#ffffff",
     color: "#334155",
     border: "1px solid #e2e8f0",
     textDecoration: "none",
     fontSize: 13,
     fontWeight: 950,
+    boxShadow: "0 6px 14px rgba(15,23,42,0.045)",
   },
 
   filterButtonActive: {
-    color: "#0f172a",
+    color: "#ffffff",
   },
 
   campaignGrid: {
@@ -1738,11 +2109,11 @@ const styles: Record<string, CSSProperties> = {
   card: {
     display: "grid",
     gridTemplateRows: "200px 1fr",
-    borderRadius: 24,
+    borderRadius: 26,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     overflow: "hidden",
-    boxShadow: "0 10px 28px rgba(15,23,42,0.06)",
+    boxShadow: "0 14px 34px rgba(15,23,42,0.07)",
     minWidth: 0,
   },
 
@@ -1775,7 +2146,7 @@ const styles: Record<string, CSSProperties> = {
     margin: 0,
     color: "#64748b",
     lineHeight: 1.5,
-    fontWeight: 700,
+    fontWeight: 710,
     overflowWrap: "anywhere",
   },
 
@@ -1783,26 +2154,70 @@ const styles: Record<string, CSSProperties> = {
     gridColumn: "1 / -1",
     display: "grid",
     justifyItems: "center",
-    padding: 28,
-    borderRadius: 24,
-    background: "#ffffff",
+    gap: 12,
+    padding: 34,
+    borderRadius: 28,
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(248,250,252,0.95))",
     border: "1px dashed #cbd5e1",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.84)",
     textAlign: "center",
     minWidth: 0,
+  },
+
+  emptyIcon: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 58,
+    height: 58,
+    borderRadius: 20,
+    border: "1px solid",
+    fontSize: 24,
+    fontWeight: 950,
   },
 
   emptyTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 28,
-    letterSpacing: "-0.04em",
+    fontSize: 30,
+    lineHeight: 1.05,
+    letterSpacing: "-0.05em",
   },
 
   emptyText: {
-    margin: "8px 0 0",
+    maxWidth: 610,
+    margin: 0,
     color: "#64748b",
     lineHeight: 1.55,
-    fontWeight: 750,
+    fontWeight: 760,
+  },
+
+  emptyActions: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 9,
+    width: "min(100%, 440px)",
+    marginTop: 2,
+  },
+
+  emptyGhost: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    minWidth: 0,
+    minHeight: 44,
+    padding: "11px 13px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    textDecoration: "none",
+    fontWeight: 950,
+    border: "1px solid #cbd5e1",
+    textAlign: "center",
+    lineHeight: 1.15,
+    boxSizing: "border-box",
   },
 
   footer: {
