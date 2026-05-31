@@ -117,10 +117,9 @@ function normalisePlayerRows(input: {
 
     if (index === 0) {
       return {
-        name: cleanText(input.buyerName),
-        email: cleanText(input.buyerEmail),
-      };
-    }
+  name: String(existing.name || ""),
+  email: String(existing.email || ""),
+};
 
     return {
       name: "",
