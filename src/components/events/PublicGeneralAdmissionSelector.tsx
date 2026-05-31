@@ -48,6 +48,10 @@ function cleanPlayer(value: unknown) {
   return String(value || "").trim();
 }
 
+function livePlayerText(value: unknown) {
+  return String(value || "");
+}
+
 function isValidEmail(value: unknown) {
   const email = cleanPlayer(value).toLowerCase();
 
@@ -68,15 +72,15 @@ function normalisePlayerRows(input: {
 
     if (existing) {
       return {
-        name: cleanPlayer(existing.name),
-        email: cleanPlayer(existing.email),
+        name: livePlayerText(existing.name),
+        email: livePlayerText(existing.email),
       };
     }
 
     if (index === 0) {
       return {
-        name: cleanPlayer(input.buyerName),
-        email: cleanPlayer(input.buyerEmail),
+        name: livePlayerText(input.buyerName),
+        email: livePlayerText(input.buyerEmail),
       };
     }
 
@@ -337,7 +341,10 @@ export default function PublicGeneralAdmissionSelector({
         continue;
       }
 
-      if (addOnNeedsBuyerAnswer(addOn) && !cleanAnswer(addOnBuyerAnswers[addOn.type])) {
+      if (
+        addOnNeedsBuyerAnswer(addOn) &&
+        !cleanAnswer(addOnBuyerAnswers[addOn.type])
+      ) {
         setCheckoutError(
           "Please answer the Higher or Lower skill question before continuing.",
         );
@@ -747,14 +754,14 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 18,
     fontWeight: 950,
     lineHeight: 1.15,
-    overflowWrap: "anywhere",
+    overflowWrap: "break-word",
   },
   ticketDescription: {
     margin: "5px 0 0",
     color: "#64748b",
     fontSize: 14,
     lineHeight: 1.45,
-    overflowWrap: "anywhere",
+    overflowWrap: "break-word",
   },
   ticketPrice: {
     margin: "8px 0 0",
