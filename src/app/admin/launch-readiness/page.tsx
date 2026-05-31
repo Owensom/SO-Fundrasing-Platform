@@ -488,6 +488,7 @@ async function getSupportSummary(tenantSlug: string) {
     [tenantSlug],
   );
 }
+
 function buildRaffleWarnings(raffles: RaffleReadinessRow[]) {
   const warnings: CampaignWarning[] = [];
 
@@ -767,6 +768,13 @@ function buildTenantReadinessItems(input: {
   );
   const hasContactEmail = Boolean(cleanText(settings?.public_contact_email));
   const contactVerified = Boolean(settings?.public_contact_email_verified_at);
+  const contactVerificationStatus = cleanText(
+    settings?.public_contact_email_verification_status,
+  ).toLowerCase();
+  const contactTestSent = contactVerificationStatus === "sent";
+  const contactTestFailed = contactVerificationStatus === "failed";
+  const contactReady = hasContactEmail && (contactVerified || contactTestSent);
+
   const hasGiftAidRegistration =
     Boolean(settings?.gift_aid_enabled) &&
     Boolean(cleanText(settings?.charity_registration_type)) &&
@@ -818,17 +826,25 @@ function buildTenantReadinessItems(input: {
     },
     {
       title: "Public contact email",
-      status: hasContactEmail
-        ? contactVerified
+      status: !hasContactEmail
+        ? "Missing"
+        : contactVerified
           ? "Verified"
-          : "Email saved"
-        : "Missing",
-      detail: hasContactEmail
-        ? contactVerified
+          : contactTestSent
+            ? "Test email sent"
+            : contactTestFailed
+              ? "Test failed"
+              : "Email saved",
+      detail: !hasContactEmail
+        ? "Add a public contact email so supporters can contact the organiser."
+        : contactVerified
           ? "The public contact email has been verified."
-          : "A public contact email is saved, but verification is not complete or was not detected."
-        : "Add a public contact email so supporters can contact the organiser.",
-      tone: hasContactEmail ? (contactVerified ? "good" : "warning") : "danger",
+          : contactTestSent
+            ? "A test email has been sent successfully to the saved public contact address."
+            : contactTestFailed
+              ? "The last public contact email test failed. Check the saved address and send another test email from Branding settings."
+              : "A public contact email is saved. Send a test email from Branding settings before launch.",
+      tone: !hasContactEmail ? "danger" : contactReady ? "good" : "warning",
       href: "/admin/settings/branding",
       action: "Open branding",
     },
@@ -916,6 +932,7 @@ function buildTenantReadinessItems(input: {
     },
   ];
 }
+
 export default async function AdminLaunchReadinessPage() {
   const tenantSlug = await requireTenantAccess();
 
@@ -1282,6 +1299,7 @@ const responsiveStyles = `
   }
 }
 `;
+
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
