@@ -683,7 +683,9 @@ export default async function TenantCampaignsPage({
           style={{
             ...styles.heroDotWash,
             backgroundImage: `radial-gradient(${
-              canUseAdvancedBranding ? `${accentColour}55` : "rgba(250,204,21,0.38)"
+              canUseAdvancedBranding
+                ? `${accentColour}55`
+                : "rgba(250,204,21,0.38)"
             } 1px, transparent 1px)`,
           }}
         />
@@ -1031,7 +1033,7 @@ export default async function TenantCampaignsPage({
               ...(activeType === "all" ? activeFilterStyle : {}),
             }}
           >
-            <span>All</span>
+            All
           </Link>
 
           <Link
@@ -1041,8 +1043,7 @@ export default async function TenantCampaignsPage({
               ...(activeType === "raffle" ? activeFilterStyle : {}),
             }}
           >
-            <span>{getTypeIcon("raffle")}</span>
-            <span>Raffles</span>
+            Raffles
           </Link>
 
           <Link
@@ -1052,8 +1053,7 @@ export default async function TenantCampaignsPage({
               ...(activeType === "squares" ? activeFilterStyle : {}),
             }}
           >
-            <span>{getTypeIcon("squares")}</span>
-            <span>Squares</span>
+            Squares
           </Link>
 
           <Link
@@ -1063,8 +1063,7 @@ export default async function TenantCampaignsPage({
               ...(activeType === "event" ? activeFilterStyle : {}),
             }}
           >
-            <span>{getTypeIcon("event")}</span>
-            <span>Events</span>
+            Events
           </Link>
 
           {auctionCapability.allowed ? (
@@ -1075,8 +1074,7 @@ export default async function TenantCampaignsPage({
                 ...(activeType === "auction" ? activeFilterStyle : {}),
               }}
             >
-              <span>{getTypeIcon("auction")}</span>
-              <span>Auctions</span>
+              Auctions
             </Link>
           ) : null}
         </nav>
@@ -2073,7 +2071,7 @@ const styles: Record<string, CSSProperties> = {
 
   filterNav: {
     display: "flex",
-    gap: 8,
+    gap: 10,
     flexWrap: "wrap",
     alignItems: "center",
   },
@@ -2082,17 +2080,19 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    minHeight: 40,
-    padding: "9px 14px",
+    minHeight: 42,
+    padding: "10px 18px",
     borderRadius: 999,
-    background: "#ffffff",
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(248,250,252,0.96))",
     color: "#334155",
-    border: "1px solid #e2e8f0",
+    border: "1px solid rgba(203,213,225,0.92)",
     textDecoration: "none",
     fontSize: 13,
     fontWeight: 950,
-    boxShadow: "0 6px 14px rgba(15,23,42,0.045)",
+    letterSpacing: "-0.01em",
+    boxShadow:
+      "0 8px 18px rgba(15,23,42,0.055), inset 0 1px 0 rgba(255,255,255,0.86)",
   },
 
   filterButtonActive: {
