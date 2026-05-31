@@ -217,6 +217,7 @@ function getTypeStyle(type: Campaign["type"]): CSSProperties {
     borderColor: "#fde68a",
   };
 }
+
 function getSafeAdminReturn(value?: string) {
   if (!value) return "";
   if (value === "/admin") return value;
@@ -469,31 +470,32 @@ export default async function TenantCampaignsPage({
     borderColor: primaryColour,
     color: "#0f172a",
   };
-    return (
+
+  return (
     <main className="tenant-campaigns-page" style={brandedPageStyle}>
       <style>{responsiveStyles}</style>
 
       <section className="brandHeader" style={styles.brandHeader}>
         <div className="brandIdentity" style={styles.brandIdentity}>
-          {brandLogoSrc ? (
-            <div style={styles.brandLogoWrap}>
+          <div
+            className="brandLogoPlate"
+            style={{
+              ...styles.brandLogoPlate,
+              borderColor: `${accentColour}66`,
+            }}
+          >
+            {brandLogoSrc ? (
               <img
                 src={brandLogoSrc}
                 alt={publicDisplayName}
                 style={styles.brandLogo}
               />
-            </div>
-          ) : (
-            <div
-              style={{
-                ...styles.brandLogoFallback,
-                background: primaryColour,
-                borderColor: accentColour,
-              }}
-            >
-              {publicDisplayName.slice(0, 2).toUpperCase()}
-            </div>
-          )}
+            ) : (
+              <span style={styles.brandLogoFallback}>
+                {publicDisplayName.slice(0, 2).toUpperCase()}
+              </span>
+            )}
+          </div>
 
           <div style={styles.brandCopy}>
             <h1 style={styles.brandTitle}>{publicDisplayName}</h1>
@@ -561,62 +563,62 @@ export default async function TenantCampaignsPage({
           <div style={styles.supportPanel}>
             <h2 style={styles.supportPanelTitle}>Support options</h2>
 
-           <div style={styles.supportOptionList}>
-  <Link
-    href={
-      featuredCampaign
-        ? getCampaignUrl(featuredCampaign)
-        : "#live-campaigns"
-    }
-    style={styles.supportOptionLink}
-  >
-    <div
-      style={{
-        ...styles.supportIcon,
-        background: `${primaryColour}26`,
-        borderColor: `${primaryColour}66`,
-      }}
-    >
-      →
-    </div>
+            <div style={styles.supportOptionList}>
+              <Link
+                href={
+                  featuredCampaign
+                    ? getCampaignUrl(featuredCampaign)
+                    : "#live-campaigns"
+                }
+                style={styles.supportOptionLink}
+              >
+                <div
+                  style={{
+                    ...styles.supportIcon,
+                    background: `${primaryColour}26`,
+                    borderColor: `${primaryColour}66`,
+                  }}
+                >
+                  →
+                </div>
 
-    <div style={styles.supportOptionCopy}>
-      <strong>See campaign</strong>
-      <span>Open the campaign page to enter, buy, bid or book.</span>
-    </div>
-  </Link>
+                <div style={styles.supportOptionCopy}>
+                  <strong>See campaign</strong>
+                  <span>Open the campaign page to enter, buy, bid or book.</span>
+                </div>
+              </Link>
 
-  <Link
-    href={
-      featuredCampaign
-        ? getSupportUrl({
-            tenantSlug,
-            campaign: featuredCampaign,
-          })
-        : `/c/${tenantSlug}/support`
-    }
-    style={styles.supportOptionLink}
-  >
-    <div
-      style={{
-        ...styles.supportIcon,
-        background: `${accentColour}24`,
-        borderColor: `${accentColour}78`,
-      }}
-    >
-      ♥
-    </div>
+              <Link
+                href={
+                  featuredCampaign
+                    ? getSupportUrl({
+                        tenantSlug,
+                        campaign: featuredCampaign,
+                      })
+                    : `/c/${tenantSlug}/support`
+                }
+                style={styles.supportOptionLink}
+              >
+                <div
+                  style={{
+                    ...styles.supportIcon,
+                    background: `${accentColour}24`,
+                    borderColor: `${accentColour}78`,
+                  }}
+                >
+                  ♥
+                </div>
 
-    <div style={styles.supportOptionCopy}>
-      <strong>Support campaign</strong>
-      <span>Make a simple donation without receiving an entry.</span>
-    </div>
-  </Link>
+                <div style={styles.supportOptionCopy}>
+                  <strong>Support campaign</strong>
+                  <span>Make a simple donation without receiving an entry.</span>
+                </div>
+              </Link>
 
-  <Link
-    href={getContactUrl({ tenantSlug })}
-    style={styles.supportOptionLink}
-  >
+              <Link
+                href={getContactUrl({ tenantSlug })}
+                style={styles.supportOptionLink}
+              >
                 <div
                   style={{
                     ...styles.supportIcon,
@@ -824,7 +826,12 @@ export default async function TenantCampaignsPage({
           ) : null}
         </nav>
       </section>
-            <section id="live-campaigns" className="campaignGrid" style={styles.campaignGrid}>
+
+      <section
+        id="live-campaigns"
+        className="campaignGrid"
+        style={styles.campaignGrid}
+      >
         {visibleCampaigns.length === 0 ? (
           <div style={styles.emptyCard}>
             <h2 style={styles.emptyTitle}>No live campaigns found</h2>
@@ -997,11 +1004,11 @@ const responsiveStyles = `
     justify-items: stretch !important;
   }
 
-  .tenant-campaigns-page .brandLogoWrap,
-  .tenant-campaigns-page .brandLogoFallback {
+  .tenant-campaigns-page .brandLogoPlate {
     width: 56px !important;
     height: 56px !important;
     border-radius: 16px !important;
+    padding: 6px !important;
   }
 
   .tenant-campaigns-page .brandTitle {
@@ -1095,17 +1102,22 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
   },
 
-  brandLogoWrap: {
+  brandLogoPlate: {
+    position: "relative",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     width: 72,
     height: 72,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
+    borderRadius: 20,
+    padding: 8,
     overflow: "hidden",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.08)",
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(248,250,252,0.94))",
+    border: "1px solid rgba(226,232,240,0.96)",
+    boxShadow:
+      "0 12px 28px rgba(15,23,42,0.12), inset 0 1px 0 rgba(255,255,255,0.92)",
+    isolation: "isolate",
   },
 
   brandLogo: {
@@ -1113,17 +1125,9 @@ const styles: Record<string, CSSProperties> = {
     width: "100%",
     height: "100%",
     objectFit: "contain",
-    padding: 7,
   },
 
   brandLogoFallback: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 72,
-    height: 72,
-    borderRadius: 18,
-    border: "2px solid",
     color: "#0f172a",
     fontSize: 22,
     fontWeight: 950,
@@ -1163,7 +1167,8 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid",
     minWidth: 0,
   },
-    brandFeatureKicker: {
+
+  brandFeatureKicker: {
     color: "#92400e",
     fontSize: 10,
     fontWeight: 950,
@@ -1179,7 +1184,7 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
-    brandFeatureText: {
+  brandFeatureText: {
     color: "#475569",
     fontSize: 12,
     lineHeight: 1.35,
