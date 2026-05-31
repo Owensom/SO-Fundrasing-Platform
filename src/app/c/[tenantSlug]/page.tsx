@@ -510,15 +510,15 @@ export default async function TenantCampaignsPage({
     ? {
         ...styles.hero,
         background: `
-          radial-gradient(circle at 88% 92%, ${primaryColour}72, transparent 31%),
-          radial-gradient(circle at 12% 14%, ${accentColour}3D, transparent 28%),
-          linear-gradient(126deg, #060816 0%, #0f172a 42%, ${primaryColour}72 100%)
+          radial-gradient(circle at 98% 104%, ${primaryColour}58, transparent 28%),
+          radial-gradient(circle at 8% 12%, ${accentColour}28, transparent 25%),
+          linear-gradient(126deg, #060816 0%, #0f172a 52%, #111827 100%)
         `,
       }
     : {
         ...styles.hero,
         background:
-          "radial-gradient(circle at bottom right, rgba(37,99,235,0.28), transparent 42%), radial-gradient(circle at top left, rgba(250,204,21,0.12), transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #172554 100%)",
+          "radial-gradient(circle at bottom right, rgba(37,99,235,0.24), transparent 40%), radial-gradient(circle at top left, rgba(250,204,21,0.10), transparent 32%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #172554 100%)",
       };
 
   const brandedPrimaryActionStyle: CSSProperties = canUseAdvancedBranding
@@ -631,7 +631,7 @@ export default async function TenantCampaignsPage({
               color: canUseAdvancedBranding ? primaryColour : "#2563eb",
             }}
           >
-            ✦
+            ◷
           </span>
 
           <div style={styles.brandFeatureCopy}>
@@ -667,16 +667,16 @@ export default async function TenantCampaignsPage({
           style={{
             ...styles.heroLineOne,
             borderColor: canUseAdvancedBranding
-              ? `${accentColour}28`
-              : "rgba(250,204,21,0.18)",
+              ? `${accentColour}24`
+              : "rgba(250,204,21,0.16)",
           }}
         />
         <div
           style={{
             ...styles.heroLineTwo,
             borderColor: canUseAdvancedBranding
-              ? `${primaryColour}24`
-              : "rgba(37,99,235,0.18)",
+              ? `${primaryColour}1E`
+              : "rgba(37,99,235,0.16)",
           }}
         />
         <div
@@ -684,8 +684,8 @@ export default async function TenantCampaignsPage({
             ...styles.heroDotWash,
             backgroundImage: `radial-gradient(${
               canUseAdvancedBranding
-                ? `${accentColour}55`
-                : "rgba(250,204,21,0.38)"
+                ? `${accentColour}45`
+                : "rgba(250,204,21,0.32)"
             } 1px, transparent 1px)`,
           }}
         />
@@ -697,10 +697,10 @@ export default async function TenantCampaignsPage({
                 ...styles.eyebrow,
                 color: canUseAdvancedBranding ? accentColour : "#facc15",
                 borderColor: canUseAdvancedBranding
-                  ? `${accentColour}B8`
-                  : "rgba(250,204,21,0.78)",
+                  ? `${accentColour}A8`
+                  : "rgba(250,204,21,0.72)",
                 background: canUseAdvancedBranding
-                  ? `${primaryColour}20`
+                  ? `${primaryColour}1A`
                   : "rgba(15,23,42,0.34)",
               }}
             >
@@ -831,8 +831,8 @@ export default async function TenantCampaignsPage({
                 <div
                   style={{
                     ...styles.supportIcon,
-                    background: "rgba(255,255,255,0.12)",
-                    borderColor: "rgba(255,255,255,0.25)",
+                    background: "rgba(255,255,255,0.13)",
+                    borderColor: "rgba(255,255,255,0.24)",
                     color: "#ffffff",
                   }}
                 >
@@ -1514,7 +1514,7 @@ const styles: Record<string, CSSProperties> = {
     inset: 0,
     pointerEvents: "none",
     background:
-      "radial-gradient(circle at 20% 18%, rgba(255,255,255,0.09), transparent 30%)",
+      "radial-gradient(circle at 20% 18%, rgba(255,255,255,0.08), transparent 30%)",
   },
 
   heroLineOne: {
@@ -1541,12 +1541,12 @@ const styles: Record<string, CSSProperties> = {
 
   heroDotWash: {
     position: "absolute",
-    right: -80,
-    bottom: -80,
-    width: 360,
-    height: 260,
+    right: -88,
+    bottom: -96,
+    width: 330,
+    height: 225,
     backgroundSize: "14px 14px",
-    opacity: 0.42,
+    opacity: 0.28,
     pointerEvents: "none",
     maskImage: "radial-gradient(circle, black, transparent 70%)",
   },
@@ -1654,10 +1654,10 @@ const styles: Record<string, CSSProperties> = {
     alignContent: "center",
     padding: 19,
     borderRadius: 26,
-    background: "rgba(255,255,255,0.105)",
-    border: "1px solid rgba(255,255,255,0.17)",
+    background: "rgba(15,23,42,0.30)",
+    border: "1px solid rgba(255,255,255,0.18)",
     boxShadow:
-      "inset 0 1px 0 rgba(255,255,255,0.12), 0 18px 42px rgba(0,0,0,0.12)",
+      "inset 0 1px 0 rgba(255,255,255,0.12), 0 20px 48px rgba(0,0,0,0.16)",
     backdropFilter: "blur(14px)",
     minWidth: 0,
   },
@@ -1708,8 +1708,8 @@ const styles: Record<string, CSSProperties> = {
     padding: 13,
     borderRadius: 18,
     background:
-      "linear-gradient(135deg, rgba(255,255,255,0.145), rgba(255,255,255,0.075))",
-    border: "1px solid rgba(255,255,255,0.18)",
+      "linear-gradient(135deg, rgba(255,255,255,0.13), rgba(255,255,255,0.06))",
+    border: "1px solid rgba(255,255,255,0.20)",
     color: "#e5edf8",
     textDecoration: "none",
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
