@@ -141,6 +141,31 @@ async function getBrandingSettings(tenantSlug: string) {
   );
 }
 
+function getCanUseAdvancedBranding({
+  settings,
+  isPlatformOwner,
+}: {
+  settings: BrandingSettings | null;
+  isPlatformOwner: boolean;
+}) {
+  const subscriptionTier = normaliseSubscriptionTier(
+    settings?.subscription_tier,
+  );
+
+  const capabilityTenant = {
+    subscription_tier: subscriptionTier,
+    subscription_status: settings?.subscription_status || "active",
+    platform_owner_bypass: Boolean(settings?.platform_owner_bypass),
+  };
+
+  const advancedBrandingCapability = checkSubscriptionCapability(
+    capabilityTenant,
+    "advanced_branding",
+  );
+
+  return advancedBrandingCapability.allowed || isPlatformOwner;
+}
+
 async function updateTenantBranding(formData: FormData) {
   "use server";
 
@@ -149,23 +174,10 @@ async function updateTenantBranding(formData: FormData) {
 
   const existingSettings = await getBrandingSettings(tenantSlug);
 
-  const subscriptionTier = normaliseSubscriptionTier(
-    existingSettings?.subscription_tier,
-  );
-
-  const capabilityTenant = {
-    subscription_tier: subscriptionTier,
-    subscription_status: existingSettings?.subscription_status || "active",
-    platform_owner_bypass: Boolean(existingSettings?.platform_owner_bypass),
-  };
-
-  const advancedBrandingCapability = checkSubscriptionCapability(
-    capabilityTenant,
-    "advanced_branding",
-  );
-
-  const canUseAdvancedBranding =
-    advancedBrandingCapability.allowed || access.isPlatformOwner;
+  const canUseAdvancedBranding = getCanUseAdvancedBranding({
+    settings: existingSettings,
+    isPlatformOwner: access.isPlatformOwner,
+  });
 
   const nextDisplayName = cleanLimitedText(
     formData.get("public_display_name"),
@@ -329,12 +341,26 @@ async function sendContactEmailTest(formData: FormData) {
     redirect("/admin/settings/branding?contactTest=missing_contact_email");
   }
 
+  const canUseAdvancedBranding = getCanUseAdvancedBranding({
+    settings,
+    isPlatformOwner: access.isPlatformOwner,
+  });
+
   try {
     await sendTenantContactTestEmail({
       tenantSlug,
       tenantDisplayName: cleanText(settings.public_display_name) || tenantSlug,
       tenantContactEmail: contactEmail,
       tenantContactName: settings.public_contact_name,
+      branding: {
+        advancedBranding: canUseAdvancedBranding,
+        displayName: settings.public_display_name,
+        logoUrl: settings.public_logo_url,
+        logoMarkUrl: settings.public_logo_mark_url,
+        primaryColour: settings.public_primary_colour,
+        accentColour: settings.public_accent_colour,
+        footerText: settings.public_footer_text,
+      },
     });
 
     await query(
@@ -397,19 +423,10 @@ export default async function AdminBrandingSettingsPage({
     settings?.subscription_tier,
   );
 
-  const capabilityTenant = {
-    subscription_tier: subscriptionTier,
-    subscription_status: settings?.subscription_status || "active",
-    platform_owner_bypass: Boolean(settings?.platform_owner_bypass),
-  };
-
-  const advancedBrandingCapability = checkSubscriptionCapability(
-    capabilityTenant,
-    "advanced_branding",
-  );
-
-  const canUseAdvancedBranding =
-    advancedBrandingCapability.allowed || access.isPlatformOwner;
+  const canUseAdvancedBranding = getCanUseAdvancedBranding({
+    settings,
+    isPlatformOwner: access.isPlatformOwner,
+  });
 
   return (
     <BrandingSettingsForm
