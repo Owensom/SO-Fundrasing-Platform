@@ -4,6 +4,7 @@ import { useMemo, useState, type CSSProperties } from "react";
 import BuyerDetailsFields from "@/components/events/BuyerDetailsFields";
 import PublicEventCheckoutAddOnSelector, {
   type PublicEventCheckoutAddOn,
+  type PublicEventCheckoutAddOnPlayer,
   type PublicEventCheckoutAddOnSelection,
 } from "@/components/events/PublicEventCheckoutAddOnSelector";
 
@@ -41,6 +42,49 @@ function cleanAccessCode(value: string) {
 
 function cleanAnswer(value: unknown) {
   return String(value || "").trim();
+}
+
+function cleanPlayer(value: unknown) {
+  return String(value || "").trim();
+}
+
+function isValidEmail(value: unknown) {
+  const email = cleanPlayer(value).toLowerCase();
+
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function normalisePlayerRows(input: {
+  quantity: number;
+  players?: PublicEventCheckoutAddOnPlayer[];
+  buyerName: string;
+  buyerEmail: string;
+}) {
+  const quantity = Math.max(0, Math.floor(Number(input.quantity || 0)));
+  const existingPlayers = Array.isArray(input.players) ? input.players : [];
+
+  return Array.from({ length: quantity }).map((_, index) => {
+    const existing = existingPlayers[index];
+
+    if (existing) {
+      return {
+        name: cleanPlayer(existing.name),
+        email: cleanPlayer(existing.email),
+      };
+    }
+
+    if (index === 0) {
+      return {
+        name: cleanPlayer(input.buyerName),
+        email: cleanPlayer(input.buyerEmail),
+      };
+    }
+
+    return {
+      name: "",
+      email: "",
+    };
+  });
 }
 
 function calculatePlatformCommissionCents(
@@ -137,6 +181,9 @@ export default function PublicGeneralAdmissionSelector({
   const [addOnBuyerAnswers, setAddOnBuyerAnswers] = useState<
     Record<string, string>
   >({});
+  const [addOnPlayers, setAddOnPlayers] = useState<
+    Record<string, PublicEventCheckoutAddOnPlayer[]>
+  >({});
   const [coverFees, setCoverFees] = useState(false);
   const [accessCode, setAccessCode] = useState("");
   const [checkoutError, setCheckoutError] = useState("");
@@ -164,11 +211,25 @@ export default function PublicGeneralAdmissionSelector({
   });
 
   const selectedAddOns: PublicEventCheckoutAddOnSelection[] = checkoutAddOns
-    .map((addOn) => ({
-      type: addOn.type,
-      quantity: safeAddOnQuantities[addOn.type] || 0,
-      buyerAnswer: cleanAnswer(addOnBuyerAnswers[addOn.type]),
-    }))
+    .map((addOn) => {
+      const quantity = safeAddOnQuantities[addOn.type] || 0;
+      const players =
+        addOn.type === "higher_or_lower"
+          ? normalisePlayerRows({
+              quantity,
+              players: addOnPlayers[addOn.type],
+              buyerName,
+              buyerEmail,
+            })
+          : undefined;
+
+      return {
+        type: addOn.type,
+        quantity,
+        buyerAnswer: cleanAnswer(addOnBuyerAnswers[addOn.type]),
+        ...(players ? { players } : {}),
+      };
+    })
     .filter((addOn) => addOn.quantity > 0);
 
   const ticketTotal = selectedItems.reduce(
@@ -219,10 +280,24 @@ export default function PublicGeneralAdmissionSelector({
     addOn: PublicEventCheckoutAddOn,
     nextQuantity: number,
   ) {
+    const quantity = normaliseAddOnQuantity(nextQuantity, addOn);
+
     setAddOnQuantities((current) => ({
       ...current,
-      [addOn.type]: normaliseAddOnQuantity(nextQuantity, addOn),
+      [addOn.type]: quantity,
     }));
+
+    if (addOn.type === "higher_or_lower") {
+      setAddOnPlayers((current) => ({
+        ...current,
+        [addOn.type]: normalisePlayerRows({
+          quantity,
+          players: current[addOn.type],
+          buyerName,
+          buyerEmail,
+        }),
+      }));
+    }
   }
 
   function updateAddOnBuyerAnswer(
@@ -235,6 +310,21 @@ export default function PublicGeneralAdmissionSelector({
     }));
   }
 
+  function updateAddOnPlayers(
+    addOn: PublicEventCheckoutAddOn,
+    players: PublicEventCheckoutAddOnPlayer[],
+  ) {
+    setAddOnPlayers((current) => ({
+      ...current,
+      [addOn.type]: normalisePlayerRows({
+        quantity: safeAddOnQuantities[addOn.type] || 0,
+        players,
+        buyerName,
+        buyerEmail,
+      }),
+    }));
+  }
+
   function validateAddOnAnswers() {
     if (hasAccessCode) {
       return true;
@@ -243,15 +333,53 @@ export default function PublicGeneralAdmissionSelector({
     for (const addOn of checkoutAddOns) {
       const quantity = safeAddOnQuantities[addOn.type] || 0;
 
-      if (quantity <= 0 || !addOnNeedsBuyerAnswer(addOn)) {
+      if (quantity <= 0) {
         continue;
       }
 
-      if (!cleanAnswer(addOnBuyerAnswers[addOn.type])) {
+      if (addOnNeedsBuyerAnswer(addOn) && !cleanAnswer(addOnBuyerAnswers[addOn.type])) {
         setCheckoutError(
-          `Please answer the Higher or Lower skill question before continuing.`,
+          "Please answer the Higher or Lower skill question before continuing.",
         );
         return false;
+      }
+
+      if (addOn.type === "higher_or_lower") {
+        const players = normalisePlayerRows({
+          quantity,
+          players: addOnPlayers[addOn.type],
+          buyerName,
+          buyerEmail,
+        });
+
+        if (players.length !== quantity) {
+          setCheckoutError(
+            "Please add player details for every Higher or Lower entry.",
+          );
+          return false;
+        }
+
+        const missingPlayer = players.find(
+          (player) => !cleanPlayer(player.name) || !cleanPlayer(player.email),
+        );
+
+        if (missingPlayer) {
+          setCheckoutError(
+            "Please enter a name and email for every Higher or Lower player.",
+          );
+          return false;
+        }
+
+        const invalidEmail = players.find(
+          (player) => !isValidEmail(player.email),
+        );
+
+        if (invalidEmail) {
+          setCheckoutError(
+            "Please enter a valid email for every Higher or Lower player.",
+          );
+          return false;
+        }
       }
     }
 
@@ -422,12 +550,18 @@ export default function PublicGeneralAdmissionSelector({
                   currency={currency}
                   quantity={safeAddOnQuantities[addOn.type] || 0}
                   buyerAnswer={addOnBuyerAnswers[addOn.type] || ""}
+                  buyerName={buyerName}
+                  buyerEmail={buyerEmail}
+                  players={addOnPlayers[addOn.type] || []}
                   disabled={hasAccessCode}
                   onQuantityChange={(nextQuantity) =>
                     updateAddOnQuantity(addOn, nextQuantity)
                   }
                   onBuyerAnswerChange={(answer) =>
                     updateAddOnBuyerAnswer(addOn, answer)
+                  }
+                  onPlayersChange={(players) =>
+                    updateAddOnPlayers(addOn, players)
                   }
                 />
               ))}
