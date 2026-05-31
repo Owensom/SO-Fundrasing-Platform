@@ -21,7 +21,7 @@ const DONATION_HEART_IMAGE_URL =
   "https://so-fundraising-platform.vercel.app/brand/donation-heart-gold.png";
 
 const HIGHER_OR_LOWER_IMAGE_URL =
-  "https://so-fundraising-platform.vercel.app/brand/higher-or-lower-gold.png";
+  "https://so-fundraising-platform.vercel.app/brand/higher-or-lower-gold-transparent-v2.png`;
 
 type EmailBranding = {
   name?: string | null;
