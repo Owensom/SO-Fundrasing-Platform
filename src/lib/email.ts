@@ -24,16 +24,34 @@ const HIGHER_OR_LOWER_IMAGE_URL =
   "https://so-fundraising-platform.vercel.app/brand/higher-or-lower-gold-transparent-v2.png";
 
 type EmailBranding = {
+  advancedBranding?: boolean | null;
   name?: string | null;
   logoUrl?: string | null;
+  logoMarkUrl?: string | null;
   primaryColor?: string | null;
+  primaryColour?: string | null;
+  accentColor?: string | null;
+  accentColour?: string | null;
+  footerText?: string | null;
 };
 
-const DEFAULT_BRANDING = {
+type ResolvedEmailBranding = {
+  advancedBranding: boolean;
+  name: string;
+  logoUrl: string;
+  primaryColor: string;
+  accentColor: string;
+  footerText: string;
+};
+
+const DEFAULT_BRANDING: ResolvedEmailBranding = {
+  advancedBranding: false,
   name: "SO Fundraising Platform",
   logoUrl:
     "https://res.cloudinary.com/dyez8xsbw/image/upload/v1777292787/so-logo-full_dt3i5l.png",
-  primaryColor: "#16a34a",
+  primaryColor: "#1683F8",
+  accentColor: "#FACC15",
+  footerText: "",
 };
 
 const NAMED_COLOURS: Record<string, string> = {
@@ -65,12 +83,46 @@ const NAMED_COLOURS: Record<string, string> = {
   yellow: "#eab308",
 };
 
-function getBranding(branding?: EmailBranding) {
+function cleanOptionalText(value: unknown) {
+  return String(value ?? "").trim();
+}
+
+function normaliseHexColour(value: unknown, fallback: string) {
+  const clean = cleanOptionalText(value).toUpperCase();
+
+  if (/^#[0-9A-F]{6}$/.test(clean)) {
+    return clean;
+  }
+
+  return fallback;
+}
+
+function getBranding(branding?: EmailBranding): ResolvedEmailBranding {
+  const canUseAdvancedBranding = Boolean(branding?.advancedBranding);
+
+  if (!canUseAdvancedBranding) {
+    return DEFAULT_BRANDING;
+  }
+
+  const name = cleanOptionalText(branding?.name) || DEFAULT_BRANDING.name;
+  const logoUrl =
+    cleanOptionalText(branding?.logoMarkUrl) ||
+    cleanOptionalText(branding?.logoUrl) ||
+    DEFAULT_BRANDING.logoUrl;
+
   return {
-    name: branding?.name?.trim() || DEFAULT_BRANDING.name,
-    logoUrl: branding?.logoUrl?.trim() || DEFAULT_BRANDING.logoUrl,
-    primaryColor:
-      branding?.primaryColor?.trim() || DEFAULT_BRANDING.primaryColor,
+    advancedBranding: true,
+    name,
+    logoUrl,
+    primaryColor: normaliseHexColour(
+      branding?.primaryColour || branding?.primaryColor,
+      DEFAULT_BRANDING.primaryColor,
+    ),
+    accentColor: normaliseHexColour(
+      branding?.accentColour || branding?.accentColor,
+      DEFAULT_BRANDING.accentColor,
+    ),
+    footerText: cleanOptionalText(branding?.footerText),
   };
 }
 
@@ -409,6 +461,52 @@ function renderWinnerTrophyHero(label = "Winner trophy") {
   `;
 }
 
+function renderBrandHeader(brand: ResolvedEmailBranding) {
+  const heroBackground = brand.advancedBranding
+    ? `
+      radial-gradient(circle at 88% 92%, ${escapeHtml(brand.primaryColor)}58, transparent 30%),
+      radial-gradient(circle at 10% 12%, ${escapeHtml(brand.accentColor)}28, transparent 26%),
+      linear-gradient(135deg,#060816 0%,#0f172a 56%,#111827 100%)
+    `
+    : "linear-gradient(135deg,#020617 0%,#0f172a 58%,#172554 100%)";
+
+  return `
+    <div style="
+      text-align:center;
+      padding:28px 22px 18px;
+      background:${heroBackground};
+    ">
+      <div style="
+        display:inline-block;
+        max-width:322px;
+        border-radius:24px;
+        background:linear-gradient(135deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94));
+        border:1px solid rgba(226,232,240,0.96);
+        box-shadow:
+          0 18px 44px rgba(15,23,42,0.22),
+          inset 0 1px 0 rgba(255,255,255,0.92);
+        padding:16px 20px;
+      ">
+        <img
+          src="${escapeHtml(brand.logoUrl)}"
+          alt="${escapeHtml(brand.name)}"
+          width="260"
+          style="
+            display:block;
+            width:260px;
+            max-width:100%;
+            height:auto;
+            margin:0 auto;
+            border:0;
+            outline:none;
+            text-decoration:none;
+          "
+        />
+      </div>
+    </div>
+  `;
+}
+
 function renderFiftyFiftyReceiptBlock() {
   return `
     <div style="
@@ -499,6 +597,15 @@ function renderEmailShell(params: {
 }) {
   const brand = getBranding(params.branding);
   const showTicketImage = params.showTicketImage !== false;
+  const topStripe = `linear-gradient(90deg,${escapeHtml(
+    brand.primaryColor,
+  )},${escapeHtml(brand.accentColor)})`;
+
+  const footerText =
+    params.footer ||
+    (brand.advancedBranding && brand.footerText
+      ? brand.footerText
+      : `Powered by ${brand.name}. Supporting causes through fundraising.`);
 
   return `
     <!doctype html>
@@ -522,19 +629,11 @@ function renderEmailShell(params: {
             overflow:hidden;
             box-shadow:0 10px 30px rgba(15,23,42,0.08);
           ">
-            <div style="height:6px;background:${escapeHtml(
-              brand.primaryColor,
-            )};"></div>
+            ${renderBrandHeader(brand)}
+
+            <div style="height:6px;background:${topStripe};"></div>
 
             <div style="padding:30px 26px 28px;">
-              <div style="text-align:center;margin-bottom:22px;">
-                <img
-                  src="${escapeHtml(brand.logoUrl)}"
-                  alt="${escapeHtml(brand.name)}"
-                  style="max-width:280px;width:100%;height:auto;display:block;margin:0 auto;"
-                />
-              </div>
-
               ${
                 params.showWinnerTrophy
                   ? renderWinnerTrophyHero(params.winnerTrophyLabel)
@@ -596,12 +695,7 @@ function renderEmailShell(params: {
                 font-size:13px;
                 line-height:1.6;
               ">
-                ${
-                  params.footer ||
-                  `Powered by ${escapeHtml(
-                    brand.name,
-                  )}. Supporting causes through fundraising.`
-                }
+                ${escapeHtml(footerText)}
               </div>
             </div>
           </div>
@@ -653,6 +747,7 @@ async function sendEmail(params: {
     id: result.data?.id,
   });
 }
+
 export async function sendReceiptEmail({
   to,
   name,
@@ -1299,6 +1394,7 @@ export async function sendDonationReceiptEmail({
     console.error("donation receipt email failed", err);
   }
 }
+
 export async function sendEventWinnerEmail({
   to,
   name,
