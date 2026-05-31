@@ -69,6 +69,10 @@ function cleanText(value: unknown) {
   return String(value || "").trim();
 }
 
+function liveText(value: unknown) {
+  return String(value || "");
+}
+
 function hasValidPrizeValueRange(addOn: PublicEventCheckoutAddOn) {
   const min = Number(addOn.prizeValueRangeMinCents || 0);
   const max = Number(addOn.prizeValueRangeMaxCents || 0);
@@ -110,16 +114,17 @@ function normalisePlayerRows(input: {
 
     if (existing) {
       return {
-        name: cleanText(existing.name),
-        email: cleanText(existing.email),
+        name: liveText(existing.name),
+        email: liveText(existing.email),
       };
     }
 
     if (index === 0) {
       return {
-  name: String(existing.name || ""),
-  email: String(existing.email || ""),
-};
+        name: liveText(input.buyerName),
+        email: liveText(input.buyerEmail),
+      };
+    }
 
     return {
       name: "",
@@ -465,7 +470,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.1,
     fontWeight: 950,
     letterSpacing: "-0.03em",
-    overflowWrap: "anywhere",
+    overflowWrap: "break-word",
   },
 
   description: {
@@ -474,7 +479,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.45,
     fontWeight: 750,
-    overflowWrap: "anywhere",
+    overflowWrap: "break-word",
   },
 
   limitText: {
@@ -536,7 +541,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 15,
     lineHeight: 1.25,
     fontWeight: 950,
-    overflowWrap: "anywhere",
+    overflowWrap: "break-word",
   },
 
   rangeHelp: {
@@ -544,7 +549,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     lineHeight: 1.4,
     fontWeight: 750,
-    overflowWrap: "anywhere",
+    overflowWrap: "break-word",
   },
 
   controls: {
@@ -601,7 +606,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     lineHeight: 1.35,
     fontWeight: 950,
-    overflowWrap: "anywhere",
+    overflowWrap: "break-word",
   },
 
   answerHelp: {
@@ -609,7 +614,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     lineHeight: 1.4,
     fontWeight: 750,
-    overflowWrap: "anywhere",
+    overflowWrap: "break-word",
   },
 
   answerInput: {
@@ -669,7 +674,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     lineHeight: 1.45,
     fontWeight: 750,
-    overflowWrap: "anywhere",
+    overflowWrap: "break-word",
   },
 
   playersList: {
