@@ -831,8 +831,12 @@ export default async function TenantCampaignsPage({
                 <div
                   style={{
                     ...styles.supportIcon,
-                    background: "rgba(255,255,255,0.13)",
-                    borderColor: "rgba(255,255,255,0.24)",
+                    background: canUseAdvancedBranding
+                      ? `linear-gradient(135deg, ${primaryColour}55, ${accentColour}36)`
+                      : "linear-gradient(135deg, rgba(22,131,248,0.36), rgba(250,204,21,0.22))",
+                    borderColor: canUseAdvancedBranding
+                      ? `${accentColour}55`
+                      : "rgba(191,219,254,0.35)",
                     color: "#ffffff",
                   }}
                 >
@@ -1099,7 +1103,7 @@ export default async function TenantCampaignsPage({
                   : "rgba(37,99,235,0.18)",
               }}
             >
-              ✦
+              ◷
             </div>
 
             <h2 style={styles.emptyTitle}>Campaigns coming soon</h2>
