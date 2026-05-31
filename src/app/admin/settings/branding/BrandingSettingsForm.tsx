@@ -327,6 +327,11 @@ export default function BrandingSettingsForm({
       return;
     }
 
+    if (!file.type.startsWith("image/")) {
+      alert("Please upload an image file such as PNG, JPG, SVG or WEBP.");
+      return;
+    }
+
     const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
     const preset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
 
@@ -380,6 +385,9 @@ export default function BrandingSettingsForm({
     }
   }
 
+  const heroLogoSource = logoMarkUrl || logoUrl;
+  const previewName = displayName || tenantSlug;
+
   return (
     <main className="branding-settings-page" style={styles.page}>
       <style>{responsiveStyles}</style>
@@ -413,21 +421,27 @@ export default function BrandingSettingsForm({
         <div style={styles.heroPanel}>
           <p style={styles.heroPanelEyebrow}>Brand preview</p>
 
-          <div style={styles.previewLogoWrap}>
-            {logoMarkUrl || logoUrl ? (
+          <div
+            className="brand-logo-plate brand-logo-plate-hero"
+            style={{
+              ...styles.brandLogoPlate,
+              ...styles.brandLogoPlateHero,
+            }}
+          >
+            {heroLogoSource ? (
               <img
-                src={logoMarkUrl || logoUrl}
-                alt={displayName || tenantSlug}
-                style={styles.previewLogo}
+                src={heroLogoSource}
+                alt={previewName}
+                style={styles.brandLogoImage}
               />
             ) : (
-              <span style={styles.previewLogoFallback}>
-                {(displayName || tenantSlug).slice(0, 2).toUpperCase()}
+              <span style={styles.brandLogoFallback}>
+                {previewName.slice(0, 2).toUpperCase()}
               </span>
             )}
           </div>
 
-          <h2 style={styles.heroPanelTitle}>{displayName || tenantSlug}</h2>
+          <h2 style={styles.heroPanelTitle}>{previewName}</h2>
 
           <p style={styles.heroPanelText}>
             {tagline || "Your public tenant tagline will appear here."}
@@ -670,27 +684,34 @@ export default function BrandingSettingsForm({
                   <div style={styles.panelIntro}>
                     <h3 style={styles.uploadTitle}>Main logo</h3>
                     <p style={styles.uploadText}>
-                      Upload a transparent PNG where possible, or paste an image
-                      URL manually.
+                      Upload a transparent PNG, SVG, WEBP or JPG. Logos are
+                      shown inside a dark-safe premium plate so they stay clean
+                      on light and dark backgrounds.
                     </p>
                   </div>
 
                   {logoUrl ? (
-                    <div style={styles.uploadPreviewWrap}>
+                    <div
+                      className="brand-logo-plate brand-logo-plate-upload"
+                      style={{
+                        ...styles.brandLogoPlate,
+                        ...styles.brandLogoPlateUpload,
+                      }}
+                    >
                       <img
                         src={logoUrl}
                         alt="Main logo preview"
-                        style={styles.uploadPreview}
+                        style={styles.brandLogoImage}
                       />
                     </div>
                   ) : null}
                 </div>
 
-                <label style={styles.uploadButton}>
+                <label className="upload-button" style={styles.uploadButton}>
                   {logoUploading ? "Uploading..." : "Upload logo"}
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml,image/*"
                     disabled={!canUseAdvancedBranding || logoUploading}
                     onChange={(event) => {
                       const file = event.target.files?.[0];
@@ -720,26 +741,33 @@ export default function BrandingSettingsForm({
                   <div style={styles.panelIntro}>
                     <h3 style={styles.uploadTitle}>Logo mark</h3>
                     <p style={styles.uploadText}>
-                      Optional square/icon version for compact spaces.
+                      Optional square/icon version for compact spaces. This also
+                      uses the same dark-safe display treatment.
                     </p>
                   </div>
 
                   {logoMarkUrl ? (
-                    <div style={styles.uploadPreviewWrap}>
+                    <div
+                      className="brand-logo-plate brand-logo-plate-mark"
+                      style={{
+                        ...styles.brandLogoPlate,
+                        ...styles.brandLogoPlateMark,
+                      }}
+                    >
                       <img
                         src={logoMarkUrl}
                         alt="Logo mark preview"
-                        style={styles.uploadPreview}
+                        style={styles.brandLogoImage}
                       />
                     </div>
                   ) : null}
                 </div>
 
-                <label style={styles.uploadButton}>
+                <label className="upload-button" style={styles.uploadButton}>
                   {markUploading ? "Uploading..." : "Upload logo mark"}
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml,image/*"
                     disabled={!canUseAdvancedBranding || markUploading}
                     onChange={(event) => {
                       const file = event.target.files?.[0];
@@ -815,7 +843,7 @@ export default function BrandingSettingsForm({
 
                     <label style={styles.miniLabel}>
                       Click for custom colour
-                      <div style={styles.colourControl}>
+                      <div className="colour-control" style={styles.colourControl}>
                         <input
                           type="color"
                           value={primaryColour}
@@ -882,7 +910,7 @@ export default function BrandingSettingsForm({
 
                     <label style={styles.miniLabel}>
                       Click for custom colour
-                      <div style={styles.colourControl}>
+                      <div className="colour-control" style={styles.colourControl}>
                         <input
                           type="color"
                           value={accentColour}
@@ -926,7 +954,7 @@ export default function BrandingSettingsForm({
               </section>
             ) : null}
 
-            <button type="submit" style={styles.primaryButton}>
+            <button className="primary-button" type="submit" style={styles.primaryButton}>
               Save branding settings
             </button>
           </form>
@@ -996,6 +1024,7 @@ export default function BrandingSettingsForm({
 
             <form action={sendContactEmailTestAction} style={styles.testEmailForm}>
               <button
+                className="test-email-button"
                 type="submit"
                 disabled={!formState.contactEmail}
                 style={{
@@ -1010,7 +1039,7 @@ export default function BrandingSettingsForm({
             </form>
           </section>
 
-          <div style={styles.previewActions}>
+          <div className="preview-actions" style={styles.previewActions}>
             <Link
               href={`/c/${tenantSlug}?adminReturn=${encodeURIComponent(
                 "/admin/settings/branding",
@@ -1080,6 +1109,10 @@ const responsiveStyles = `
   font: inherit;
 }
 
+.branding-settings-page .brand-logo-plate {
+  isolation: isolate;
+}
+
 @media (max-width: 960px) {
   .branding-settings-page .branding-hero,
   .branding-settings-page .settings-grid {
@@ -1116,6 +1149,12 @@ const responsiveStyles = `
   .branding-settings-page .colour-grid,
   .branding-settings-page .verification-grid {
     grid-template-columns: 1fr !important;
+  }
+
+  .branding-settings-page .brand-logo-plate-hero {
+    width: 82px !important;
+    height: 82px !important;
+    border-radius: 24px !important;
   }
 
   .branding-settings-page .preview-actions {
@@ -1171,6 +1210,16 @@ const responsiveStyles = `
 
   .branding-settings-page .colour-control {
     grid-template-columns: 52px minmax(0, 1fr) !important;
+  }
+
+  .branding-settings-page .brand-logo-plate-upload {
+    width: 100% !important;
+    height: 74px !important;
+  }
+
+  .branding-settings-page .brand-logo-plate-mark {
+    width: 74px !important;
+    height: 74px !important;
   }
 }
 `;
@@ -1310,27 +1359,50 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.08em",
   },
 
-  previewLogoWrap: {
+  brandLogoPlate: {
+    position: "relative",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    width: 84,
-    height: 84,
-    maxWidth: "100%",
-    borderRadius: 24,
-    background: "#ffffff",
-    border: "1px solid rgba(255,255,255,0.28)",
     overflow: "hidden",
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(248,250,252,0.94))",
+    border: "1px solid rgba(226,232,240,0.96)",
+    boxShadow:
+      "0 18px 45px rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.92)",
   },
 
-  previewLogo: {
+  brandLogoPlateHero: {
+    width: 92,
+    height: 92,
+    borderRadius: 28,
+    padding: 13,
+  },
+
+  brandLogoPlateUpload: {
+    width: 118,
+    height: 78,
+    borderRadius: 18,
+    padding: 10,
+    flex: "0 0 auto",
+  },
+
+  brandLogoPlateMark: {
+    width: 82,
+    height: 82,
+    borderRadius: 22,
+    padding: 10,
+    flex: "0 0 auto",
+  },
+
+  brandLogoImage: {
+    display: "block",
     width: "100%",
     height: "100%",
     objectFit: "contain",
-    padding: 10,
   },
 
-  previewLogoFallback: {
+  brandLogoFallback: {
     color: "#0f172a",
     fontSize: 24,
     fontWeight: 950,
@@ -1751,7 +1823,8 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
     padding: 14,
     borderRadius: 18,
-    background: "#f8fafc",
+    background:
+      "linear-gradient(135deg, rgba(248,250,252,1), rgba(241,245,249,0.92))",
     border: "1px solid #e2e8f0",
     minWidth: 0,
     overflow: "hidden",
@@ -1781,23 +1854,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     fontWeight: 700,
     overflowWrap: "anywhere",
-  },
-
-  uploadPreviewWrap: {
-    width: 86,
-    height: 62,
-    borderRadius: 14,
-    overflow: "hidden",
-    background: "#ffffff",
-    border: "1px solid #cbd5e1",
-    flex: "0 0 auto",
-  },
-
-  uploadPreview: {
-    width: "100%",
-    height: "100%",
-    objectFit: "contain",
-    padding: 8,
   },
 
   uploadButton: {
