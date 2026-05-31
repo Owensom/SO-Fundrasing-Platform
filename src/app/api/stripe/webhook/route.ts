@@ -118,10 +118,14 @@ type DonationDetails = {
   gift_aid_claimed: boolean;
 };
 
+type HigherOrLowerGameSession = {
+  id: string;
+};
+
 type HigherOrLowerOrderItemRow = {
   event_order_id: string;
   event_order_item_id: string;
-  quantity: number;
+  quantity: number | string | null;
   guest_name: string | null;
   customer_name: string | null;
   customer_email: string | null;
@@ -131,10 +135,6 @@ type HigherOrLowerOrderItemRow = {
 type HigherOrLowerPlayer = {
   name: string;
   email: string;
-};
-
-type HigherOrLowerGameSession = {
-  id: string;
 };
 
 type HigherOrLowerEntryRow = {
@@ -378,7 +378,7 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
-function normalisePlayer(value: unknown): HigherOrLowerPlayer | null {
+function normaliseHigherOrLowerPlayer(value: unknown): HigherOrLowerPlayer | null {
   if (!isObjectRecord(value)) {
     return null;
   }
@@ -396,7 +396,7 @@ function normalisePlayer(value: unknown): HigherOrLowerPlayer | null {
   };
 }
 
-function playersFromMetadata(value: unknown): HigherOrLowerPlayer[] {
+function higherOrLowerPlayersFromMetadata(value: unknown): HigherOrLowerPlayer[] {
   if (!isObjectRecord(value)) {
     return [];
   }
@@ -408,11 +408,11 @@ function playersFromMetadata(value: unknown): HigherOrLowerPlayer[] {
   }
 
   return rawPlayers
-    .map((player) => normalisePlayer(player))
+    .map((player) => normaliseHigherOrLowerPlayer(player))
     .filter(Boolean) as HigherOrLowerPlayer[];
 }
 
-function fallbackPlayersForOrderItem(
+function fallbackHigherOrLowerPlayersForOrderItem(
   item: HigherOrLowerOrderItemRow,
 ): HigherOrLowerPlayer[] {
   const quantity = Math.max(1, safeNumber(item.quantity, 1));
@@ -424,13 +424,13 @@ function fallbackPlayersForOrderItem(
     return [];
   }
 
-  return Array.from({ length: quantity }).map((_, index) => ({
+  return Array.from({ length: quantity }).map(() => ({
     name,
     email,
   }));
 }
 
-function playerEntryLabel(entry: {
+function higherOrLowerPlayerEntryLabel(entry: {
   player_name?: string | null;
   entry_number: number;
 }) {
@@ -569,6 +569,7 @@ async function getCheckoutFinancials({
     stripeDestinationAccountId,
   };
 }
+
 async function getVerifiedEventOrder(input: {
   orderId: string;
   eventId: string;
@@ -872,26 +873,7 @@ async function listHigherOrLowerPaidOrderItems(input: {
   );
 }
 
-async function nextHigherOrLowerEntryNumber(input: {
-  tenantSlug: string;
-  eventId: string;
-  sessionId: string;
-}) {
-  const rows = await query<{ next_entry_number: number }>(
-    `
-      select coalesce(max(entry_number), 0) + 1 as next_entry_number
-      from event_addon_game_entries
-      where tenant_slug = $1
-        and event_id = $2
-        and session_id = $3
-    `,
-    [input.tenantSlug, input.eventId, input.sessionId],
-  );
-
-  return Math.max(1, Number(rows[0]?.next_entry_number || 1));
-}
-
-async function upsertHigherOrLowerEntry(input: {
+async function createOrUpdateHigherOrLowerEntry(input: {
   tenantSlug: string;
   eventId: string;
   sessionId: string;
@@ -901,7 +883,69 @@ async function upsertHigherOrLowerEntry(input: {
   playerName: string;
   playerEmail: string;
 }) {
-  const rows = await query<HigherOrLowerEntryRow>(
+  const existingRows = await query<HigherOrLowerEntryRow>(
+    `
+      select
+        id::text,
+        entry_number,
+        player_name,
+        player_email,
+        public_answer_token
+      from event_addon_game_entries
+      where tenant_slug = $1
+        and event_id = $2
+        and session_id = $3
+        and event_order_item_id = $4
+        and entry_number = $5
+      limit 1
+    `,
+    [
+      input.tenantSlug,
+      input.eventId,
+      input.sessionId,
+      input.eventOrderItemId,
+      input.entryNumber,
+    ],
+  );
+
+  const existing = existingRows[0] || null;
+
+  if (existing) {
+    const updatedRows = await query<HigherOrLowerEntryRow>(
+      `
+        update event_addon_game_entries
+        set
+          player_name = $6,
+          player_email = $7,
+          public_answer_token = coalesce(public_answer_token, encode(gen_random_bytes(24), 'hex')),
+          updated_at = now()
+        where tenant_slug = $1
+          and event_id = $2
+          and session_id = $3
+          and event_order_item_id = $4
+          and entry_number = $5
+        returning
+          id::text,
+          entry_number,
+          player_name,
+          player_email,
+          public_answer_token
+      `,
+      [
+        input.tenantSlug,
+        input.eventId,
+        input.sessionId,
+        input.eventOrderItemId,
+        input.entryNumber,
+        input.playerName,
+        input.playerEmail,
+      ],
+    );
+
+    return updatedRows[0] || existing;
+  }
+
+  const insertedRows = await query<HigherOrLowerEntryRow>(
     `
       insert into event_addon_game_entries (
         tenant_slug,
@@ -915,27 +959,7 @@ async function upsertHigherOrLowerEntry(input: {
         status,
         public_answer_token
       )
-      values (
-        $1,
-        $2,
-        $3,
-        $4,
-        $5,
-        $6,
-        $7,
-        $8,
-        'active',
-        encode(gen_random_bytes(24), 'hex')
-      )
-      on conflict (tenant_slug, event_id, session_id, event_order_item_id, entry_number)
-      do update set
-        player_name = excluded.player_name,
-        player_email = excluded.player_email,
-        public_answer_token = coalesce(
-          event_addon_game_entries.public_answer_token,
-          excluded.public_answer_token
-        ),
-        updated_at = now()
+      values ($1,$2,$3,$4,$5,$6,$7,$8,'active',encode(gen_random_bytes(24), 'hex'))
       returning
         id::text,
         entry_number,
@@ -955,7 +979,7 @@ async function upsertHigherOrLowerEntry(input: {
     ],
   );
 
-  return rows[0] || null;
+  return insertedRows[0] || null;
 }
 
 async function createHigherOrLowerEntriesAndSendLinks(input: {
@@ -986,6 +1010,22 @@ async function createHigherOrLowerEntriesAndSendLinks(input: {
     };
   }
 
+  const eventSlug = cleanText(input.eventSlug);
+
+  if (!eventSlug) {
+    console.warn("Higher or Lower player link email skipped: missing event slug", {
+      tenantSlug: input.tenantSlug,
+      eventId: input.eventId,
+      orderId: input.orderId,
+    });
+
+    return {
+      created: 0,
+      emailed: 0,
+      skippedReason: "missing_event_slug",
+    };
+  }
+
   const orderItems = await listHigherOrLowerPaidOrderItems({
     tenantSlug: input.tenantSlug,
     eventId: input.eventId,
@@ -1000,21 +1040,15 @@ async function createHigherOrLowerEntriesAndSendLinks(input: {
     };
   }
 
-  let nextEntryNumber = await nextHigherOrLowerEntryNumber({
-    tenantSlug: input.tenantSlug,
-    eventId: input.eventId,
-    sessionId: gameSession.id,
-  });
-
   let created = 0;
   let emailed = 0;
 
   for (const item of orderItems) {
-    const metadataPlayers = playersFromMetadata(item.metadata);
+    const metadataPlayers = higherOrLowerPlayersFromMetadata(item.metadata);
     const players =
       metadataPlayers.length > 0
         ? metadataPlayers
-        : fallbackPlayersForOrderItem(item);
+        : fallbackHigherOrLowerPlayersForOrderItem(item);
 
     if (players.length === 0) {
       console.warn("Higher or Lower player link skipped: no player emails", {
@@ -1029,10 +1063,9 @@ async function createHigherOrLowerEntriesAndSendLinks(input: {
 
     for (let index = 0; index < players.length; index += 1) {
       const player = players[index];
-      const entryNumber = nextEntryNumber;
-      nextEntryNumber += 1;
+      const entryNumber = index + 1;
 
-      const entry = await upsertHigherOrLowerEntry({
+      const entry = await createOrUpdateHigherOrLowerEntry({
         tenantSlug: input.tenantSlug,
         eventId: input.eventId,
         sessionId: gameSession.id,
@@ -1058,7 +1091,7 @@ async function createHigherOrLowerEntriesAndSendLinks(input: {
       created += 1;
 
       const answerUrl = `${siteUrl(input.req)}/e/${encodeURIComponent(
-        input.eventSlug,
+        eventSlug,
       )}/higher-or-lower/play/${encodeURIComponent(
         entry.public_answer_token,
       )}`;
@@ -1068,7 +1101,7 @@ async function createHigherOrLowerEntriesAndSendLinks(input: {
           to: player.email,
           name: player.name,
           eventTitle: input.eventTitle,
-          playerEntryLabel: playerEntryLabel({
+          playerEntryLabel: higherOrLowerPlayerEntryLabel({
             player_name: entry.player_name,
             entry_number: entry.entry_number,
           }),
@@ -1095,4 +1128,1123 @@ async function createHigherOrLowerEntriesAndSendLinks(input: {
     emailed,
     skippedReason: "",
   };
+}
+
+async function recordPlatformPayment(input: {
+  session: Stripe.Checkout.Session;
+  paymentIntentId: string | null;
+  raffleId: string | null;
+  tenantSlug: string;
+  reservationToken: string;
+  paymentType: string;
+  squaresGameId: string | null;
+  email: string | null;
+  financials: PaymentFinancials;
+  auctionId?: string | null;
+  auctionItemId?: string | null;
+  auctionBidId?: string | null;
+  donationId?: string | null;
+  campaignType?: string | null;
+  campaignId?: string | null;
+}) {
+  await query(
+    `
+      insert into platform_payments (
+        stripe_checkout_session_id,
+        stripe_payment_intent_id,
+        raffle_id,
+        tenant_slug,
+        reservation_token,
+        currency,
+        gross_amount_cents,
+        platform_fee_cents,
+        net_amount_cents,
+        donor_fee_cents,
+        donor_covered_fees,
+        ticket_subtotal_cents,
+        payment_status,
+        customer_email,
+        payment_type,
+        squares_game_id,
+        stripe_transfer_id,
+        stripe_destination_account_id,
+        stripe_payout_status,
+        payout_reconciled_at,
+        auction_id,
+        auction_item_id,
+        auction_bid_id,
+        donation_id,
+        campaign_type,
+        campaign_id
+      )
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
+      on conflict (stripe_checkout_session_id)
+      do update set
+        stripe_payment_intent_id = excluded.stripe_payment_intent_id,
+        raffle_id = excluded.raffle_id,
+        tenant_slug = excluded.tenant_slug,
+        reservation_token = excluded.reservation_token,
+        currency = excluded.currency,
+        gross_amount_cents = excluded.gross_amount_cents,
+        platform_fee_cents = excluded.platform_fee_cents,
+        net_amount_cents = excluded.net_amount_cents,
+        donor_fee_cents = excluded.donor_fee_cents,
+        donor_covered_fees = excluded.donor_covered_fees,
+        ticket_subtotal_cents = excluded.ticket_subtotal_cents,
+        payment_status = excluded.payment_status,
+        customer_email = excluded.customer_email,
+        payment_type = excluded.payment_type,
+        squares_game_id = excluded.squares_game_id,
+        stripe_transfer_id = excluded.stripe_transfer_id,
+        stripe_destination_account_id = excluded.stripe_destination_account_id,
+        stripe_payout_status = excluded.stripe_payout_status,
+        payout_reconciled_at = excluded.payout_reconciled_at,
+        auction_id = excluded.auction_id,
+        auction_item_id = excluded.auction_item_id,
+        auction_bid_id = excluded.auction_bid_id,
+        donation_id = excluded.donation_id,
+        campaign_type = excluded.campaign_type,
+        campaign_id = excluded.campaign_id
+    `,
+    [
+      input.session.id,
+      input.paymentIntentId,
+      input.raffleId,
+      input.tenantSlug,
+      input.reservationToken,
+      input.session.currency || null,
+      input.financials.grossAmountCents,
+      input.financials.platformFeeCents,
+      input.financials.netAmountCents,
+      input.financials.donorFeeCents,
+      input.financials.donorCoveredFees,
+      input.financials.ticketSubtotalCents,
+      input.session.payment_status || null,
+      input.email,
+      input.paymentType,
+      input.squaresGameId,
+      input.financials.stripeTransferId || null,
+      input.financials.stripeDestinationAccountId ||
+        input.financials.stripeConnectAccountId ||
+        null,
+      input.financials.stripeConnectRouted
+        ? "destination_charge_created"
+        : null,
+      input.financials.stripeConnectRouted
+        ? new Date().toISOString()
+        : null,
+      input.auctionId || null,
+      input.auctionItemId || null,
+      input.auctionBidId || null,
+      input.donationId || null,
+      input.campaignType || null,
+      input.campaignId || null,
+    ],
+  );
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+    if (!webhookSecret) {
+      return NextResponse.json(
+        { ok: false, error: "STRIPE_WEBHOOK_SECRET is missing" },
+        { status: 500 },
+      );
+    }
+
+    const signature = request.headers.get("stripe-signature");
+
+    if (!signature) {
+      return NextResponse.json(
+        { ok: false, error: "Missing Stripe signature" },
+        { status: 400 },
+      );
+    }
+
+    const rawBody = await request.text();
+
+    let event: Stripe.Event;
+
+    try {
+      event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+    } catch (error: any) {
+      console.error("Stripe webhook signature error", error);
+
+      return NextResponse.json(
+        { ok: false, error: error?.message || "Invalid signature" },
+        { status: 400 },
+      );
+    }
+
+    if (isStripeConnectAccountEvent(event.type)) {
+      const accountId = getConnectedAccountIdFromEvent(event);
+
+      if (!accountId) {
+        console.error("Stripe Connect webhook missing account id", {
+          eventType: event.type,
+          eventId: event.id,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          event: event.type,
+          reason: "Missing connected account id",
+        });
+      }
+
+      const account = await syncStripeConnectAccountById(accountId);
+
+      return NextResponse.json({
+        ok: true,
+        event: event.type,
+        accountId: account.id,
+        chargesEnabled: Boolean(account.charges_enabled),
+        payoutsEnabled: Boolean(account.payouts_enabled),
+        detailsSubmitted: Boolean(account.details_submitted),
+        onboardingComplete: Boolean(
+          account.details_submitted && account.charges_enabled,
+        ),
+      });
+    }
+
+    if (event.type !== "checkout.session.completed") {
+      return NextResponse.json({ ok: true, ignored: event.type });
+    }
+
+    const session = event.data.object as Stripe.Checkout.Session;
+    const metadata = session.metadata || {};
+    const type = normalisePaymentType(metadata.type || metadata.kind);
+    const metadataTenantSlug = String(
+      metadata.tenant_slug || metadata.tenantSlug || "",
+    ).trim();
+
+    const paymentIntentId = getPaymentIntentId(session);
+
+    const financials = await getCheckoutFinancials({
+      session,
+      metadata,
+      paymentIntentId,
+    });
+
+    const {
+      grossAmountCents,
+      platformFeeCents,
+      netAmountCents,
+      stripeConnectRouted,
+      stripeConnectAccountId,
+      applicationFeeAmountCents,
+      stripeTransferId,
+      stripeDestinationAccountId,
+    } = financials;
+
+    const email =
+      session.customer_details?.email || session.customer_email || null;
+
+    const name = session.customer_details?.name || null;
+
+    if (type === "donation") {
+      const donationId = String(
+        metadata.donation_id ||
+          metadata.donationId ||
+          session.client_reference_id ||
+          "",
+      ).trim();
+
+      if (!donationId) {
+        console.error("Stripe donation webhook missing donation id", {
+          checkoutSessionId: session.id,
+          metadata,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Missing donation id",
+        });
+      }
+
+      const donation = await getDonationDetails({
+        donationId,
+        metadataTenantSlug,
+      });
+
+      if (!donation) {
+        console.error("Stripe donation webhook failed donation verification", {
+          checkoutSessionId: session.id,
+          donationId,
+          metadataTenantSlug,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Donation verification failed",
+        });
+      }
+
+      await markDonationPaid({
+        donationId: donation.id,
+        stripeCheckoutSessionId: session.id,
+        stripePaymentIntentId: paymentIntentId,
+      });
+
+      await recordPlatformPayment({
+        session,
+        paymentIntentId,
+        raffleId: null,
+        tenantSlug: donation.tenant_slug,
+        reservationToken: donation.id,
+        paymentType: "donation",
+        squaresGameId: null,
+        email: email || donation.donor_email || null,
+        financials,
+        donationId: donation.id,
+        campaignType: donation.campaign_type || "general",
+        campaignId: donation.campaign_id || null,
+      });
+
+      const receiptEmail = email || donation.donor_email || null;
+
+      if (receiptEmail) {
+        try {
+          const emailBranding = await getTenantEmailBranding(
+            donation.tenant_slug,
+          );
+
+          await sendDonationReceiptEmail({
+            to: receiptEmail,
+            name: name || donation.donor_name,
+            campaignTitle:
+              donation.campaign_title || metadata.campaign_title || "Donation",
+            amountCents: grossAmountCents || donation.amount_cents,
+            currency: session.currency || donation.currency || "GBP",
+            donationReference: donation.id,
+            message: donation.message,
+            giftAidClaimed: Boolean(donation.gift_aid_claimed),
+            branding: emailBranding,
+          });
+        } catch (emailError) {
+          console.error("Donation receipt email failed:", emailError);
+        }
+      }
+
+      return NextResponse.json({
+        ok: true,
+        event: event.type,
+        type,
+        checkoutSessionId: session.id,
+        donationId: donation.id,
+        tenantSlug: donation.tenant_slug,
+        stripeConnectRouted,
+        stripeConnectAccountId,
+        stripeTransferId,
+        stripeDestinationAccountId,
+        applicationFeeAmountCents,
+        platformFeeCents,
+        netAmountCents,
+      });
+    }
+
+    if (type === "auction_winning_bid") {
+      const auctionBidId = String(
+        metadata.auction_bid_id ||
+          metadata.auctionBidId ||
+          metadata.bid_id ||
+          metadata.bidId ||
+          session.client_reference_id ||
+          "",
+      ).trim();
+
+      const auctionId = String(
+        metadata.auction_id || metadata.auctionId || "",
+      ).trim();
+
+      const auctionItemId = String(
+        metadata.auction_item_id ||
+          metadata.auctionItemId ||
+          metadata.item_id ||
+          metadata.itemId ||
+          "",
+      ).trim();
+
+      if (!auctionBidId || !auctionId || !auctionItemId) {
+        console.error("Stripe auction webhook missing auction payment data", {
+          checkoutSessionId: session.id,
+          metadata,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Missing auction winning bid data",
+        });
+      }
+
+      const payment = await getAuctionWinningBidPaymentByBidId(auctionBidId);
+
+      if (!payment) {
+        console.error("Stripe auction webhook failed bid lookup", {
+          checkoutSessionId: session.id,
+          auctionBidId,
+          auctionId,
+          auctionItemId,
+          metadataTenantSlug,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Auction bid verification failed",
+        });
+      }
+
+      if (metadataTenantSlug && metadataTenantSlug !== payment.tenant_slug) {
+        console.error("Stripe auction webhook failed tenant verification", {
+          checkoutSessionId: session.id,
+          auctionBidId,
+          metadataTenantSlug,
+          actualTenantSlug: payment.tenant_slug,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Auction tenant verification failed",
+        });
+      }
+
+      if (auctionId !== payment.auction_id || auctionItemId !== payment.item_id) {
+        console.error("Stripe auction webhook failed item verification", {
+          checkoutSessionId: session.id,
+          auctionBidId,
+          metadataAuctionId: auctionId,
+          metadataAuctionItemId: auctionItemId,
+          actualAuctionId: payment.auction_id,
+          actualItemId: payment.item_id,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Auction item verification failed",
+        });
+      }
+
+      if (!payment.is_winning) {
+        console.error("Stripe auction webhook rejected non-winning bid", {
+          checkoutSessionId: session.id,
+          auctionBidId,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Auction bid is no longer winning",
+        });
+      }
+
+      if (
+        payment.reserve_price_cents !== null &&
+        payment.reserve_price_cents !== undefined &&
+        Number(payment.amount_cents || 0) <
+          Number(payment.reserve_price_cents || 0)
+      ) {
+        console.error("Stripe auction webhook rejected reserve-not-met bid", {
+          checkoutSessionId: session.id,
+          auctionBidId,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Auction reserve not met",
+        });
+      }
+
+      await markAuctionWinningBidPaid({
+        bidId: payment.bid_id,
+        stripeCheckoutSessionId: session.id,
+        stripePaymentIntentId: paymentIntentId,
+      });
+
+      await recordPlatformPayment({
+        session,
+        paymentIntentId,
+        raffleId: null,
+        tenantSlug: payment.tenant_slug,
+        reservationToken: payment.payment_token || payment.bid_id,
+        paymentType: "auction_winning_bid",
+        squaresGameId: null,
+        email: email || payment.bidder_email || null,
+        financials,
+        auctionId: payment.auction_id,
+        auctionItemId: payment.item_id,
+        auctionBidId: payment.bid_id,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        event: event.type,
+        type,
+        checkoutSessionId: session.id,
+        auctionId: payment.auction_id,
+        auctionItemId: payment.item_id,
+        auctionBidId: payment.bid_id,
+        tenantSlug: payment.tenant_slug,
+        stripeConnectRouted,
+        stripeConnectAccountId,
+        stripeTransferId,
+        stripeDestinationAccountId,
+        applicationFeeAmountCents,
+        platformFeeCents,
+        netAmountCents,
+      });
+    }
+
+    if (type === "event") {
+      const orderId = String(
+        metadata.order_id ||
+          metadata.orderId ||
+          session.client_reference_id ||
+          "",
+      ).trim();
+
+      const eventId = String(metadata.event_id || metadata.eventId || "").trim();
+
+      if (!orderId || !eventId) {
+        console.error("Stripe event webhook missing order/event id", {
+          checkoutSessionId: session.id,
+          metadata,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Missing event order data",
+        });
+      }
+
+      const verifiedOrder = await getVerifiedEventOrder({
+        orderId,
+        eventId,
+        metadataTenantSlug,
+      });
+
+      if (!verifiedOrder) {
+        console.error("Stripe event webhook failed tenant/order verification", {
+          checkoutSessionId: session.id,
+          orderId,
+          eventId,
+          metadataTenantSlug,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Event order verification failed",
+        });
+      }
+
+      const tenantSlug = verifiedOrder.tenant_slug;
+
+      await query(
+        `
+          update event_orders
+          set
+            status = 'paid',
+            stripe_session_id = $1,
+            customer_name = coalesce($2, customer_name),
+            customer_email = coalesce($3, customer_email)
+          where id = $4
+            and event_id = $5
+            and tenant_slug = $6
+        `,
+        [session.id, name, email, orderId, eventId, tenantSlug],
+      );
+
+      await query(
+        `
+          update event_seats
+          set
+            status = 'sold',
+            customer_name = $2,
+            customer_email = $3,
+            updated_at = now()
+          where event_id = $1
+            and order_id = $4
+            and stripe_session_id = $5
+            and status = 'reserved'
+        `,
+        [eventId, name, email, orderId, session.id],
+      );
+
+      await recordPlatformPayment({
+        session,
+        paymentIntentId,
+        raffleId: null,
+        tenantSlug,
+        reservationToken: orderId,
+        paymentType: "event",
+        squaresGameId: null,
+        email,
+        financials,
+      });
+
+      const [eventDetails, emailBranding] = await Promise.all([
+        getEventDetails({
+          eventId,
+          tenantSlug,
+        }),
+        getTenantEmailBranding(tenantSlug),
+      ]);
+
+      if (email) {
+        try {
+          const orderItems = await query<{
+            label: string;
+            quantity: number;
+            unit_amount: number;
+          }>(
+            `
+              select label, quantity, unit_amount
+              from event_order_items
+              where order_id = $1
+                and event_id = $2
+              order by created_at asc
+            `,
+            [orderId, eventId],
+          );
+
+          await sendEventReceiptEmail({
+            to: email,
+            name,
+            eventTitle: eventDetails?.title || metadata.event_title || "Event",
+            amountCents: grossAmountCents,
+            currency: session.currency || "GBP",
+            orderReference: orderId,
+            tickets: orderItems,
+            eventDate: eventDetails?.starts_at || null,
+            location: eventDetails?.location || null,
+            branding: emailBranding,
+          });
+        } catch (emailError) {
+          console.error("Event receipt email failed:", emailError);
+        }
+      }
+
+      const higherOrLowerLinkResult =
+        await createHigherOrLowerEntriesAndSendLinks({
+          req: request,
+          tenantSlug,
+          eventId,
+          orderId,
+          eventTitle: eventDetails?.title || metadata.event_title || "Event",
+          eventSlug:
+            eventDetails?.slug ||
+            String(metadata.event_slug || metadata.eventSlug || "").trim(),
+          branding: emailBranding,
+        });
+
+      return NextResponse.json({
+        ok: true,
+        event: event.type,
+        type,
+        checkoutSessionId: session.id,
+        orderId,
+        eventId,
+        tenantSlug,
+        higherOrLowerEntriesCreated: higherOrLowerLinkResult.created,
+        higherOrLowerPlayerEmailsSent: higherOrLowerLinkResult.emailed,
+        higherOrLowerSkippedReason: higherOrLowerLinkResult.skippedReason,
+        stripeConnectRouted,
+        stripeConnectAccountId,
+        stripeTransferId,
+        stripeDestinationAccountId,
+        applicationFeeAmountCents,
+        platformFeeCents,
+        netAmountCents,
+      });
+    }
+
+    const reservationToken = String(
+      metadata.reservation_token ||
+        metadata.reservationToken ||
+        metadata.reservation_id ||
+        metadata.reservationId ||
+        "",
+    ).trim();
+
+    const raffleId =
+      type === "raffle"
+        ? String(metadata.raffle_id || metadata.raffleId || "").trim()
+        : null;
+
+    const squaresGameId =
+      type === "squares"
+        ? String(metadata.game_id || metadata.gameId || "").trim()
+        : null;
+
+    if (!reservationToken) {
+      console.error("Stripe webhook missing reservation token", {
+        checkoutSessionId: session.id,
+        type,
+        metadata,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: "Missing reservation token",
+      });
+    }
+
+    if (type === "raffle") {
+      if (!raffleId) {
+        console.error("Stripe webhook missing raffle id", {
+          checkoutSessionId: session.id,
+          metadata,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Missing raffle id",
+        });
+      }
+
+      const verifiedReservations = await getVerifiedRaffleReservations({
+        raffleId,
+        reservationToken,
+        metadataTenantSlug,
+      });
+
+      if (verifiedReservations.length === 0) {
+        console.error("Stripe raffle webhook failed tenant/reservation check", {
+          checkoutSessionId: session.id,
+          raffleId,
+          reservationToken,
+          metadataTenantSlug,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Raffle reservation verification failed",
+        });
+      }
+
+      const tenantSlug = verifiedReservations[0].tenant_slug;
+
+      const [raffleDetails, emailBranding] = await Promise.all([
+        getRaffleDetails({
+          raffleId,
+          tenantSlug,
+        }),
+        getTenantEmailBranding(tenantSlug),
+      ]);
+
+      if (!raffleDetails) {
+        console.error("Stripe raffle webhook failed raffle verification", {
+          checkoutSessionId: session.id,
+          raffleId,
+          tenantSlug,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Raffle verification failed",
+        });
+      }
+
+      await query(
+        `
+          update raffle_ticket_reservations
+          set
+            status = 'sold',
+            checkout_session_id = $1,
+            payment_id = $2,
+            gross_amount_cents = $3,
+            platform_fee_cents = $4,
+            net_amount_cents = $5,
+            donor_fee_cents = $6,
+            donor_covered_fees = $7,
+            ticket_subtotal_cents = $8
+          where raffle_id = $9
+            and reservation_token = $10
+        `,
+        [
+          session.id,
+          paymentIntentId,
+          grossAmountCents,
+          platformFeeCents,
+          netAmountCents,
+          financials.donorFeeCents,
+          financials.donorCoveredFees,
+          financials.ticketSubtotalCents,
+          raffleId,
+          reservationToken,
+        ],
+      );
+
+      await query(
+        `
+          insert into raffle_ticket_sales (
+            raffle_id,
+            ticket_number,
+            colour,
+            buyer_name,
+            buyer_email,
+            currency,
+            amount_cents,
+            reservation_id,
+            payment_id,
+            stripe_checkout_session_id,
+            stripe_payment_intent_id,
+            purchase_reference,
+            reservation_group_id,
+            sold_at
+          )
+          select
+            r.raffle_id,
+            r.ticket_number,
+            coalesce(nullif(r.colour, ''), 'default'),
+            coalesce(r.buyer_name, $7),
+            coalesce(r.buyer_email, $8),
+            $3,
+            $4,
+            r.reservation_token,
+            $5,
+            $6,
+            $5,
+            r.reservation_token,
+            r.reservation_group_id,
+            now()
+          from raffle_ticket_reservations r
+          where r.raffle_id = $1
+            and r.reservation_token = $2
+            and r.status = 'sold'
+            and not exists (
+              select 1
+              from raffle_ticket_sales s
+              where s.raffle_id = r.raffle_id
+                and s.ticket_number = r.ticket_number
+                and s.colour = coalesce(nullif(r.colour, ''), 'default')
+            )
+        `,
+        [
+          raffleId,
+          reservationToken,
+          session.currency || "GBP",
+          grossAmountCents,
+          paymentIntentId,
+          session.id,
+          name,
+          email,
+        ],
+      );
+
+      await query(
+        `
+          update raffles
+          set
+            sold_tickets = (
+              select count(*)::int
+              from raffle_ticket_sales
+              where raffle_id = $1
+            ),
+            updated_at = now()
+          where id = $1
+            and tenant_slug = $2
+        `,
+        [raffleId, tenantSlug],
+      );
+
+      const tickets = await query<{
+        ticket_number: number;
+        colour: string;
+      }>(
+        `
+          select ticket_number, colour
+          from raffle_ticket_sales
+          where raffle_id = $1
+            and reservation_id = $2
+          order by ticket_number asc
+        `,
+        [raffleId, reservationToken],
+      );
+
+      await recordPlatformPayment({
+        session,
+        paymentIntentId,
+        raffleId,
+        tenantSlug,
+        reservationToken,
+        paymentType: "raffle",
+        squaresGameId: null,
+        email,
+        financials,
+      });
+
+      if (email) {
+        try {
+          await sendReceiptEmail({
+            to: email,
+            name,
+            raffleTitle: raffleDetails.title || metadata.raffle_title || "Raffle",
+            tickets,
+            amountCents: grossAmountCents,
+            currency: session.currency || "GBP",
+            reservationToken,
+            branding: emailBranding,
+            raffleSubtype: raffleDetails.raffle_subtype,
+          });
+        } catch (emailError) {
+          console.error("Raffle receipt email failed:", emailError);
+        }
+      }
+
+      return NextResponse.json({
+        ok: true,
+        event: event.type,
+        type,
+        checkoutSessionId: session.id,
+        raffleId,
+        tenantSlug,
+        stripeConnectRouted,
+        stripeConnectAccountId,
+        stripeTransferId,
+        stripeDestinationAccountId,
+        applicationFeeAmountCents,
+        platformFeeCents,
+        netAmountCents,
+      });
+    }
+
+    if (type === "squares") {
+      if (!squaresGameId) {
+        console.error("Stripe webhook missing squares game id", {
+          checkoutSessionId: session.id,
+          metadata,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Missing squares game id",
+        });
+      }
+
+      const verifiedReservation = await getVerifiedSquaresReservation({
+        gameId: squaresGameId,
+        reservationToken,
+        metadataTenantSlug,
+      });
+
+      if (!verifiedReservation) {
+        console.error("Stripe squares webhook failed tenant/reservation check", {
+          checkoutSessionId: session.id,
+          squaresGameId,
+          reservationToken,
+          metadataTenantSlug,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Squares reservation verification failed",
+        });
+      }
+
+      const tenantSlug = verifiedReservation.tenant_slug;
+
+      const [squaresGame, emailBranding] = await Promise.all([
+        getSquaresGameDetails({
+          gameId: squaresGameId,
+          tenantSlug,
+        }),
+        getTenantEmailBranding(tenantSlug),
+      ]);
+
+      if (!squaresGame) {
+        console.error("Stripe squares webhook failed game verification", {
+          checkoutSessionId: session.id,
+          squaresGameId,
+          tenantSlug,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Squares game verification failed",
+        });
+      }
+
+      const squares = parseSquaresMetadata(metadata.squares_json);
+
+      await query(
+        `
+          update squares_reservations
+          set
+            payment_status = 'paid',
+            stripe_checkout_session_id = $1
+          where reservation_token = $2
+            and game_id = $3
+        `,
+        [session.id, reservationToken, squaresGameId],
+      );
+
+      await query(
+        `
+          insert into squares_sales (
+            id,
+            tenant_slug,
+            game_id,
+            reservation_token,
+            stripe_checkout_session_id,
+            stripe_payment_intent_id,
+            payment_status,
+            currency,
+            gross_amount_cents,
+            platform_fee_cents,
+            net_amount_cents,
+            customer_email,
+            customer_name,
+            squares,
+            metadata_json
+          )
+          values (
+            gen_random_uuid()::text,
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb
+          )
+        `,
+        [
+          tenantSlug,
+          squaresGameId,
+          reservationToken,
+          session.id,
+          paymentIntentId,
+          session.payment_status || "paid",
+          session.currency || "GBP",
+          grossAmountCents,
+          platformFeeCents,
+          netAmountCents,
+          email,
+          name,
+          JSON.stringify(squares),
+          JSON.stringify({
+            ...metadata,
+            tenant_slug: tenantSlug,
+            stripe_connect_routed: stripeConnectRouted ? "true" : "false",
+            stripe_connect_account_id: stripeConnectAccountId,
+            stripe_transfer_id: stripeTransferId,
+            stripe_destination_account_id: stripeDestinationAccountId,
+            application_fee_amount: String(applicationFeeAmountCents),
+            normalized_platform_fee_cents: String(platformFeeCents),
+            normalized_net_amount_cents: String(netAmountCents),
+            normalized_donor_fee_cents: String(financials.donorFeeCents),
+            normalized_ticket_subtotal_cents: String(
+              financials.ticketSubtotalCents,
+            ),
+          }),
+        ],
+      );
+
+      await query(
+        `
+          update squares_games
+          set
+            config_json = jsonb_set(
+              jsonb_set(
+                coalesce(config_json, '{}'::jsonb),
+                '{sold}',
+                (
+                  select to_jsonb(array_agg(distinct value::int order by value::int))
+                  from jsonb_array_elements_text(
+                    coalesce(config_json->'sold', '[]'::jsonb) || $3::jsonb
+                  ) as value
+                )
+              ),
+              '{reserved}',
+              (
+                select to_jsonb(coalesce(array_agg(value::int order by value::int), '{}'))
+                from jsonb_array_elements_text(
+                  coalesce(config_json->'reserved', '[]'::jsonb)
+                ) as value
+                where value::int not in (
+                  select jsonb_array_elements_text($3::jsonb)::int
+                )
+              )
+            ),
+            updated_at = now()
+          where id = $1
+            and tenant_slug = $2
+        `,
+        [squaresGameId, tenantSlug, JSON.stringify(squares)],
+      );
+
+      await recordPlatformPayment({
+        session,
+        paymentIntentId,
+        raffleId: null,
+        tenantSlug,
+        reservationToken,
+        paymentType: "squares",
+        squaresGameId,
+        email,
+        financials,
+      });
+
+      if (email) {
+        try {
+          await sendSquaresReceiptEmail({
+            to: email,
+            name,
+            gameTitle: squaresGame.title || metadata.game_title || "Squares Game",
+            squares,
+            amountCents: grossAmountCents,
+            currency: session.currency || "GBP",
+            reservationToken,
+            branding: emailBranding,
+          });
+        } catch (emailError) {
+          console.error("Squares receipt email failed:", emailError);
+        }
+      }
+
+      return NextResponse.json({
+        ok: true,
+        event: event.type,
+        type,
+        checkoutSessionId: session.id,
+        squaresGameId,
+        tenantSlug,
+        stripeConnectRouted,
+        stripeConnectAccountId,
+        stripeTransferId,
+        stripeDestinationAccountId,
+        applicationFeeAmountCents,
+        platformFeeCents,
+        netAmountCents,
+      });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      event: event.type,
+      type,
+      reason: "Unsupported checkout session type",
+    });
+  } catch (error: any) {
+    console.error("Stripe webhook error", error);
+
+    return NextResponse.json(
+      { ok: false, error: error?.message || "Webhook failed" },
+      { status: 500 },
+    );
+  }
 }
