@@ -369,23 +369,50 @@ function PlayerList({
   title,
   entries,
   emptyText,
+  helperText,
 }: {
   title: string;
   entries: PublicGameEntry[];
   emptyText: string;
+  helperText: string;
 }) {
   return (
-    <section style={styles.playerPanel}>
-      <h2 style={styles.playerPanelTitle}>{title}</h2>
+    <section className="playerPanel" style={styles.playerPanel}>
+      <div style={styles.playerPanelHeader}>
+        <div style={styles.playerPanelHeadingWrap}>
+          <h2 style={styles.playerPanelTitle}>{title}</h2>
+          <p style={styles.playerPanelHelper}>{helperText}</p>
+        </div>
+
+        <span style={styles.playerCountPill}>
+          {entries.length} {entries.length === 1 ? "player" : "players"}
+        </span>
+      </div>
 
       {entries.length === 0 ? (
         <div style={styles.emptyState}>{emptyText}</div>
       ) : (
-        <div style={styles.playerGrid}>
+        <div className="playerGrid" style={styles.playerGrid}>
           {entries.map((entry) => (
-            <div key={entry.id} style={styles.playerCard}>
-              <strong>{playerDisplayName(entry)}</strong>
-              <span>{statusLabel(entry.status)}</span>
+            <div key={entry.id} className="playerCard" style={styles.playerCard}>
+              <strong style={styles.playerNameText}>{playerDisplayName(entry)}</strong>
+
+              <div style={styles.playerStatusWrap}>
+                {entry.status === "eliminated" && entry.eliminated_round_number ? (
+                  <span style={styles.playerRoundText}>
+                    Round {entry.eliminated_round_number}
+                  </span>
+                ) : null}
+
+                <span
+                  style={{
+                    ...styles.playerStatusPill,
+                    ...statusStyle(entry.status),
+                  }}
+                >
+                  {statusLabel(entry.status)}
+                </span>
+              </div>
             </div>
           ))}
         </div>
@@ -747,12 +774,14 @@ export default async function PublicHigherOrLowerDisplayPage({
               title="Still playing"
               entries={active}
               emptyText="No active players are currently showing."
+              helperText="Players still eligible to answer the next open round."
             />
 
             <PlayerList
               title="Out of the game"
-              entries={eliminated.slice(0, 12)}
+              entries={eliminated}
               emptyText="No players have been eliminated yet."
+              helperText="Eliminated players are kept visible without stretching the room display."
             />
           </div>
         ) : null}
@@ -789,6 +818,36 @@ const responsiveStyles = `
 .public-higher-lower-page a {
   min-width: 0;
   max-width: 100%;
+}
+
+@media (min-width: 981px) {
+  .public-higher-lower-page .playersGrid {
+    align-items: start !important;
+  }
+
+  .public-higher-lower-page .playerPanel {
+    max-height: 520px !important;
+  }
+
+  .public-higher-lower-page .playerGrid {
+    max-height: 382px !important;
+    overflow-y: auto !important;
+    padding-right: 4px !important;
+  }
+
+  .public-higher-lower-page .playerGrid::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .public-higher-lower-page .playerGrid::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 999px;
+  }
+
+  .public-higher-lower-page .playerGrid::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 999px;
+  }
 }
 
 @media (max-width: 980px) {
@@ -964,8 +1023,18 @@ const responsiveStyles = `
     padding: 12px !important;
   }
 
+  .public-higher-lower-page .playerPanelHeader {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
   .public-higher-lower-page .playerCard {
     align-items: flex-start !important;
+  }
+
+  .public-higher-lower-page .playerStatusWrap {
+    width: 100% !important;
+    justify-content: flex-start !important;
   }
 }
 `;
@@ -1646,7 +1715,7 @@ const styles: Record<string, CSSProperties> = {
 
   playersGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gridTemplateColumns: "minmax(0, 0.52fr) minmax(0, 0.48fr)",
     gap: 18,
     marginBottom: 18,
   },
@@ -1654,11 +1723,26 @@ const styles: Record<string, CSSProperties> = {
   playerPanel: {
     display: "grid",
     gap: 14,
+    alignContent: "start",
     padding: 18,
     borderRadius: 24,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 10px 28px rgba(15,23,42,0.06)",
+    overflow: "hidden",
+  },
+
+  playerPanelHeader: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 12,
+    alignItems: "start",
+  },
+
+  playerPanelHeadingWrap: {
+    display: "grid",
+    gap: 6,
+    minWidth: 0,
   },
 
   playerPanelTitle: {
@@ -1667,26 +1751,96 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 26,
     lineHeight: 1.05,
     letterSpacing: "-0.045em",
+    overflowWrap: "anywhere",
+  },
+
+  playerPanelHelper: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  playerCountPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    whiteSpace: "nowrap",
+    padding: "8px 11px",
+    borderRadius: 999,
+    background: "#f8fafc",
+    border: "1px solid #cbd5e1",
+    color: "#334155",
+    fontSize: 12,
+    fontWeight: 950,
   },
 
   playerGrid: {
     display: "grid",
     gap: 8,
+    minWidth: 0,
   },
 
   playerCard: {
-    display: "flex",
-    justifyContent: "space-between",
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
     gap: 10,
     alignItems: "center",
-    flexWrap: "wrap",
-    padding: 12,
+    padding: "11px 12px",
     borderRadius: 16,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     color: "#0f172a",
     fontSize: 14,
     lineHeight: 1.35,
+    minWidth: 0,
+  },
+
+  playerNameText: {
+    minWidth: 0,
+    color: "#0f172a",
+    fontSize: 14,
+    lineHeight: 1.35,
+    fontWeight: 900,
+    overflowWrap: "anywhere",
+  },
+
+  playerStatusWrap: {
+    display: "inline-flex",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    gap: 7,
+    minWidth: 0,
+    flexWrap: "wrap",
+  },
+
+  playerRoundText: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "6px 8px",
+    borderRadius: 999,
+    background: "#fff7ed",
+    border: "1px solid #fed7aa",
+    color: "#9a3412",
+    fontSize: 11,
+    lineHeight: 1,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  playerStatusPill: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "6px 8px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 11,
+    lineHeight: 1,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
   },
 
   emptyState: {
