@@ -21,16 +21,26 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 });
 
 type EmailBranding = {
+  advancedBranding?: boolean | null;
   name?: string | null;
   logoUrl?: string | null;
+  logoMarkUrl?: string | null;
   primaryColor?: string | null;
+  primaryColour?: string | null;
+  accentColor?: string | null;
+  accentColour?: string | null;
+  footerText?: string | null;
 };
 
 type TenantEmailBrandingRow = {
+  subscription_tier: string | null;
+  platform_owner_bypass: boolean | null;
   public_display_name: string | null;
   public_logo_url: string | null;
   public_logo_mark_url: string | null;
   public_primary_colour: string | null;
+  public_accent_colour: string | null;
+  public_footer_text: string | null;
 };
 
 type PaymentFinancials = {
@@ -163,6 +173,12 @@ function normaliseEmailHexColour(value: unknown) {
   return null;
 }
 
+function canUseFoundationEmailBranding(row: TenantEmailBrandingRow) {
+  const tier = cleanText(row.subscription_tier).toLowerCase();
+
+  return tier === "foundation" || row.platform_owner_bypass === true;
+}
+
 async function getTenantEmailBranding(
   tenantSlug: string,
 ): Promise<EmailBranding | undefined> {
@@ -176,10 +192,14 @@ async function getTenantEmailBranding(
     const rows = await query<TenantEmailBrandingRow>(
       `
         select
+          subscription_tier,
+          platform_owner_bypass,
           public_display_name,
           public_logo_url,
           public_logo_mark_url,
-          public_primary_colour
+          public_primary_colour,
+          public_accent_colour,
+          public_footer_text
         from tenant_settings
         where tenant_slug = $1
         limit 1
@@ -193,19 +213,42 @@ async function getTenantEmailBranding(
       return undefined;
     }
 
-    const name = cleanText(row.public_display_name);
-    const logoUrl =
-      cleanText(row.public_logo_url) || cleanText(row.public_logo_mark_url);
-    const primaryColor = normaliseEmailHexColour(row.public_primary_colour);
+    if (!canUseFoundationEmailBranding(row)) {
+      return {
+        advancedBranding: false,
+      };
+    }
 
-    if (!name && !logoUrl && !primaryColor) {
-      return undefined;
+    const name = cleanText(row.public_display_name);
+    const logoUrl = cleanText(row.public_logo_url);
+    const logoMarkUrl = cleanText(row.public_logo_mark_url);
+    const primaryColor = normaliseEmailHexColour(row.public_primary_colour);
+    const accentColor = normaliseEmailHexColour(row.public_accent_colour);
+    const footerText = cleanText(row.public_footer_text);
+
+    if (
+      !name &&
+      !logoUrl &&
+      !logoMarkUrl &&
+      !primaryColor &&
+      !accentColor &&
+      !footerText
+    ) {
+      return {
+        advancedBranding: true,
+      };
     }
 
     return {
+      advancedBranding: true,
       name: name || undefined,
       logoUrl: logoUrl || undefined,
+      logoMarkUrl: logoMarkUrl || undefined,
       primaryColor: primaryColor || undefined,
+      primaryColour: primaryColor || undefined,
+      accentColor: accentColor || undefined,
+      accentColour: accentColor || undefined,
+      footerText: footerText || undefined,
     };
   } catch (error) {
     console.error("Unable to load tenant email branding", {
@@ -294,7 +337,6 @@ function getConnectedAccountIdFromEvent(event: Stripe.Event) {
 
   return "";
 }
-
 function isStripeConnectAccountEvent(eventType: string) {
   return (
     eventType === "account.updated" ||
@@ -745,7 +787,6 @@ async function getVerifiedSquaresReservation(input: {
 
   return reservation;
 }
-
 async function getSquaresGameDetails(input: {
   gameId: string;
   tenantSlug: string;
@@ -1101,10 +1142,10 @@ async function createHigherOrLowerEntriesAndSendLinks(input: {
       created += 1;
 
       const answerUrl = `${siteUrl(input.req)}/e/${encodeURIComponent(
-  eventSlug,
-)}/higher-or-lower/play?entry=${encodeURIComponent(
-  entry.public_answer_token,
-)}`;
+        eventSlug,
+      )}/higher-or-lower/play?entry=${encodeURIComponent(
+        entry.public_answer_token,
+      )}`;
 
       try {
         await sendHigherOrLowerPlayerLinkEmail({
@@ -1240,9 +1281,7 @@ async function recordPlatformPayment(input: {
       input.financials.stripeConnectRouted
         ? "destination_charge_created"
         : null,
-      input.financials.stripeConnectRouted
-        ? new Date().toISOString()
-        : null,
+      input.financials.stripeConnectRouted ? new Date().toISOString() : null,
       input.auctionId || null,
       input.auctionItemId || null,
       input.auctionBidId || null,
@@ -1252,7 +1291,6 @@ async function recordPlatformPayment(input: {
     ],
   );
 }
-
 export async function POST(request: NextRequest) {
   try {
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -1778,8 +1816,7 @@ export async function POST(request: NextRequest) {
         netAmountCents,
       });
     }
-
-    const reservationToken = String(
+        const reservationToken = String(
       metadata.reservation_token ||
         metadata.reservationToken ||
         metadata.reservation_id ||
