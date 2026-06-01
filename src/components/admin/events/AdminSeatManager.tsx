@@ -281,7 +281,6 @@ function seatStyle({
     color: selected ? "#082f49" : colour.text,
   };
 }
-
 export default function AdminSeatManager({
   eventId,
   seats,
@@ -313,7 +312,6 @@ export default function AdminSeatManager({
 }) {
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
-  const [selectedTableNumber, setSelectedTableNumber] = useState<string>("");
   const [ticketTypeId, setTicketTypeId] = useState<string>("");
 
   const [seatPurpose, setSeatPurpose] = useState<string>("");
@@ -329,6 +327,10 @@ export default function AdminSeatManager({
   );
 
   const returnAnchor = mode === "tables" ? "table-seating" : "row-seating";
+
+  useEffect(() => {
+    setManualOffsets(getRowOffsets(initialSeatingLayout));
+  }, [initialSeatingLayout]);
 
   const normalSeats = useMemo(
     () =>
@@ -363,71 +365,6 @@ export default function AdminSeatManager({
 
   const rowSeatingLayoutPayload = useMemo(() => manualOffsets, [manualOffsets]);
 
-  const tableGroups = useMemo(() => {
-    if (mode !== "tables") return [];
-
-    return Object.entries(groupBy(seats, (seat) => seat.table_number || "No table"))
-      .sort(([a], [b]) => numericSort(a, b))
-      .map(([tableNumber, tableSeats]) => [
-        tableNumber,
-        tableSeats.slice().sort((a, b) => numericSort(a.seat_number, b.seat_number)),
-      ]) as [string, Seat[]][];
-  }, [mode, seats]);
-
-  const activeTableNumber =
-    mode === "tables"
-      ? tableGroups.some(([tableNumber]) => tableNumber === selectedTableNumber)
-        ? selectedTableNumber
-        : tableGroups[0]?.[0] || ""
-      : "";
-
-  const activeTableSeats =
-    mode === "tables"
-      ? tableGroups.find(([tableNumber]) => tableNumber === activeTableNumber)?.[1] ||
-        []
-      : [];
-
-  const activeTableSoldCount = activeTableSeats.filter(
-    (seat) => seat.status === "sold",
-  ).length;
-
-  const activeTableBlockedCount = activeTableSeats.filter(
-    (seat) => seat.status === "blocked",
-  ).length;
-
-  const activeTableAvailableCount = activeTableSeats.filter(
-    (seat) => seat.status === "available",
-  ).length;
-
-  const byPrimaryGroup = useMemo(
-    () =>
-      mode === "tables"
-        ? {}
-        : groupBy(seats, (seat) => seat.section || "Main"),
-    [mode, seats],
-  );
-
-  useEffect(() => {
-    setManualOffsets(getRowOffsets(initialSeatingLayout));
-  }, [initialSeatingLayout]);
-
-  useEffect(() => {
-    if (mode !== "tables") return;
-
-    if (tableGroups.length === 0) {
-      setSelectedTableNumber("");
-      return;
-    }
-
-    const stillExists = tableGroups.some(
-      ([tableNumber]) => tableNumber === selectedTableNumber,
-    );
-
-    if (!selectedTableNumber || !stillExists) {
-      setSelectedTableNumber(tableGroups[0][0]);
-    }
-  }, [mode, selectedTableNumber, tableGroups]);
-
   useEffect(() => {
     if (selectedSeats.length !== 1) return;
 
@@ -458,10 +395,12 @@ export default function AdminSeatManager({
     setSelectedRowKeys([]);
 
     window.setTimeout(() => {
-      document.getElementById("individual-seat-editor")?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
+      document
+        .getElementById("individual-seat-editor")
+        ?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
     }, 50);
   }
 
@@ -517,22 +456,13 @@ export default function AdminSeatManager({
     setSelectedRowKeys([]);
   }
 
-  function changeSelectedTable(tableNumber: string) {
-    setSelectedTableNumber(tableNumber);
-    clearSelection();
-  }
-
-  function selectVisibleTableSeats() {
-    setSelectedSeatIds((current) =>
-      Array.from(new Set([...current, ...activeTableSeats.map((seat) => seat.id)])),
-    );
-    setSelectedRowKeys([]);
-  }
+  const byPrimaryGroup =
+    mode === "tables"
+      ? groupBy(seats, (seat) => seat.table_number || "No table")
+      : groupBy(seats, (seat) => seat.section || "Main");
 
   return (
     <div style={styles.manager}>
-      <style>{responsiveStyles}</style>
-
       <div style={styles.toolbar}>
         <div>
           <h3 style={styles.title}>Seat manager</h3>
@@ -595,11 +525,7 @@ export default function AdminSeatManager({
             Select blocked ({blockedSeats.length})
           </button>
 
-          <button
-            type="button"
-            onClick={clearSelection}
-            style={styles.secondaryButton}
-          >
+          <button type="button" onClick={clearSelection} style={styles.secondaryButton}>
             Clear selection
           </button>
         </div>
@@ -618,9 +544,7 @@ export default function AdminSeatManager({
 
           return (
             <span key={ticketType.id} style={styles.legendItem}>
-              <span
-                style={{ ...styles.legendDot, background: colour.background }}
-              />
+              <span style={{ ...styles.legendDot, background: colour.background }} />
               {ticketType.name} — {currency} {moneyFromCents(ticketType.price)}
             </span>
           );
@@ -656,15 +580,12 @@ export default function AdminSeatManager({
         <strong>{selectedSeatIds.length}</strong> selected ·{" "}
         <strong>{normalSeats.length}</strong> normal public ·{" "}
         <strong>{blockedSeats.length}</strong> blocked ·{" "}
-        <strong>
-          {seats.filter((seat) => seat.seat_purpose === "vip").length}
-        </strong>{" "}
+        <strong>{seats.filter((seat) => seat.seat_purpose === "vip").length}</strong>{" "}
         VIP ·{" "}
         <strong>
           {seats.filter((seat) => seat.seat_purpose === "complimentary").length}
         </strong>{" "}
-        complimentary · <strong>{seatsWithDetails.length}</strong> saved
-        allocations.
+        complimentary · <strong>{seatsWithDetails.length}</strong> saved allocations.
       </div>
 
       <div style={styles.actionPanel}>
@@ -700,11 +621,7 @@ export default function AdminSeatManager({
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={clearAllocationForm}
-              style={styles.secondaryButton}
-            >
+            <button type="button" onClick={clearAllocationForm} style={styles.secondaryButton}>
               Clear form
             </button>
           </div>
@@ -715,16 +632,12 @@ export default function AdminSeatManager({
             </div>
           ) : selectedSeats.length > 1 ? (
             <div style={styles.warningBox}>
-              Multiple seats selected. Saving applies these details to all
-              selected seats.
+              Multiple seats selected. Saving applies these details to all selected seats.
             </div>
           ) : (
-            <div style={styles.emptyBox}>
-              Select a seat to edit allocation details.
-            </div>
+            <div style={styles.emptyBox}>Select a seat to edit allocation details.</div>
           )}
-
-          <div style={styles.twoCol}>
+                    <div style={styles.twoCol}>
             <label style={styles.field}>
               <span style={styles.label}>Seat purpose</span>
               <select
@@ -830,12 +743,8 @@ export default function AdminSeatManager({
         </form>
       </div>
 
-      <div className="admin-seat-bulk-panel" style={styles.bulkPanel}>
-        <form
-          action={applyTicketTypeAction}
-          className="admin-seat-action-form"
-          style={styles.actionForm}
-        >
+      <div style={styles.bulkPanel}>
+        <form action={applyTicketTypeAction} style={styles.actionForm}>
           <input type="hidden" name="event_id" value={eventId} />
           <input type="hidden" name="return_anchor" value={returnAnchor} />
           <input
@@ -873,11 +782,7 @@ export default function AdminSeatManager({
           </button>
         </form>
 
-        <form
-          action={updateSelectedSeatsStatusAction}
-          className="admin-seat-action-form"
-          style={styles.actionForm}
-        >
+        <form action={updateSelectedSeatsStatusAction} style={styles.actionForm}>
           <input type="hidden" name="event_id" value={eventId} />
           <input type="hidden" name="return_anchor" value={returnAnchor} />
           <input
@@ -899,11 +804,7 @@ export default function AdminSeatManager({
           </button>
         </form>
 
-        <form
-          action={updateSelectedSeatsStatusAction}
-          className="admin-seat-action-form"
-          style={styles.actionForm}
-        >
+        <form action={updateSelectedSeatsStatusAction} style={styles.actionForm}>
           <input type="hidden" name="event_id" value={eventId} />
           <input type="hidden" name="return_anchor" value={returnAnchor} />
           <input
@@ -925,11 +826,7 @@ export default function AdminSeatManager({
           </button>
         </form>
 
-        <form
-          action={deleteSelectedSeatsAction}
-          className="admin-seat-action-form"
-          style={styles.actionForm}
-        >
+        <form action={deleteSelectedSeatsAction} style={styles.actionForm}>
           <input type="hidden" name="event_id" value={eventId} />
           <input type="hidden" name="return_anchor" value={returnAnchor} />
           <input
@@ -951,11 +848,7 @@ export default function AdminSeatManager({
         </form>
 
         {mode === "rows" && deleteSelectedRowsAction && (
-          <form
-            action={deleteSelectedRowsAction}
-            className="admin-seat-action-form"
-            style={styles.actionForm}
-          >
+          <form action={deleteSelectedRowsAction} style={styles.actionForm}>
             <input type="hidden" name="event_id" value={eventId} />
             <input
               type="hidden"
@@ -978,274 +871,189 @@ export default function AdminSeatManager({
       </div>
 
       <div style={styles.mapPanel}>
-        {mode === "tables" ? (
-          tableGroups.length === 0 ? (
-            <div style={styles.emptyBox}>No table seats generated yet.</div>
-          ) : (
-            <div style={styles.tableModePanel}>
-              <div style={styles.tableSelectorPanel}>
-                <div
-                  className="admin-seat-table-selector-header"
-                  style={styles.tableSelectorHeader}
-                >
-                  <div>
-                    <h4 style={styles.tableSelectorTitle}>Choose table</h4>
-                    <p style={styles.text}>
-                      Showing one table at a time to keep the layout compact.
-                      Switching tables clears the current selection.
-                    </p>
-                  </div>
-
-                  <label style={styles.tableSelectWrap}>
-                    <span style={styles.label}>Current table</span>
-                    <select
-                      className="admin-seat-table-select"
-                      value={activeTableNumber}
-                      onChange={(event) =>
-                        changeSelectedTable(event.target.value)
-                      }
-                      style={styles.tableSelect}
-                    >
-                      {tableGroups.map(([tableNumber, tableSeats]) => (
-                        <option key={tableNumber} value={tableNumber}>
-                          {displayTableTitle(tableNumber, tableNames)} ·{" "}
-                          {tableSeats.length} seats
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-
-                <div style={styles.tableQuickNav}>
-                  {tableGroups.map(([tableNumber]) => {
-                    const active = tableNumber === activeTableNumber;
-
-                    return (
-                      <button
-                        key={tableNumber}
-                        type="button"
-                        onClick={() => changeSelectedTable(tableNumber)}
-                        style={{
-                          ...styles.tableQuickButton,
-                          ...(active ? styles.tableQuickButtonActive : {}),
-                        }}
-                      >
-                        {tableNumber}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div style={styles.tableMetaGrid}>
-                <div style={styles.tableMetaCard}>
-                  <span style={styles.tableMetaLabel}>Seats</span>
-                  <strong style={styles.tableMetaValue}>
-                    {activeTableSeats.length}
-                  </strong>
-                </div>
-
-                <div style={styles.tableMetaCard}>
-                  <span style={styles.tableMetaLabel}>Available</span>
-                  <strong style={styles.tableMetaValue}>
-                    {activeTableAvailableCount}
-                  </strong>
-                </div>
-
-                <div style={styles.tableMetaCard}>
-                  <span style={styles.tableMetaLabel}>Sold</span>
-                  <strong style={styles.tableMetaValue}>
-                    {activeTableSoldCount}
-                  </strong>
-                </div>
-
-                <div style={styles.tableMetaCard}>
-                  <span style={styles.tableMetaLabel}>Blocked</span>
-                  <strong style={styles.tableMetaValue}>
-                    {activeTableBlockedCount}
-                  </strong>
-                </div>
-              </div>
-
-              <div style={styles.tableRowCard}>
-                <div style={styles.tableRowHeader}>
-                  <div>
-                    <h4 style={styles.groupTitle}>
-                      {displayTableTitle(activeTableNumber, tableNames)}
-                    </h4>
-                    <p style={styles.text}>
-                      {activeTableSeats.length} seats. Click seats to select;
-                      double-click to edit.
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={selectVisibleTableSeats}
-                    disabled={activeTableSeats.length === 0}
-                    style={{
-                      ...styles.secondaryButton,
-                      opacity: activeTableSeats.length === 0 ? 0.45 : 1,
-                    }}
-                  >
-                    Select table
-                  </button>
-                </div>
-
-                <div style={styles.tableSeatLine}>
-                  {activeTableSeats.map((seat) => {
-                    const ticketType = ticketTypes.find(
-                      (item) => item.id === seat.ticket_type_id,
-                    );
-                    const selected = selectedSeatIds.includes(seat.id);
-
-                    return (
-                      <button
-                        key={seat.id}
-                        type="button"
-                        onClick={() => toggleSeat(seat.id)}
-                        onDoubleClick={() => selectOnlySeat(seat.id)}
-                        title={seatTitle(seat)}
-                        style={seatStyle({
-                          selected,
-                          ticketType,
-                          ticketTypes,
-                          status: seat.status,
-                          seatPurpose: seat.seat_purpose,
-                        })}
-                      >
-                        {seat.seat_number}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )
-        ) : (
-          Object.entries(byPrimaryGroup)
-            .sort(([a], [b]) => numericSort(a, b))
-            .map(([group, groupSeats]) => {
-              const rows = groupBy(
-                groupSeats,
-                (seat) => seat.row_label || "No row",
-              );
-
-              const rowEntries = Object.entries(rows).sort(([a], [b]) =>
-                numericSort(a, b),
-              );
-
-              const maxUnits = Math.max(
-                1,
-                ...rowEntries.map(([, rowSeats]) => rowVisualUnits(rowSeats)),
-              );
+        {Object.entries(byPrimaryGroup)
+          .sort(([a], [b]) => numericSort(a, b))
+          .map(([group, groupSeats]) => {
+            if (mode === "tables") {
+              const sortedSeats = groupSeats
+                .slice()
+                .sort((a, b) => numericSort(a.seat_number, b.seat_number));
 
               return (
-                <div key={group} style={styles.groupBlock}>
-                  <h4 style={styles.groupTitle}>{group}</h4>
+                <div key={group} style={styles.tableRowCard}>
+                  <div style={styles.tableRowHeader}>
+                    <div>
+                      <h4 style={styles.groupTitle}>
+                        {displayTableTitle(group, tableNames)}
+                      </h4>
+                      <p style={styles.text}>
+                        {sortedSeats.length} seats. Click seats to select; double-click to edit.
+                      </p>
+                    </div>
 
-                  {rowEntries.map(([row, rowSeats]) => {
-                    const actualKey =
-                      rowSeats.length > 0
-                        ? rowKeyForSeat(rowSeats[0])
-                        : `${group === "Main" ? "" : group}|${row}`;
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelectedSeatIds((current) =>
+                          Array.from(
+                            new Set([
+                              ...current,
+                              ...sortedSeats.map((seat) => seat.id),
+                            ]),
+                          ),
+                        )
+                      }
+                      style={styles.secondaryButton}
+                    >
+                      Select table
+                    </button>
+                  </div>
 
-                    const rowSelected = selectedRowKeys.includes(actualKey);
-
-                    const sortedRowSeats = rowSeats
-                      .slice()
-                      .sort((a, b) =>
-                        numericSort(a.seat_number, b.seat_number),
+                  <div style={styles.tableSeatLine}>
+                    {sortedSeats.map((seat) => {
+                      const ticketType = ticketTypes.find(
+                        (item) => item.id === seat.ticket_type_id,
                       );
+                      const selected = selectedSeatIds.includes(seat.id);
 
-                    const autoOffset = Math.max(
-                      0,
-                      Math.floor((maxUnits - rowVisualUnits(rowSeats)) / 2),
-                    );
-
-                    const manualOffset = manualOffsets[actualKey] || 0;
-                    const totalOffset = Math.max(0, autoOffset + manualOffset);
-
-                    return (
-                      <div key={`${group}-${row}`} style={styles.rowLine}>
+                      return (
                         <button
+                          key={seat.id}
                           type="button"
-                          onClick={() => toggleRow(actualKey, rowSeats)}
-                          style={{
-                            ...styles.rowButton,
-                            background: rowSelected ? "#bae6fd" : "#ffffff",
-                          }}
-                        >
-                          Row {row}
-                        </button>
-
-                        <div style={styles.rowNudgeControls}>
-                          <button
-                            type="button"
-                            onClick={() => changeRowOffset(actualKey, -1)}
-                            style={styles.nudgeButton}
-                            title="Move row left"
-                          >
-                            ←
-                          </button>
-
-                          <span style={styles.offsetPill}>+{totalOffset}</span>
-
-                          <button
-                            type="button"
-                            onClick={() => changeRowOffset(actualKey, 1)}
-                            style={styles.nudgeButton}
-                            title="Move row right"
-                          >
-                            →
-                          </button>
-                        </div>
-
-                        <div
-                          style={{
-                            ...styles.seatLine,
-                            paddingLeft: totalOffset * 42,
-                          }}
-                        >
-                          {sortedRowSeats.map((seat) => {
-                            const ticketType = ticketTypes.find(
-                              (item) => item.id === seat.ticket_type_id,
-                            );
-
-                            const selected = selectedSeatIds.includes(seat.id);
-
-                            return (
-                              <span key={seat.id} style={styles.seatWrap}>
-                                <button
-                                  type="button"
-                                  onClick={() => toggleSeat(seat.id)}
-                                  onDoubleClick={() => selectOnlySeat(seat.id)}
-                                  title={seatTitle(seat)}
-                                  style={seatStyle({
-                                    selected,
-                                    ticketType,
-                                    ticketTypes,
-                                    status: seat.status,
-                                    seatPurpose: seat.seat_purpose,
-                                  })}
-                                >
-                                  {seat.seat_number}
-                                </button>
-
-                                {seat.aisle_after ? (
-                                  <span style={styles.aisle}>Aisle</span>
-                                ) : null}
-                              </span>
-                            );
+                          onClick={() => toggleSeat(seat.id)}
+                          onDoubleClick={() => selectOnlySeat(seat.id)}
+                          title={seatTitle(seat)}
+                          style={seatStyle({
+                            selected,
+                            ticketType,
+                            ticketTypes,
+                            status: seat.status,
+                            seatPurpose: seat.seat_purpose,
                           })}
-                        </div>
-                      </div>
-                    );
-                  })}
+                        >
+                          {seat.seat_number}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               );
-            })
-        )}
+            }
+
+            const rows = groupBy(groupSeats, (seat) => seat.row_label || "No row");
+
+            const rowEntries = Object.entries(rows).sort(([a], [b]) =>
+              numericSort(a, b),
+            );
+
+            const maxUnits = Math.max(
+              1,
+              ...rowEntries.map(([, rowSeats]) => rowVisualUnits(rowSeats)),
+            );
+
+            return (
+              <div key={group} style={styles.groupBlock}>
+                <h4 style={styles.groupTitle}>{group}</h4>
+
+                {rowEntries.map(([row, rowSeats]) => {
+                  const actualKey =
+                    rowSeats.length > 0
+                      ? rowKeyForSeat(rowSeats[0])
+                      : `${group === "Main" ? "" : group}|${row}`;
+
+                  const rowSelected = selectedRowKeys.includes(actualKey);
+
+                  const sortedRowSeats = rowSeats
+                    .slice()
+                    .sort((a, b) => numericSort(a.seat_number, b.seat_number));
+
+                  const autoOffset = Math.max(
+                    0,
+                    Math.floor((maxUnits - rowVisualUnits(rowSeats)) / 2),
+                  );
+
+                  const manualOffset = manualOffsets[actualKey] || 0;
+                  const totalOffset = Math.max(0, autoOffset + manualOffset);
+
+                  return (
+                    <div key={`${group}-${row}`} style={styles.rowLine}>
+                      <button
+                        type="button"
+                        onClick={() => toggleRow(actualKey, rowSeats)}
+                        style={{
+                          ...styles.rowButton,
+                          background: rowSelected ? "#bae6fd" : "#ffffff",
+                        }}
+                      >
+                        Row {row}
+                      </button>
+
+                      <div style={styles.rowNudgeControls}>
+                        <button
+                          type="button"
+                          onClick={() => changeRowOffset(actualKey, -1)}
+                          style={styles.nudgeButton}
+                          title="Move row left"
+                        >
+                          ←
+                        </button>
+
+                        <span style={styles.offsetPill}>+{totalOffset}</span>
+
+                        <button
+                          type="button"
+                          onClick={() => changeRowOffset(actualKey, 1)}
+                          style={styles.nudgeButton}
+                          title="Move row right"
+                        >
+                          →
+                        </button>
+                      </div>
+
+                      <div
+                        style={{
+                          ...styles.seatLine,
+                          paddingLeft: totalOffset * 42,
+                        }}
+                      >
+                        {sortedRowSeats.map((seat) => {
+                          const ticketType = ticketTypes.find(
+                            (item) => item.id === seat.ticket_type_id,
+                          );
+
+                          const selected = selectedSeatIds.includes(seat.id);
+
+                          return (
+                            <span key={seat.id} style={styles.seatWrap}>
+                              <button
+                                type="button"
+                                onClick={() => toggleSeat(seat.id)}
+                                onDoubleClick={() => selectOnlySeat(seat.id)}
+                                title={seatTitle(seat)}
+                                style={seatStyle({
+                                  selected,
+                                  ticketType,
+                                  ticketTypes,
+                                  status: seat.status,
+                                  seatPurpose: seat.seat_purpose,
+                                })}
+                              >
+                                {seat.seat_number}
+                              </button>
+
+                              {seat.aisle_after ? (
+                                <span style={styles.aisle}>Aisle</span>
+                              ) : null}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
       </div>
 
       <div style={styles.savedAllocationsPanel}>
@@ -1286,9 +1094,7 @@ export default function AdminSeatManager({
                     <td style={styles.td}>{seat.admin_label || "—"}</td>
                     <td style={styles.td}>{seat.guest_name || "—"}</td>
                     <td style={styles.td}>{seat.guest_email || "—"}</td>
-                    <td style={styles.td}>
-                      {seat.dietary_requirements || "—"}
-                    </td>
+                    <td style={styles.td}>{seat.dietary_requirements || "—"}</td>
                     <td style={styles.td}>{seat.menu_choice || "—"}</td>
                     <td style={styles.td}>{seat.admin_note || "—"}</td>
                     <td style={styles.td}>
@@ -1310,26 +1116,6 @@ export default function AdminSeatManager({
     </div>
   );
 }
-
-const responsiveStyles = `
-@media (max-width: 680px) {
-  .admin-seat-table-selector-header {
-    grid-template-columns: 1fr !important;
-  }
-
-  .admin-seat-table-select,
-  .admin-seat-action-form,
-  .admin-seat-action-form select,
-  .admin-seat-action-form button {
-    width: 100% !important;
-  }
-
-  .admin-seat-bulk-panel {
-    display: grid !important;
-    grid-template-columns: 1fr !important;
-  }
-}
-`;
 
 const styles: Record<string, CSSProperties> = {
   manager: { display: "grid", gap: 14 },
@@ -1700,110 +1486,6 @@ const styles: Record<string, CSSProperties> = {
     margin: "0 6px",
   },
 
-  tableModePanel: {
-    display: "grid",
-    gap: 12,
-  },
-
-  tableSelectorPanel: {
-    display: "grid",
-    gap: 12,
-    padding: 14,
-    borderRadius: 18,
-    background:
-      "linear-gradient(135deg, #f8fafc 0%, #ffffff 58%, #eff6ff 100%)",
-    border: "1px solid #dbeafe",
-  },
-
-  tableSelectorHeader: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(220px, 0.36fr)",
-    gap: 12,
-    alignItems: "end",
-  },
-
-  tableSelectorTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 18,
-    fontWeight: 950,
-    letterSpacing: "-0.025em",
-  },
-
-  tableSelectWrap: {
-    display: "grid",
-    gap: 6,
-    minWidth: 0,
-  },
-
-  tableSelect: {
-    width: "100%",
-    minHeight: 42,
-    borderRadius: 13,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
-    padding: "9px 10px",
-    fontWeight: 850,
-    boxSizing: "border-box",
-  },
-
-  tableQuickNav: {
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap",
-    alignItems: "center",
-  },
-
-  tableQuickButton: {
-    minWidth: 42,
-    minHeight: 36,
-    padding: "0 12px",
-    borderRadius: 999,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#334155",
-    fontWeight: 900,
-    cursor: "pointer",
-  },
-
-  tableQuickButtonActive: {
-    borderColor: "#1683f8",
-    background: "#1683f8",
-    color: "#ffffff",
-    boxShadow: "0 10px 20px rgba(22,131,248,0.16)",
-  },
-
-  tableMetaGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
-    gap: 10,
-  },
-
-  tableMetaCard: {
-    display: "grid",
-    gap: 3,
-    padding: 12,
-    borderRadius: 16,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-  },
-
-  tableMetaLabel: {
-    color: "#64748b",
-    fontSize: 11,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-  },
-
-  tableMetaValue: {
-    color: "#0f172a",
-    fontSize: 22,
-    lineHeight: 1,
-    fontWeight: 950,
-  },
-
   tableRowCard: {
     display: "grid",
     gap: 12,
@@ -1811,6 +1493,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 18,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
+    marginBottom: 12,
   },
 
   tableRowHeader: {
