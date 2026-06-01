@@ -500,7 +500,6 @@ function tableAreaStyle(shape: TableShape): CSSProperties {
     borderRadius: 999,
   };
 }
-
 function tablePlateStyle(shape: TableShape): CSSProperties {
   if (shape === "square") {
     return {
@@ -526,6 +525,28 @@ function tablePlateStyle(shape: TableShape): CSSProperties {
     height: 142,
     borderRadius: 999,
   };
+}
+
+function getVisibleTableEntries<T extends { tableNumber: string }>(
+  tableEntries: T[],
+  activeIndex: number,
+) {
+  if (tableEntries.length <= 12) {
+    return tableEntries;
+  }
+
+  const windowSize = 7;
+  const sideCount = Math.floor(windowSize / 2);
+  const start = Math.max(
+    0,
+    Math.min(
+      activeIndex - sideCount,
+      Math.max(0, tableEntries.length - windowSize),
+    ),
+  );
+  const end = Math.min(tableEntries.length, start + windowSize);
+
+  return tableEntries.slice(start, end);
 }
 
 export default function PublicTableSelector({
@@ -612,10 +633,35 @@ export default function PublicTableSelector({
       });
   }, [groupedTables, seatingLayoutJson]);
 
+  const activeTableIndex = Math.max(
+    0,
+    tableEntries.findIndex(
+      (table) => table.tableNumber === selectedTableNumber,
+    ),
+  );
+
   const activeTable =
     tableEntries.find((table) => table.tableNumber === selectedTableNumber) ||
     tableEntries[0] ||
     null;
+
+  const resolvedActiveTableIndex = activeTable
+    ? Math.max(
+        0,
+        tableEntries.findIndex(
+          (table) => table.tableNumber === activeTable.tableNumber,
+        ),
+      )
+    : 0;
+
+  const visibleTableEntries = getVisibleTableEntries(
+    tableEntries,
+    resolvedActiveTableIndex,
+  );
+
+  const isLargeTableEvent = tableEntries.length > 12;
+  const canGoPreviousTable = resolvedActiveTableIndex > 0;
+  const canGoNextTable = resolvedActiveTableIndex < tableEntries.length - 1;
 
   const activeTableAvailableCount =
     activeTable?.seats.filter((seat) => seat.status === "available").length || 0;
@@ -644,6 +690,16 @@ export default function PublicTableSelector({
       setSelectedTableNumber(tableEntries[0].tableNumber);
     }
   }, [selectedTableNumber, tableEntries]);
+
+  function goToTableByIndex(nextIndex: number) {
+    const table = tableEntries[nextIndex];
+
+    if (!table) {
+      return;
+    }
+
+    setSelectedTableNumber(table.tableNumber);
+  }
 
   const cartSeats = useMemo(() => {
     return cartItems
@@ -846,8 +902,7 @@ export default function PublicTableSelector({
 
     return true;
   }
-
-  function toggleSeat(seat: Seat) {
+    function toggleSeat(seat: Seat) {
     if (seat.status !== "available") return;
 
     setCartItems((current) => {
@@ -960,7 +1015,8 @@ export default function PublicTableSelector({
 
             .public-table-selector-cart-grid,
             .public-table-selector-picker-header,
-            .public-table-selector-active-summary {
+            .public-table-selector-active-summary,
+            .public-table-selector-nav-row {
               grid-template-columns: 1fr !important;
             }
           }
@@ -1011,6 +1067,14 @@ export default function PublicTableSelector({
               min-height: 36px !important;
               min-width: 40px !important;
               padding: 0 10px !important;
+            }
+
+            .public-table-selector-nav-button {
+              width: 100% !important;
+            }
+
+            .public-table-selector-position-card {
+              text-align: center !important;
             }
           }
         `}
@@ -1074,11 +1138,12 @@ export default function PublicTableSelector({
                         }
                         style={styles.tableSelect}
                       >
-                        {tableEntries.map((table) => (
+                        {tableEntries.map((table, index) => (
                           <option
                             key={table.tableNumber}
                             value={table.tableNumber}
                           >
+                            Table {index + 1} of {tableEntries.length} ·{" "}
                             {table.tableLabel} · {table.seats.length} seats
                           </option>
                         ))}
@@ -1087,10 +1152,67 @@ export default function PublicTableSelector({
                   </div>
 
                   <div
+                    className="public-table-selector-nav-row"
+                    style={styles.tableNavRow}
+                  >
+                    <button
+                      type="button"
+                      className="public-table-selector-nav-button"
+                      onClick={() => goToTableByIndex(resolvedActiveTableIndex - 1)}
+                      disabled={!canGoPreviousTable}
+                      style={{
+                        ...styles.tableNavButton,
+                        opacity: canGoPreviousTable ? 1 : 0.45,
+                        cursor: canGoPreviousTable ? "pointer" : "not-allowed",
+                      }}
+                    >
+                      ← Previous table
+                    </button>
+
+                    <div
+                      className="public-table-selector-position-card"
+                      style={styles.tablePositionCard}
+                    >
+                      <span style={styles.tablePositionLabel}>
+                        {isLargeTableEvent ? "Large table event" : "Table"}
+                      </span>
+                      <strong style={styles.tablePositionValue}>
+                        Table {resolvedActiveTableIndex + 1} of{" "}
+                        {tableEntries.length}
+                      </strong>
+                      <span style={styles.tablePositionHint}>
+                        {isLargeTableEvent
+                          ? "Use the dropdown for direct access to any table."
+                          : "Use the table shortcuts below."}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="public-table-selector-nav-button"
+                      onClick={() => goToTableByIndex(resolvedActiveTableIndex + 1)}
+                      disabled={!canGoNextTable}
+                      style={{
+                        ...styles.tableNavButton,
+                        opacity: canGoNextTable ? 1 : 0.45,
+                        cursor: canGoNextTable ? "pointer" : "not-allowed",
+                      }}
+                    >
+                      Next table →
+                    </button>
+                  </div>
+
+                  <div
                     className="public-table-selector-table-pills"
                     style={styles.tablePills}
                   >
-                    {tableEntries.map((table) => {
+                    {isLargeTableEvent ? (
+                      <span style={styles.windowedPillsLabel}>
+                        Nearby tables
+                      </span>
+                    ) : null}
+
+                    {visibleTableEntries.map((table) => {
                       const active =
                         table.tableNumber === activeTable.tableNumber;
                       const selectedCount = table.seats.filter((seat) =>
@@ -1117,6 +1239,13 @@ export default function PublicTableSelector({
                         </button>
                       );
                     })}
+
+                    {isLargeTableEvent ? (
+                      <span style={styles.windowedPillsHint}>
+                        Showing {visibleTableEntries.length} of{" "}
+                        {tableEntries.length}
+                      </span>
+                    ) : null}
                   </div>
                 </section>
 
@@ -1238,8 +1367,7 @@ export default function PublicTableSelector({
               />
 
               <div style={styles.summarySpacer} />
-
-              <label style={styles.accessCodeBox}>
+                            <label style={styles.accessCodeBox}>
                 <span style={styles.accessCodeLabel}>VIP / complimentary code</span>
                 <input
                   value={accessCode}
@@ -1710,11 +1838,87 @@ const styles: Record<string, CSSProperties> = {
     boxSizing: "border-box",
   },
 
+  tableNavRow: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 0.25fr) minmax(220px, 0.5fr) minmax(0, 0.25fr)",
+    gap: 10,
+    alignItems: "stretch",
+  },
+
+  tableNavButton: {
+    minHeight: 48,
+    borderRadius: 16,
+    border: "1px solid #bfdbfe",
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    fontSize: 13,
+    fontWeight: 950,
+    padding: "10px 12px",
+    boxShadow: "0 8px 18px rgba(37,99,235,0.08)",
+  },
+
+  tablePositionCard: {
+    display: "grid",
+    gap: 4,
+    alignContent: "center",
+    padding: 12,
+    borderRadius: 16,
+    border: "1px solid #e2e8f0",
+    background: "#ffffff",
+    minWidth: 0,
+    textAlign: "center",
+  },
+
+  tablePositionLabel: {
+    color: "#64748b",
+    fontSize: 10,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  tablePositionValue: {
+    color: "#0f172a",
+    fontSize: 16,
+    lineHeight: 1.15,
+    fontWeight: 950,
+  },
+
+  tablePositionHint: {
+    color: "#64748b",
+    fontSize: 12,
+    lineHeight: 1.35,
+    fontWeight: 750,
+  },
+
   tablePills: {
     display: "flex",
     gap: 8,
     flexWrap: "wrap",
     alignItems: "center",
+  },
+
+  windowedPillsLabel: {
+    display: "inline-flex",
+    width: "100%",
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  windowedPillsHint: {
+    display: "inline-flex",
+    alignItems: "center",
+    minHeight: 38,
+    padding: "0 10px",
+    borderRadius: 999,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 850,
   },
 
   tablePill: {
