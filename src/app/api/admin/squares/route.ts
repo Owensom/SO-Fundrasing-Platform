@@ -7,6 +7,8 @@ import { canPublishAnotherCampaign } from "@/lib/subscription-capabilities";
 import {
   createSquaresGame,
   listSquaresGames,
+  normaliseFreeEntry,
+  normaliseLegalQuestion,
   normalisePrizes,
   slugify,
 } from "../../../../../api/_lib/squares-repo";
@@ -22,14 +24,22 @@ function parseNumber(
   return Number.isFinite(n) ? n : fallback;
 }
 
-function parsePrizesJson(value: string) {
-  if (!value.trim()) return [];
+function parseJsonValue(value: string) {
+  if (!value.trim()) return null;
 
   try {
-    return normalisePrizes(JSON.parse(value));
+    return JSON.parse(value);
   } catch {
-    return [];
+    return null;
   }
+}
+
+function parsePrizesJson(value: string) {
+  const parsed = parseJsonValue(value);
+
+  if (!parsed) return [];
+
+  return normalisePrizes(parsed);
 }
 
 function parsePrizeTable(formData: FormData) {
@@ -64,6 +74,18 @@ function parsePrizes(formData: FormData) {
   }
 
   return parsePrizesJson(String(formData.get("prizes") ?? "[]"));
+}
+
+function parseQuestion(formData: FormData) {
+  return normaliseLegalQuestion(
+    parseJsonValue(String(formData.get("question") ?? "")),
+  );
+}
+
+function parseFreeEntry(formData: FormData) {
+  return normaliseFreeEntry(
+    parseJsonValue(String(formData.get("free_entry") ?? "")),
+  );
 }
 
 function parseDrawAt(value: FormDataEntryValue | null) {
@@ -267,6 +289,8 @@ export async function POST(request: NextRequest) {
     const price_per_square_cents = Math.max(0, Math.round(priceMajor * 100));
 
     const prizes = parsePrizes(formData);
+    const question = parseQuestion(formData);
+    const free_entry = parseFreeEntry(formData);
 
     const created = await createSquaresGame({
       tenant_slug: tenantSlug,
@@ -280,6 +304,8 @@ export async function POST(request: NextRequest) {
       total_squares,
       price_per_square_cents,
       prizes,
+      question,
+      free_entry,
     });
 
     if (!created) {
