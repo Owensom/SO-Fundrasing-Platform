@@ -532,7 +532,8 @@ export default async function EventSlugPage({
     background: primaryColour,
     boxShadow: `0 10px 22px ${primaryColour}2E`,
   };
-    return (
+
+  return (
     <main className="public-event-page" style={brandedPageStyle}>
       <style>{responsiveStyles}</style>
 
@@ -648,8 +649,7 @@ export default async function EventSlugPage({
           </div>
         </div>
       </section>
-
-      <div style={styles.contentWrap}>
+            <div style={styles.contentWrap}>
         {resolvedSearchParams.checkout === "success" && (
           <section style={styles.successCard}>
             <strong>Payment successful.</strong>
@@ -753,6 +753,7 @@ export default async function EventSlugPage({
         {publicDisplayAddOns.map((addOn) => (
           <section
             key={addOn.type}
+            className="addOnPanel"
             style={{
               ...styles.addOnPanel,
               borderColor: `${accentColour}66`,
@@ -830,8 +831,8 @@ export default async function EventSlugPage({
             </div>
 
             {addOn.type === "higher_or_lower" ? (
-              <div style={styles.liveScreenCallout}>
-                <div>
+              <div className="liveScreenCallout" style={styles.liveScreenCallout}>
+                <div style={styles.liveScreenCopy}>
                   <span style={styles.liveScreenEyebrow}>Live room screen</span>
                   <strong style={styles.liveScreenTitle}>
                     Playing Higher or Lower on the night?
@@ -844,6 +845,7 @@ export default async function EventSlugPage({
 
                 <Link
                   href={higherOrLowerLiveHref}
+                  className="liveScreenButton"
                   style={{
                     ...styles.liveScreenButton,
                     background: accentColour,
@@ -854,7 +856,8 @@ export default async function EventSlugPage({
                 </Link>
               </div>
             ) : null}
-                        {shouldShowLegalSafeguards(addOn) ? (
+
+            {shouldShowLegalSafeguards(addOn) ? (
               <section
                 className="addOnSafeguardsPanel"
                 style={{
@@ -1291,8 +1294,15 @@ const responsiveStyles = `
   .public-event-page .addOnDetailsGrid,
   .public-event-page .addOnSafeguardsHeader,
   .public-event-page .addOnSafeguardsGrid,
-  .public-event-page .prizeRevealPublicHeader {
+  .public-event-page .prizeRevealPublicHeader,
+  .public-event-page .liveScreenCallout {
     grid-template-columns: 1fr !important;
+  }
+
+  .public-event-page .liveScreenButton {
+    width: 100% !important;
+    max-width: 100% !important;
+    white-space: normal !important;
   }
 
   .public-event-page .prizeRevealPrizeGrid {
@@ -1333,6 +1343,31 @@ const responsiveStyles = `
   .public-event-page .addOnTitle,
   .public-event-page .prizeRevealPublicTitle {
     font-size: clamp(30px, 10vw, 42px) !important;
+  }
+
+  .public-event-page .liveScreenCallout {
+    padding: 14px !important;
+    border-radius: 18px !important;
+    gap: 12px !important;
+  }
+
+  .public-event-page .liveScreenTitle {
+    font-size: 18px !important;
+    line-height: 1.18 !important;
+    letter-spacing: -0.025em !important;
+    word-break: normal !important;
+    overflow-wrap: break-word !important;
+  }
+
+  .public-event-page .liveScreenText {
+    font-size: 13px !important;
+  }
+
+  .public-event-page .liveScreenButton {
+    min-height: 44px !important;
+    padding: 12px 14px !important;
+    border-radius: 16px !important;
+    font-size: 13px !important;
   }
 
   .public-event-page .prizeRevealPrizeGrid {
@@ -1872,7 +1907,7 @@ const styles: Record<string, CSSProperties> = {
 
   liveScreenCallout: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(220px, auto)",
     gap: 14,
     alignItems: "center",
     marginTop: 16,
@@ -1880,6 +1915,11 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 22,
     background: "rgba(255,255,255,0.11)",
     border: "1px solid rgba(255,255,255,0.16)",
+    minWidth: 0,
+  },
+
+  liveScreenCopy: {
+    minWidth: 0,
   },
 
   liveScreenEyebrow: {
@@ -1898,7 +1938,8 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 20,
     lineHeight: 1.1,
     letterSpacing: "-0.035em",
-    overflowWrap: "anywhere",
+    wordBreak: "normal",
+    overflowWrap: "break-word",
   },
 
   liveScreenText: {
@@ -1907,6 +1948,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.45,
     fontWeight: 800,
+    overflowWrap: "break-word",
   },
 
   liveScreenButton: {
@@ -1914,6 +1956,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     minHeight: 46,
+    maxWidth: "100%",
     padding: "12px 16px",
     borderRadius: 999,
     textDecoration: "none",
@@ -1921,7 +1964,8 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textAlign: "center",
     boxShadow: "0 14px 28px rgba(250,204,21,0.18)",
-    whiteSpace: "nowrap",
+    whiteSpace: "normal",
+    overflowWrap: "break-word",
   },
 
   addOnSafeguardsPanel: {
