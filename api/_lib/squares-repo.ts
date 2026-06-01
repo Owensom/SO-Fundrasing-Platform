@@ -11,10 +11,24 @@ export type SquarePrize = {
   imageUrl?: string;
 };
 
+export type SquaresLegalQuestion = {
+  text: string;
+  answer: string;
+};
+
+export type SquaresFreeEntry = {
+  address?: string;
+  instructions?: string;
+  closes_at?: string | null;
+};
+
 export type SquaresConfig = {
   prizes?: SquarePrize[];
   sold?: number[];
   reserved?: number[];
+  question?: SquaresLegalQuestion | null;
+  legal_question?: SquaresLegalQuestion | null;
+  free_entry?: SquaresFreeEntry | null;
 };
 
 export type SquaresGameRow = {
@@ -46,6 +60,9 @@ export type CreateSquaresGameInput = {
   price_per_square_cents: number;
   total_squares: number;
   prizes?: SquarePrize[];
+  question?: SquaresLegalQuestion | null;
+  legal_question?: SquaresLegalQuestion | null;
+  free_entry?: SquaresFreeEntry | null;
 };
 
 export type UpdateSquaresGameInput = Partial<CreateSquaresGameInput> & {
@@ -102,6 +119,10 @@ function uuid() {
   return crypto.randomUUID();
 }
 
+function cleanText(value: unknown) {
+  return String(value || "").trim();
+}
+
 export function slugify(value: string) {
   return value
     .toLowerCase()
@@ -140,12 +161,67 @@ export function normalisePrizes(value: unknown): SquarePrize[] {
       const raw = item as Record<string, unknown>;
 
       return {
-        title: String(raw.title ?? raw.name ?? "").trim(),
-        description: String(raw.description ?? "").trim(),
-        imageUrl: String(raw.imageUrl ?? raw.image_url ?? "").trim(),
+        title: cleanText(raw.title ?? raw.name),
+        description: cleanText(raw.description),
+        imageUrl: cleanText(raw.imageUrl ?? raw.image_url),
       };
     })
     .filter((item) => item.title.length > 0);
+}
+
+export function normaliseLegalQuestion(
+  value: unknown,
+): SquaresLegalQuestion | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const raw = value as Record<string, unknown>;
+  const text = cleanText(raw.text ?? raw.question ?? raw.question_text);
+  const answer = cleanText(raw.answer ?? raw.correctAnswer ?? raw.correct_answer);
+
+  if (!text || !answer) {
+    return null;
+  }
+
+  return {
+    text,
+    answer,
+  };
+}
+
+export function normaliseFreeEntry(value: unknown): SquaresFreeEntry | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const raw = value as Record<string, unknown>;
+  const address = cleanText(raw.address ?? raw.postal_address);
+  const instructions = cleanText(raw.instructions ?? raw.postal_instructions);
+  const closesAt = cleanText(
+    raw.closes_at ?? raw.closesAt ?? raw.postal_closing_date,
+  );
+
+  if (!address && !instructions && !closesAt) {
+    return null;
+  }
+
+  return {
+    address,
+    instructions,
+    closes_at: closesAt || null,
+  };
+}
+
+function getExistingQuestion(config: SquaresConfig | null | undefined) {
+  return (
+    normaliseLegalQuestion(config?.question) ||
+    normaliseLegalQuestion(config?.legal_question)
+  );
+}
+
+function getExistingFreeEntry(config: SquaresConfig | null | undefined) {
+  return normaliseFreeEntry(config?.free_entry);
 }
 
 export async function listSquaresGames(tenantSlug: string) {
@@ -196,10 +272,19 @@ export async function createSquaresGame(input: CreateSquaresGameInput) {
     Math.max(1, Number(input.total_squares || 100)),
   );
 
+  const question =
+    normaliseLegalQuestion(input.question) ||
+    normaliseLegalQuestion(input.legal_question);
+
+  const freeEntry = normaliseFreeEntry(input.free_entry);
+
   const config: SquaresConfig = {
     prizes: normalisePrizes(input.prizes ?? []),
     sold: [],
     reserved: [],
+    question,
+    legal_question: question,
+    free_entry: freeEntry,
   };
 
   return queryOne<SquaresGameRow>(
@@ -253,6 +338,17 @@ export async function updateSquaresGame(
       ? Math.min(500, Math.max(1, Number(input.total_squares)))
       : existing.total_squares;
 
+  const question =
+    input.question !== undefined || input.legal_question !== undefined
+      ? normaliseLegalQuestion(input.question) ||
+        normaliseLegalQuestion(input.legal_question)
+      : getExistingQuestion(currentConfig);
+
+  const freeEntry =
+    input.free_entry !== undefined
+      ? normaliseFreeEntry(input.free_entry)
+      : getExistingFreeEntry(currentConfig);
+
   const config: SquaresConfig = {
     prizes:
       input.prizes != null
@@ -266,6 +362,9 @@ export async function updateSquaresGame(
       input.reserved != null
         ? normaliseSquares(input.reserved, totalSquares)
         : normaliseSquares(currentConfig.reserved ?? [], totalSquares),
+    question,
+    legal_question: question,
+    free_entry: freeEntry,
   };
 
   return queryOne<SquaresGameRow>(
