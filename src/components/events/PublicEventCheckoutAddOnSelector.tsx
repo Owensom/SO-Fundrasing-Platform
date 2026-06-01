@@ -218,8 +218,10 @@ export default function PublicEventCheckoutAddOnSelector({
   }
 
   return (
-    <section style={styles.panel}>
-      <div style={styles.header}>
+    <section className="event-checkout-addon" style={styles.panel}>
+      <style>{responsiveStyles}</style>
+
+      <div className="event-checkout-addon-header" style={styles.header}>
         <div style={styles.copy}>
           <p style={styles.eyebrow}>Event-night add-on</p>
 
@@ -242,7 +244,7 @@ export default function PublicEventCheckoutAddOnSelector({
           ) : null}
         </div>
 
-        <div style={styles.priceBox}>
+        <div className="event-checkout-addon-price" style={styles.priceBox}>
           <span style={styles.priceLabel}>Entry</span>
           <strong style={styles.priceValue}>
             {currency} {moneyFromCents(addOn.entryPriceCents)}
@@ -430,21 +432,61 @@ export default function PublicEventCheckoutAddOnSelector({
   );
 }
 
+const responsiveStyles = `
+.event-checkout-addon,
+.event-checkout-addon * {
+  box-sizing: border-box;
+}
+
+.event-checkout-addon {
+  overflow: hidden;
+}
+
+.event-checkout-addon-header {
+  min-width: 0;
+}
+
+@media (max-width: 760px) {
+  .event-checkout-addon-header {
+    grid-template-columns: 1fr !important;
+  }
+
+  .event-checkout-addon-price {
+    width: fit-content !important;
+    max-width: 100% !important;
+    justify-items: start !important;
+    grid-template-columns: auto auto !important;
+    align-items: center !important;
+    column-gap: 8px !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .event-checkout-addon-price {
+    width: 100% !important;
+    grid-template-columns: 1fr !important;
+    justify-items: start !important;
+  }
+}
+`;
+
 const styles: Record<string, CSSProperties> = {
   panel: {
     display: "grid",
     gap: 12,
     padding: 14,
     borderRadius: 18,
-    background: "rgba(255,255,255,0.06)",
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.075), rgba(255,255,255,0.045))",
     border: "1px solid rgba(255,255,255,0.14)",
     color: "#ffffff",
     minWidth: 0,
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)",
   },
 
   header: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(96px, auto)",
     gap: 12,
     alignItems: "start",
     minWidth: 0,
@@ -461,33 +503,37 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.11em",
+    lineHeight: 1.25,
   },
 
   title: {
     margin: 0,
     color: "#ffffff",
-    fontSize: 18,
-    lineHeight: 1.1,
+    fontSize: 21,
+    lineHeight: 1.08,
     fontWeight: 950,
-    letterSpacing: "-0.03em",
+    letterSpacing: "-0.04em",
     overflowWrap: "break-word",
+    wordBreak: "normal",
   },
 
   description: {
-    margin: "6px 0 0",
+    margin: "7px 0 0",
     color: "#cbd5e1",
     fontSize: 13,
-    lineHeight: 1.45,
+    lineHeight: 1.5,
     fontWeight: 750,
     overflowWrap: "break-word",
+    wordBreak: "normal",
   },
 
   limitText: {
-    margin: "7px 0 0",
+    margin: "8px 0 0",
     color: "#fde68a",
     fontSize: 12,
     lineHeight: 1.35,
     fontWeight: 850,
+    overflowWrap: "break-word",
   },
 
   priceBox: {
@@ -495,11 +541,12 @@ const styles: Record<string, CSSProperties> = {
     gap: 3,
     justifyItems: "end",
     alignContent: "start",
-    padding: "9px 10px",
+    padding: "9px 11px",
     borderRadius: 14,
-    background: "rgba(250,204,21,0.14)",
-    border: "1px solid rgba(250,204,21,0.2)",
-    minWidth: 92,
+    background: "rgba(250,204,21,0.12)",
+    border: "1px solid rgba(250,204,21,0.22)",
+    minWidth: 96,
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)",
   },
 
   priceLabel: {
@@ -508,6 +555,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
+    lineHeight: 1.1,
   },
 
   priceValue: {
@@ -542,6 +590,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.25,
     fontWeight: 950,
     overflowWrap: "break-word",
+    wordBreak: "normal",
   },
 
   rangeHelp: {
@@ -550,6 +599,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.4,
     fontWeight: 750,
     overflowWrap: "break-word",
+    wordBreak: "normal",
   },
 
   controls: {
@@ -607,6 +657,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.35,
     fontWeight: 950,
     overflowWrap: "break-word",
+    wordBreak: "normal",
   },
 
   answerHelp: {
@@ -615,6 +666,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.4,
     fontWeight: 750,
     overflowWrap: "break-word",
+    wordBreak: "normal",
   },
 
   answerInput: {
@@ -675,6 +727,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
     fontWeight: 750,
     overflowWrap: "break-word",
+    wordBreak: "normal",
   },
 
   playersList: {
@@ -729,5 +782,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     lineHeight: 1.4,
     fontWeight: 750,
+    overflowWrap: "break-word",
   },
 };
