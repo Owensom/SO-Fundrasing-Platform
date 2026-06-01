@@ -51,11 +51,17 @@ const FOUNDATION_EVENT_FUNDRAISING_ADD_ON_TYPES: EventFundraisingAddOnType[] = [
   "higher_or_lower",
 ];
 
+function cleanSubscriptionValue(value: string | null | undefined) {
+  return String(value || "").trim().toLowerCase();
+}
+
 export function normaliseSubscriptionTier(
   value: string | null | undefined,
 ): SubscriptionTier {
-  if (VALID_TIERS.includes(value as SubscriptionTier)) {
-    return value as SubscriptionTier;
+  const clean = cleanSubscriptionValue(value);
+
+  if (VALID_TIERS.includes(clean as SubscriptionTier)) {
+    return clean as SubscriptionTier;
   }
 
   return "community";
@@ -64,11 +70,11 @@ export function normaliseSubscriptionTier(
 export function isSubscriptionActive(
   status: string | null | undefined,
 ): boolean {
-  if (!status) return true;
+  const clean = cleanSubscriptionValue(status);
 
-  return ["active", "trialing", "free", "manual", "exempt"].includes(
-    status.toLowerCase(),
-  );
+  if (!clean) return true;
+
+  return ["active", "trialing", "free", "manual", "exempt"].includes(clean);
 }
 
 export function getTierLabel(tier: SubscriptionTier) {
@@ -119,7 +125,6 @@ export function getTierCapabilities(
       "events",
       "auctions",
       "custom_campaign_images",
-      "advanced_branding",
       "custom_commission",
       "event_guest_catering_edit",
       "event_vip_access_codes",
@@ -162,7 +167,6 @@ export function checkSubscriptionCapability(
   if (
     capability === "auctions" ||
     capability === "custom_campaign_images" ||
-    capability === "advanced_branding" ||
     capability === "custom_commission" ||
     capability === "event_guest_catering_edit" ||
     capability === "event_vip_access_codes" ||
@@ -176,6 +180,7 @@ export function checkSubscriptionCapability(
   }
 
   if (
+    capability === "advanced_branding" ||
     capability === "custom_domain" ||
     capability === "priority_support" ||
     capability === "platform_owner_bypass" ||
@@ -295,6 +300,10 @@ export function canUseEventFundraisingAddOnType(params: {
 
 export function getCustomCampaignImagesUpgradeMessage() {
   return "Custom campaign images require the Professional plan or higher. Community campaigns use the platform default images.";
+}
+
+export function getAdvancedBrandingUpgradeMessage() {
+  return "Advanced public and email branding requires the Foundation plan.";
 }
 
 export function getEventGuestCateringEditUpgradeMessage() {
