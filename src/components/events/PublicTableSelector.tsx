@@ -2239,4 +2239,3 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 16px 30px rgba(22,131,248,0.25)",
   },
 };
-};
