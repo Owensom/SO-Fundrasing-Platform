@@ -318,7 +318,104 @@ export default function NewSquaresGameForm({
   function removePrize(id: string) {
     setPrizes((current) => current.filter((prize) => prize.id !== id));
   }
-          <div style={styles.previewShell}>
+
+  return (
+    <form
+      className="new-squares-form"
+      action="/api/admin/squares"
+      method="post"
+      style={styles.form}
+    >
+      <style>{responsiveStyles}</style>
+
+      <input type="hidden" name="draw_at" value={drawAtValue} />
+      <input type="hidden" name="image_position" value="center" />
+      <input type="hidden" name="prizes" value={prizesValue} />
+      <input type="hidden" name="question" value={questionValue} />
+      <input type="hidden" name="free_entry" value={freeEntryValue} />
+
+      <section style={styles.topActions}>
+        <Link href="/admin/squares" style={styles.backButton}>
+          ← Back to squares
+        </Link>
+
+        <Link href="/admin" style={styles.dashboardButton}>
+          Dashboard
+        </Link>
+      </section>
+
+      {campaignLimitReached ? (
+        <section style={styles.upgradeBanner}>
+          <div style={styles.upgradeEyebrow}>Plan limit reached</div>
+
+          <h1 style={styles.upgradeTitle}>
+            Community plans can publish up to 2 active campaigns.
+          </h1>
+
+          <p style={styles.upgradeText}>
+            This squares campaign was not published because this tenant already
+            has the maximum number of active published campaigns allowed on the
+            Community plan. Save this campaign as a draft, close an existing
+            campaign, or upgrade to Professional for unlimited active campaigns.
+          </p>
+
+          <div style={styles.upgradeActions}>
+            <Link href="/admin/billing" style={styles.primaryUpgradeButton}>
+              View billing options
+            </Link>
+
+            <Link href="/admin/squares" style={styles.secondaryUpgradeButton}>
+              Manage squares
+            </Link>
+          </div>
+        </section>
+      ) : null}
+
+      <section style={styles.hero}>
+        <div style={styles.heroContent}>
+          <div style={styles.eyebrow}>Squares builder</div>
+
+          <div style={styles.heroTitleRow}>
+            <h1 style={styles.heroTitle}>
+              {title.trim() ? title : "Build a premium squares game"}
+            </h1>
+
+            <div style={styles.statusPill}>{status || "draft"}</div>
+          </div>
+
+          <p style={styles.heroSlug}>/s/{slug.trim() ? slug : "squares-slug"}</p>
+
+          <p style={styles.heroDescription}>
+            Create the public campaign, configure the board, set pricing, add
+            prizes and keep legal entry requirements in one polished setup flow.
+          </p>
+
+          <p style={styles.heroUseCase}>
+            Perfect for football cards, race nights, finals, ceilidhs and live
+            fundraising events.
+          </p>
+
+          <div style={styles.heroMetricGrid}>
+            <HeroMetric label="Total squares" value={boardSize} />
+
+            <HeroMetric
+              label="Price / square"
+              value={formatPreviewMoney(price, currency)}
+            />
+
+            <HeroMetric
+              label="Max sales"
+              value={formatPreviewMoney(estimatedTotal, currency)}
+            />
+
+            <HeroMetric
+              label="Public prizes"
+              value={prizeText(publicPrizesCount)}
+            />
+          </div>
+        </div>
+
+        <div style={styles.previewShell}>
           <div style={styles.previewBadge}>Public preview</div>
 
           <div style={styles.previewImageWrap}>
@@ -475,7 +572,6 @@ export default function NewSquaresGameForm({
           <Field label="Draw date">
             <input
               type="text"
-              inputMode="numeric"
               value={drawDate}
               onChange={(event) =>
                 setDrawDate(cleanUkDatePart(event.target.value))
@@ -488,7 +584,6 @@ export default function NewSquaresGameForm({
           <Field label="Draw time">
             <input
               type="text"
-              inputMode="numeric"
               value={drawTime}
               onChange={(event) => setDrawTime(cleanTimePart(event.target.value))}
               style={styles.input}
@@ -656,7 +751,8 @@ export default function NewSquaresGameForm({
           </div>
         </div>
       </SectionCard>
-              <SectionCard
+
+      <SectionCard
         number="04"
         title="Prize settings"
         description="Add prizes and choose which ones appear publicly on the campaign page."
@@ -830,7 +926,6 @@ export default function NewSquaresGameForm({
             <Field label="Postal entry closes date">
               <input
                 type="text"
-                inputMode="numeric"
                 value={freeEntryCloseDate}
                 onChange={(event) =>
                   setFreeEntryCloseDate(cleanUkDatePart(event.target.value))
@@ -843,7 +938,6 @@ export default function NewSquaresGameForm({
             <Field label="Postal entry closes time">
               <input
                 type="text"
-                inputMode="numeric"
                 value={freeEntryCloseTime}
                 onChange={(event) =>
                   setFreeEntryCloseTime(cleanTimePart(event.target.value))
@@ -1023,6 +1117,7 @@ function CheckItem({
     </div>
   );
 }
+
 const responsiveStyles = `
   .new-squares-form,
   .new-squares-form * {
@@ -1346,7 +1441,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     letterSpacing: "-0.03em",
   },
-    previewShell: {
+  previewShell: {
     display: "grid",
     alignContent: "start",
     gap: 12,
