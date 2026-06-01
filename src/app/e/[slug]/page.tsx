@@ -649,7 +649,8 @@ export default async function EventSlugPage({
           </div>
         </div>
       </section>
-            <div style={styles.contentWrap}>
+
+      <div style={styles.contentWrap}>
         {resolvedSearchParams.checkout === "success" && (
           <section style={styles.successCard}>
             <strong>Payment successful.</strong>
@@ -749,241 +750,263 @@ export default async function EventSlugPage({
             </div>
           </section>
         </div>
-
-        {publicDisplayAddOns.map((addOn) => (
-          <section
+                {publicDisplayAddOns.map((addOn) => (
+          <details
             key={addOn.type}
-            className="addOnPanel"
+            className="addOnDisclosure"
             style={{
-              ...styles.addOnPanel,
+              ...styles.addOnDisclosure,
               borderColor: `${accentColour}66`,
               background: `radial-gradient(circle at top left, ${accentColour}22, transparent 34%), linear-gradient(135deg, #0f172a 0%, #1e293b 58%, #020617 100%)`,
             }}
           >
-            <div className="addOnHeader" style={styles.addOnHeader}>
-              <div>
-                <div
-                  style={{
-                    ...styles.addOnEyebrow,
-                    color: accentColour,
-                    borderColor: `${accentColour}66`,
-                    background: `${accentColour}14`,
-                  }}
-                >
-                  Event-night fundraiser
+            <summary className="addOnSummary" style={styles.addOnSummary}>
+              <div className="addOnHeader" style={styles.addOnHeader}>
+                <div>
+                  <div
+                    style={{
+                      ...styles.addOnEyebrow,
+                      color: accentColour,
+                      borderColor: `${accentColour}66`,
+                      background: `${accentColour}14`,
+                    }}
+                  >
+                    Event-night fundraiser
+                  </div>
+
+                  <h2 className="addOnTitle" style={styles.addOnTitle}>
+                    {addOn.title}
+                  </h2>
+
+                  <p style={styles.addOnDescription}>{addOn.description}</p>
                 </div>
 
-                <h2 className="addOnTitle" style={styles.addOnTitle}>
-                  {addOn.title}
-                </h2>
+                <div style={styles.addOnSummarySide}>
+                  <div
+                    style={{
+                      ...styles.addOnPriceCard,
+                      borderColor: `${accentColour}66`,
+                      background: `${accentColour}14`,
+                    }}
+                  >
+                    <span style={styles.addOnPriceLabel}>Entry</span>
+                    <strong style={styles.addOnPriceValue}>
+                      {addOn.entryPriceCents > 0
+                        ? `${event.currency} ${moneyFromCents(
+                            addOn.entryPriceCents,
+                          )}`
+                        : "On the night"}
+                    </strong>
+                    <span style={styles.addOnPriceHint}>
+                      {addOn.collectAtCheckout && addOn.entryPriceCents > 0
+                        ? "Available during checkout"
+                        : addOn.collectAtCheckout
+                          ? "Set up for checkout collection"
+                          : "Collected by the organiser"}
+                    </span>
+                  </div>
 
-                <p style={styles.addOnDescription}>{addOn.description}</p>
+                  <span
+                    className="addOnTogglePill"
+                    style={{
+                      ...styles.addOnTogglePill,
+                      borderColor: `${accentColour}66`,
+                      background: `${accentColour}18`,
+                      color: accentColour,
+                    }}
+                  >
+                    View details
+                  </span>
+                </div>
               </div>
+            </summary>
 
-              <div
-                style={{
-                  ...styles.addOnPriceCard,
-                  borderColor: `${accentColour}66`,
-                  background: `${accentColour}14`,
-                }}
-              >
-                <span style={styles.addOnPriceLabel}>Entry</span>
-                <strong style={styles.addOnPriceValue}>
-                  {addOn.entryPriceCents > 0
-                    ? `${event.currency} ${moneyFromCents(
-                        addOn.entryPriceCents,
-                      )}`
-                    : "On the night"}
-                </strong>
-                <span style={styles.addOnPriceHint}>
-                  {addOn.collectAtCheckout && addOn.entryPriceCents > 0
-                    ? "Available during checkout"
-                    : addOn.collectAtCheckout
-                      ? "Set up for checkout collection"
-                      : "Collected by the organiser"}
-                </span>
-              </div>
-            </div>
-
-            <div className="addOnDetailsGrid" style={styles.addOnDetailsGrid}>
-              <div style={styles.addOnDetailCard}>
-                <span style={styles.addOnDetailLabel}>How it works</span>
-                <strong style={styles.addOnDetailValue}>
-                  {addOn.instructions}
-                </strong>
-              </div>
-
-              <div style={styles.addOnDetailCard}>
-                <span style={styles.addOnDetailLabel}>Prize</span>
-                <strong style={styles.addOnDetailValue}>
-                  {addOn.prizeTitle || "Prize to be announced"}
-                </strong>
-              </div>
-
-              <div style={styles.addOnDetailCard}>
-                <span style={styles.addOnDetailLabel}>Entries</span>
-                <strong style={styles.addOnDetailValue}>
-                  {addOn.maxEntriesPerBooking
-                    ? `Up to ${addOn.maxEntriesPerBooking} per booking`
-                    : "Entry details on the night"}
-                </strong>
-              </div>
-            </div>
-
-            {addOn.type === "higher_or_lower" ? (
-              <div className="liveScreenCallout" style={styles.liveScreenCallout}>
-                <div style={styles.liveScreenCopy}>
-                  <span style={styles.liveScreenEyebrow}>Live room screen</span>
-                  <strong style={styles.liveScreenTitle}>
-                    Playing Higher or Lower on the night?
+            <div className="addOnBody" style={styles.addOnBody}>
+              <div className="addOnDetailsGrid" style={styles.addOnDetailsGrid}>
+                <div style={styles.addOnDetailCard}>
+                  <span style={styles.addOnDetailLabel}>How it works</span>
+                  <strong style={styles.addOnDetailValue}>
+                    {addOn.instructions}
                   </strong>
-                  <p style={styles.liveScreenText}>
-                    Open the live display screen for the room. It hides the next
-                    prize until the organiser reveals each round.
-                  </p>
                 </div>
 
-                <Link
-                  href={higherOrLowerLiveHref}
-                  className="liveScreenButton"
-                  style={{
-                    ...styles.liveScreenButton,
-                    background: accentColour,
-                    color: "#422006",
-                  }}
-                >
-                  Open Higher or Lower live screen
-                </Link>
+                <div style={styles.addOnDetailCard}>
+                  <span style={styles.addOnDetailLabel}>Prize</span>
+                  <strong style={styles.addOnDetailValue}>
+                    {addOn.prizeTitle || "Prize to be announced"}
+                  </strong>
+                </div>
+
+                <div style={styles.addOnDetailCard}>
+                  <span style={styles.addOnDetailLabel}>Entries</span>
+                  <strong style={styles.addOnDetailValue}>
+                    {addOn.maxEntriesPerBooking
+                      ? `Up to ${addOn.maxEntriesPerBooking} per booking`
+                      : "Entry details on the night"}
+                  </strong>
+                </div>
               </div>
-            ) : null}
 
-            {shouldShowLegalSafeguards(addOn) ? (
-              <section
-                className="addOnSafeguardsPanel"
-                style={{
-                  ...styles.addOnSafeguardsPanel,
-                  borderColor: `${accentColour}66`,
-                  background: `linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06)), radial-gradient(circle at top left, ${accentColour}1F, transparent 36%)`,
-                }}
-              >
+              {addOn.type === "higher_or_lower" ? (
                 <div
-                  className="addOnSafeguardsHeader"
-                  style={styles.addOnSafeguardsHeader}
+                  className="liveScreenCallout"
+                  style={styles.liveScreenCallout}
                 >
-                  <div>
-                    <div
-                      style={{
-                        ...styles.addOnSafeguardsEyebrow,
-                        color: accentColour,
-                        borderColor: `${accentColour}66`,
-                        background: `${accentColour}14`,
-                      }}
-                    >
-                      Skill and judgement
-                    </div>
-
-                    <h3 style={styles.addOnSafeguardsTitle}>
-                      Higher or Lower entry information
-                    </h3>
-
-                    <p style={styles.addOnSafeguardsText}>
-                      These details are provided by the organiser to help
-                      supporters understand the entry requirements and the prize
-                      value range before taking part.
+                  <div style={styles.liveScreenCopy}>
+                    <span style={styles.liveScreenEyebrow}>
+                      Live room screen
+                    </span>
+                    <strong style={styles.liveScreenTitle}>
+                      Playing Higher or Lower on the night?
+                    </strong>
+                    <p style={styles.liveScreenText}>
+                      Open the live display screen for the room. It hides the
+                      next prize until the organiser reveals each round.
                     </p>
                   </div>
 
-                  {hasValidPrizeValueRange(addOn) ? (
-                    <div
-                      style={{
-                        ...styles.valueRangePublicCard,
-                        borderColor: `${accentColour}66`,
-                        background: `${accentColour}14`,
-                      }}
-                    >
-                      <span style={styles.valueRangePublicLabel}>
-                        Prize values
-                      </span>
-                      <strong style={styles.valueRangePublicValue}>
-                        {formatMoneyFromCents(
-                          addOn.prizeValueRangeMinCents,
-                          event.currency,
-                        )}{" "}
-                        –{" "}
-                        {formatMoneyFromCents(
-                          addOn.prizeValueRangeMaxCents,
-                          event.currency,
-                        )}
-                      </strong>
-                      <span style={styles.valueRangePublicHint}>
-                        Approximate range
-                      </span>
-                    </div>
-                  ) : null}
+                  <Link
+                    href={higherOrLowerLiveHref}
+                    className="liveScreenButton"
+                    style={{
+                      ...styles.liveScreenButton,
+                      background: accentColour,
+                      color: "#422006",
+                    }}
+                  >
+                    Open Higher or Lower live screen
+                  </Link>
                 </div>
+              ) : null}
 
-                <div
-                  className="addOnSafeguardsGrid"
-                  style={styles.addOnSafeguardsGrid}
+              {shouldShowLegalSafeguards(addOn) ? (
+                <section
+                  className="addOnSafeguardsPanel"
+                  style={{
+                    ...styles.addOnSafeguardsPanel,
+                    borderColor: `${accentColour}66`,
+                    background: `linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06)), radial-gradient(circle at top left, ${accentColour}1F, transparent 36%)`,
+                  }}
                 >
-                  {addOn.legalQuestionEnabled && addOn.legalQuestionText ? (
-                    <article style={styles.safeguardCard}>
-                      <span style={styles.safeguardLabel}>
-                        Entry question
-                      </span>
-                      <strong style={styles.safeguardQuestion}>
-                        {addOn.legalQuestionText}
-                      </strong>
+                  <div
+                    className="addOnSafeguardsHeader"
+                    style={styles.addOnSafeguardsHeader}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          ...styles.addOnSafeguardsEyebrow,
+                          color: accentColour,
+                          borderColor: `${accentColour}66`,
+                          background: `${accentColour}14`,
+                        }}
+                      >
+                        Skill and judgement
+                      </div>
 
-                      {addOn.legalQuestionHelperText ? (
-                        <p style={styles.safeguardHelp}>
-                          {addOn.legalQuestionHelperText}
-                        </p>
-                      ) : (
-                        <p style={styles.safeguardHelp}>
-                          Answer requirements will be checked during the entry
-                          process when enabled by the organiser.
-                        </p>
-                      )}
-                    </article>
-                  ) : null}
+                      <h3 style={styles.addOnSafeguardsTitle}>
+                        Higher or Lower entry information
+                      </h3>
 
-                  {hasValidPrizeValueRange(addOn) ? (
-                    <article style={styles.safeguardCard}>
-                      <span style={styles.safeguardLabel}>
-                        Prize value range
-                      </span>
-                      <strong style={styles.safeguardQuestion}>
-                        Prizes range from{" "}
-                        {formatMoneyFromCents(
-                          addOn.prizeValueRangeMinCents,
-                          event.currency,
-                        )}{" "}
-                        to{" "}
-                        {formatMoneyFromCents(
-                          addOn.prizeValueRangeMaxCents,
-                          event.currency,
-                        )}
-                      </strong>
-
-                      <p style={styles.safeguardHelp}>
-                        {addOn.prizeValueRangeNote ||
-                          "Prize values are shown to help supporters make a judgement during the game."}
+                      <p style={styles.addOnSafeguardsText}>
+                        These details are provided by the organiser to help
+                        supporters understand the entry requirements and the
+                        prize value range before taking part.
                       </p>
-                    </article>
-                  ) : null}
-                </div>
+                    </div>
 
-                <p style={styles.addOnSafeguardsFootnote}>
-                  The organiser is responsible for running this promotion
-                  lawfully. When checkout collection is enabled, the Higher or
-                  Lower answer is requested during booking.
-                </p>
-              </section>
-            ) : null}
+                    {hasValidPrizeValueRange(addOn) ? (
+                      <div
+                        style={{
+                          ...styles.valueRangePublicCard,
+                          borderColor: `${accentColour}66`,
+                          background: `${accentColour}14`,
+                        }}
+                      >
+                        <span style={styles.valueRangePublicLabel}>
+                          Prize values
+                        </span>
+                        <strong style={styles.valueRangePublicValue}>
+                          {formatMoneyFromCents(
+                            addOn.prizeValueRangeMinCents,
+                            event.currency,
+                          )}{" "}
+                          –{" "}
+                          {formatMoneyFromCents(
+                            addOn.prizeValueRangeMaxCents,
+                            event.currency,
+                          )}
+                        </strong>
+                        <span style={styles.valueRangePublicHint}>
+                          Approximate range
+                        </span>
+                      </div>
+                    ) : null}
+                  </div>
 
-            <p style={styles.addOnFootnote}>{addOn.footnote}</p>
-          </section>
+                  <div
+                    className="addOnSafeguardsGrid"
+                    style={styles.addOnSafeguardsGrid}
+                  >
+                    {addOn.legalQuestionEnabled && addOn.legalQuestionText ? (
+                      <article style={styles.safeguardCard}>
+                        <span style={styles.safeguardLabel}>
+                          Entry question
+                        </span>
+                        <strong style={styles.safeguardQuestion}>
+                          {addOn.legalQuestionText}
+                        </strong>
+
+                        {addOn.legalQuestionHelperText ? (
+                          <p style={styles.safeguardHelp}>
+                            {addOn.legalQuestionHelperText}
+                          </p>
+                        ) : (
+                          <p style={styles.safeguardHelp}>
+                            Answer requirements will be checked during the entry
+                            process when enabled by the organiser.
+                          </p>
+                        )}
+                      </article>
+                    ) : null}
+
+                    {hasValidPrizeValueRange(addOn) ? (
+                      <article style={styles.safeguardCard}>
+                        <span style={styles.safeguardLabel}>
+                          Prize value range
+                        </span>
+                        <strong style={styles.safeguardQuestion}>
+                          Prizes range from{" "}
+                          {formatMoneyFromCents(
+                            addOn.prizeValueRangeMinCents,
+                            event.currency,
+                          )}{" "}
+                          to{" "}
+                          {formatMoneyFromCents(
+                            addOn.prizeValueRangeMaxCents,
+                            event.currency,
+                          )}
+                        </strong>
+
+                        <p style={styles.safeguardHelp}>
+                          {addOn.prizeValueRangeNote ||
+                            "Prize values are shown to help supporters make a judgement during the game."}
+                        </p>
+                      </article>
+                    ) : null}
+                  </div>
+
+                  <p style={styles.addOnSafeguardsFootnote}>
+                    The organiser is responsible for running this promotion
+                    lawfully. When checkout collection is enabled, the Higher or
+                    Lower answer is requested during booking.
+                  </p>
+                </section>
+              ) : null}
+
+              <p style={styles.addOnFootnote}>{addOn.footnote}</p>
+            </div>
+          </details>
         ))}
 
         {prizeRevealAddOns.map((addOn) => {
@@ -1285,6 +1308,38 @@ const responsiveStyles = `
   min-width: 0;
 }
 
+.public-event-page .addOnSummary::-webkit-details-marker {
+  display: none;
+}
+
+.public-event-page .addOnSummary {
+  list-style: none;
+}
+
+.public-event-page .addOnDisclosure[open] .addOnTogglePill::after {
+  content: " hide";
+}
+
+.public-event-page .addOnDisclosure:not([open]) .addOnTogglePill::after {
+  content: "";
+}
+
+.public-event-page .addOnDisclosure[open] .addOnBody {
+  animation: addOnReveal 180ms ease-out;
+}
+
+@keyframes addOnReveal {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (max-width: 980px) {
   .public-event-page .brandHeader {
     grid-template-columns: 1fr !important;
@@ -1333,16 +1388,30 @@ const responsiveStyles = `
     letter-spacing: -0.06em !important;
   }
 
-  .public-event-page .addOnPanel,
+  .public-event-page .addOnDisclosure,
   .public-event-page .addOnSafeguardsPanel,
   .public-event-page .prizeRevealPublicPanel {
     padding: 16px !important;
     border-radius: 22px !important;
   }
 
+  .public-event-page .addOnSummary {
+    margin: -16px !important;
+    padding: 16px !important;
+  }
+
   .public-event-page .addOnTitle,
   .public-event-page .prizeRevealPublicTitle {
     font-size: clamp(30px, 10vw, 42px) !important;
+  }
+
+  .public-event-page .addOnSummarySide {
+    justify-items: stretch !important;
+  }
+
+  .public-event-page .addOnTogglePill {
+    width: 100% !important;
+    justify-content: center !important;
   }
 
   .public-event-page .liveScreenCallout {
@@ -1790,7 +1859,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid",
   },
 
-  addOnPanel: {
+  addOnDisclosure: {
     margin: "0 0 18px",
     padding: "clamp(18px, 4vw, 24px)",
     borderRadius: 28,
@@ -1800,11 +1869,47 @@ const styles: Record<string, CSSProperties> = {
     overflow: "hidden",
   },
 
+  addOnSummary: {
+    display: "block",
+    margin: "calc(clamp(18px, 4vw, 24px) * -1)",
+    padding: "clamp(18px, 4vw, 24px)",
+    cursor: "pointer",
+    outline: "none",
+  },
+
   addOnHeader: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) minmax(220px, 0.34fr)",
     gap: 16,
     alignItems: "stretch",
+  },
+
+  addOnSummarySide: {
+    display: "grid",
+    gap: 10,
+    alignContent: "center",
+    justifyItems: "stretch",
+    minWidth: 0,
+  },
+
+  addOnTogglePill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 38,
+    width: "100%",
+    padding: "9px 12px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 12,
+    fontWeight: 950,
+    textAlign: "center",
+  },
+
+  addOnBody: {
+    display: "grid",
+    gap: 0,
+    paddingTop: 16,
   },
 
   addOnEyebrow: {
@@ -1876,7 +1981,7 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: 12,
-    marginTop: 16,
+    marginTop: 0,
   },
 
   addOnDetailCard: {
