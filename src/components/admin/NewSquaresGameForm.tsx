@@ -318,7 +318,7 @@ export default function NewSquaresGameForm({
   function removePrize(id: string) {
     setPrizes((current) => current.filter((prize) => prize.id !== id));
   }
-<div style={styles.previewShell}>
+          <div style={styles.previewShell}>
           <div style={styles.previewBadge}>Public preview</div>
 
           <div style={styles.previewImageWrap}>
@@ -656,7 +656,7 @@ export default function NewSquaresGameForm({
           </div>
         </div>
       </SectionCard>
-                    <SectionCard
+              <SectionCard
         number="04"
         title="Prize settings"
         description="Add prizes and choose which ones appear publicly on the campaign page."
@@ -1346,7 +1346,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     letterSpacing: "-0.03em",
   },
-          previewShell: {
+    previewShell: {
     display: "grid",
     alignContent: "start",
     gap: 12,
@@ -1862,4 +1862,3 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 10px 20px rgba(22,131,248,0.22)",
   },
 };
-        
