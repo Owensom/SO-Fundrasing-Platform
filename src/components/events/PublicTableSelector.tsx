@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import BuyerDetailsFields from "@/components/events/BuyerDetailsFields";
 import PublicEventCheckoutAddOnSelector, {
   type PublicEventCheckoutAddOn,
@@ -551,6 +551,7 @@ export default function PublicTableSelector({
   const [buyerEmail, setBuyerEmail] = useState("");
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [guestData, setGuestData] = useState<Record<string, GuestData>>({});
+  const [selectedTableNumber, setSelectedTableNumber] = useState("");
   const [addOnQuantities, setAddOnQuantities] = useState<Record<string, number>>(
     {},
   );
@@ -610,6 +611,39 @@ export default function PublicTableSelector({
         };
       });
   }, [groupedTables, seatingLayoutJson]);
+
+  const activeTable =
+    tableEntries.find((table) => table.tableNumber === selectedTableNumber) ||
+    tableEntries[0] ||
+    null;
+
+  const activeTableAvailableCount =
+    activeTable?.seats.filter((seat) => seat.status === "available").length || 0;
+
+  const activeTableSelectedCount =
+    activeTable?.seats.filter((seat) => selectedSeatIds.includes(seat.id))
+      .length || 0;
+
+  const activeTableUnavailableCount =
+    activeTable?.seats.filter((seat) => seat.status !== "available").length || 0;
+
+  useEffect(() => {
+    if (tableEntries.length === 0) {
+      if (selectedTableNumber) {
+        setSelectedTableNumber("");
+      }
+
+      return;
+    }
+
+    const stillExists = tableEntries.some(
+      (table) => table.tableNumber === selectedTableNumber,
+    );
+
+    if (!selectedTableNumber || !stillExists) {
+      setSelectedTableNumber(tableEntries[0].tableNumber);
+    }
+  }, [selectedTableNumber, tableEntries]);
 
   const cartSeats = useMemo(() => {
     return cartItems
@@ -924,7 +958,9 @@ export default function PublicTableSelector({
               position: static !important;
             }
 
-            .public-table-selector-cart-grid {
+            .public-table-selector-cart-grid,
+            .public-table-selector-picker-header,
+            .public-table-selector-active-summary {
               grid-template-columns: 1fr !important;
             }
           }
@@ -956,6 +992,20 @@ export default function PublicTableSelector({
               transform-origin: top center;
               margin-bottom: -52px !important;
             }
+
+            .public-table-selector-table-select {
+              width: 100% !important;
+            }
+
+            .public-table-selector-table-pills {
+              gap: 7px !important;
+            }
+
+            .public-table-selector-table-pill {
+              min-height: 36px !important;
+              min-width: 40px !important;
+              padding: 0 10px !important;
+            }
           }
         `}
       </style>
@@ -964,11 +1014,14 @@ export default function PublicTableSelector({
         <div className="public-table-selector-map-panel" style={styles.mapPanel}>
           <div style={styles.mapHeader}>
             <div>
-              <h3 className="public-table-selector-map-title" style={styles.mapTitle}>
+              <h3
+                className="public-table-selector-map-title"
+                style={styles.mapTitle}
+              >
                 Table plan
               </h3>
               <p style={styles.mapText}>
-                Choose available seats from the table layout below.
+                Choose a table, then select available seats from that table.
               </p>
             </div>
 
@@ -982,83 +1035,188 @@ export default function PublicTableSelector({
           </div>
 
           <div className="public-table-selector-table-scroll" style={styles.tableScroll}>
-            {tableEntries.length === 0 ? (
+            {tableEntries.length === 0 || !activeTable ? (
               <div style={styles.emptyLight}>
                 <strong>No table seats available yet</strong>
                 <p>Tables may not have been released yet.</p>
               </div>
             ) : (
-              <div style={styles.tableGrid}>
-                {tableEntries.map((table) => (
-                  <section
-                    key={table.tableNumber}
-                    className="public-table-selector-table-card"
-                    style={styles.tableCard}
+              <div style={styles.singleTableStack}>
+                <section style={styles.tablePicker}>
+                  <div
+                    className="public-table-selector-picker-header"
+                    style={styles.tablePickerHeader}
                   >
-                    <div style={styles.tableHeader}>
-                      <div>
-                        <h4 style={styles.tableTitle}>{table.tableLabel}</h4>
-                        <p style={styles.tableMeta}>
-                          {table.seats.length} seat
-                          {table.seats.length === 1 ? "" : "s"} •{" "}
-                          {table.shape === "round"
-                            ? "Round"
-                            : table.shape === "square"
-                              ? "Square"
-                              : "Rectangle"}{" "}
-                          table
-                        </p>
-                      </div>
+                    <div>
+                      <p style={styles.tablePickerEyebrow}>Choose table</p>
+                      <h4 style={styles.tablePickerTitle}>
+                        {activeTable.tableLabel}
+                      </h4>
+                      <p style={styles.tablePickerText}>
+                        Showing one table at a time. Seats already selected from
+                        other tables remain in your booking summary.
+                      </p>
                     </div>
 
-                    <div
-                      className="public-table-selector-table-area"
-                      style={tableAreaStyle(table.shape)}
-                    >
-                      <div style={tablePlateStyle(table.shape)}>
-                        <span style={styles.tablePlateLabel}>
-                          {table.tableLabel}
-                        </span>
-                      </div>
-
-                      {table.seats.map((seat, index) => {
-                        const selected = selectedSeatIds.includes(seat.id);
-                        const colours = seatColours(seat.status, selected);
-                        const ticketType = ticketTypes.find(
-                          (item) => item.id === seat.ticket_type_id,
-                        );
-
-                        return (
-                          <button
-                            key={seat.id}
-                            type="button"
-                            onClick={() => toggleSeat(seat)}
-                            disabled={seat.status !== "available"}
-                            title={seatHoverLabel(seat, ticketType, currency)}
-                            style={{
-                              ...styles.tableSeat,
-                              ...seatPosition(
-                                index,
-                                table.seats.length,
-                                table.shape,
-                              ),
-                              ...colours,
-                            }}
+                    <label style={styles.tableSelectWrap}>
+                      <span style={styles.labelDark}>Current table</span>
+                      <select
+                        className="public-table-selector-table-select"
+                        value={activeTable.tableNumber}
+                        onChange={(event) =>
+                          setSelectedTableNumber(event.target.value)
+                        }
+                        style={styles.tableSelect}
+                      >
+                        {tableEntries.map((table) => (
+                          <option
+                            key={table.tableNumber}
+                            value={table.tableNumber}
                           >
-                            {seat.seat_number || index + 1}
-                          </button>
-                        );
-                      })}
+                            {table.tableLabel} · {table.seats.length} seats
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  <div
+                    className="public-table-selector-table-pills"
+                    style={styles.tablePills}
+                  >
+                    {tableEntries.map((table) => {
+                      const active =
+                        table.tableNumber === activeTable.tableNumber;
+                      const selectedCount = table.seats.filter((seat) =>
+                        selectedSeatIds.includes(seat.id),
+                      ).length;
+
+                      return (
+                        <button
+                          key={table.tableNumber}
+                          type="button"
+                          className="public-table-selector-table-pill"
+                          onClick={() => setSelectedTableNumber(table.tableNumber)}
+                          style={{
+                            ...styles.tablePill,
+                            ...(active ? styles.tablePillActive : {}),
+                          }}
+                        >
+                          <span>{table.tableNumber}</span>
+                          {selectedCount > 0 ? (
+                            <strong style={styles.tablePillBadge}>
+                              {selectedCount}
+                            </strong>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                <div
+                  className="public-table-selector-active-summary"
+                  style={styles.activeSummary}
+                >
+                  <div style={styles.activeSummaryCard}>
+                    <span style={styles.activeSummaryLabel}>Seats</span>
+                    <strong style={styles.activeSummaryValue}>
+                      {activeTable.seats.length}
+                    </strong>
+                  </div>
+
+                  <div style={styles.activeSummaryCard}>
+                    <span style={styles.activeSummaryLabel}>Available</span>
+                    <strong style={styles.activeSummaryValue}>
+                      {activeTableAvailableCount}
+                    </strong>
+                  </div>
+
+                  <div style={styles.activeSummaryCard}>
+                    <span style={styles.activeSummaryLabel}>Unavailable</span>
+                    <strong style={styles.activeSummaryValue}>
+                      {activeTableUnavailableCount}
+                    </strong>
+                  </div>
+
+                  <div style={styles.activeSummaryCard}>
+                    <span style={styles.activeSummaryLabel}>Selected</span>
+                    <strong style={styles.activeSummaryValue}>
+                      {activeTableSelectedCount}
+                    </strong>
+                  </div>
+                </div>
+
+                <section
+                  className="public-table-selector-table-card"
+                  style={styles.tableCard}
+                >
+                  <div style={styles.tableHeader}>
+                    <div>
+                      <h4 style={styles.tableTitle}>
+                        {activeTable.tableLabel}
+                      </h4>
+                      <p style={styles.tableMeta}>
+                        {activeTable.seats.length} seat
+                        {activeTable.seats.length === 1 ? "" : "s"} •{" "}
+                        {activeTable.shape === "round"
+                          ? "Round"
+                          : activeTable.shape === "square"
+                            ? "Square"
+                            : "Rectangle"}{" "}
+                        table
+                      </p>
                     </div>
-                  </section>
-                ))}
+                  </div>
+
+                  <div
+                    className="public-table-selector-table-area"
+                    style={tableAreaStyle(activeTable.shape)}
+                  >
+                    <div style={tablePlateStyle(activeTable.shape)}>
+                      <span style={styles.tablePlateLabel}>
+                        {activeTable.tableLabel}
+                      </span>
+                    </div>
+
+                    {activeTable.seats.map((seat, index) => {
+                      const selected = selectedSeatIds.includes(seat.id);
+                      const colours = seatColours(seat.status, selected);
+                      const ticketType = ticketTypes.find(
+                        (item) => item.id === seat.ticket_type_id,
+                      );
+
+                      return (
+                        <button
+                          key={seat.id}
+                          type="button"
+                          onClick={() => toggleSeat(seat)}
+                          disabled={seat.status !== "available"}
+                          title={seatHoverLabel(seat, ticketType, currency)}
+                          style={{
+                            ...styles.tableSeat,
+                            ...seatPosition(
+                              index,
+                              activeTable.seats.length,
+                              activeTable.shape,
+                            ),
+                            ...colours,
+                          }}
+                        >
+                          {seat.seat_number || index + 1}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
               </div>
             )}
           </div>
 
           <div style={styles.helperNotice}>
             <span style={styles.helperIcon}>ⓘ</span>
-            On smaller screens, swipe across the table plan to view all seats.
+            Use the table selector above to switch between tables. On smaller
+            screens, swipe across the table plan if needed.
           </div>
         </div>
 
@@ -1125,7 +1283,10 @@ export default function PublicTableSelector({
               <div style={styles.cartTop}>
                 <div>
                   <p style={styles.cartEyebrow}>Booking summary</p>
-                  <h3 className="public-table-selector-cart-title" style={styles.cartTitle}>
+                  <h3
+                    className="public-table-selector-cart-title"
+                    style={styles.cartTitle}
+                  >
                     Your table seats
                   </h3>
                 </div>
@@ -1379,6 +1540,7 @@ function Legend({ color, label }: { color: string; label: string }) {
     </span>
   );
 }
+
 const styles: Record<string, CSSProperties> = {
   shell: {
     display: "grid",
@@ -1464,12 +1626,157 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75)",
   },
 
-  tableGrid: {
+  singleTableStack: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 360px), 1fr))",
     gap: 14,
-    alignItems: "start",
     minWidth: 0,
+  },
+
+  tablePicker: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    borderRadius: 22,
+    background:
+      "linear-gradient(135deg, #f8fafc 0%, #ffffff 58%, #eff6ff 100%)",
+    border: "1px solid #dbeafe",
+    minWidth: 0,
+  },
+
+  tablePickerHeader: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(220px, 0.36fr)",
+    gap: 12,
+    alignItems: "end",
+    minWidth: 0,
+  },
+
+  tablePickerEyebrow: {
+    margin: "0 0 6px",
+    color: "#2563eb",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  tablePickerTitle: {
+    margin: 0,
+    color: "#111827",
+    fontSize: "clamp(22px, 5vw, 28px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
+  tablePickerText: {
+    margin: "7px 0 0",
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  tableSelectWrap: {
+    display: "grid",
+    gap: 6,
+    minWidth: 0,
+  },
+
+  labelDark: {
+    color: "#334155",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+
+  tableSelect: {
+    width: "100%",
+    minHeight: 42,
+    padding: "9px 10px",
+    borderRadius: 13,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 14,
+    fontWeight: 850,
+    boxSizing: "border-box",
+  },
+
+  tablePills: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
+
+  tablePill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    minWidth: 44,
+    minHeight: 38,
+    padding: "0 12px",
+    borderRadius: 999,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: 950,
+    cursor: "pointer",
+  },
+
+  tablePillActive: {
+    borderColor: "#1683f8",
+    background: "#1683f8",
+    color: "#ffffff",
+    boxShadow: "0 10px 20px rgba(22,131,248,0.16)",
+  },
+
+  tablePillBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 20,
+    height: 20,
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.22)",
+    color: "inherit",
+    fontSize: 11,
+    fontWeight: 950,
+  },
+
+  activeSummary: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  activeSummaryCard: {
+    display: "grid",
+    gap: 4,
+    padding: 12,
+    borderRadius: 16,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+
+  activeSummaryLabel: {
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  activeSummaryValue: {
+    color: "#0f172a",
+    fontSize: 22,
+    lineHeight: 1,
+    fontWeight: 950,
   },
 
   tableCard: {
@@ -1931,4 +2238,5 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 15,
     boxShadow: "0 16px 30px rgba(22,131,248,0.25)",
   },
+};
 };
