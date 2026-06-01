@@ -458,8 +458,7 @@ export default async function TenantCampaignsPage({
     campaigns: publicCampaigns,
     highlightedSettings,
   });
-
-  const campaignTypeNames = auctionCapability.allowed
+    const campaignTypeNames = auctionCapability.allowed
     ? "raffles, squares, events and auctions"
     : "raffles, squares and events";
 
@@ -864,8 +863,7 @@ export default async function TenantCampaignsPage({
           </div>
         ) : null}
       </section>
-
-      <section className="contactStrip" style={styles.contactStrip}>
+            <section className="contactStrip" style={styles.contactStrip}>
         <div
           style={{
             ...styles.contactStripIcon,
@@ -1164,7 +1162,7 @@ export default async function TenantCampaignsPage({
                   {campaign.description?.trim() || getTypeMeta(campaign.type)}
                 </p>
 
-                <div style={styles.actionStack}>
+                <div style={styles.campaignCardActionStack}>
                   <div className="primaryActionRow" style={styles.primaryActionRow}>
                     <Link
                       href={getCampaignUrl(campaign)}
@@ -1364,7 +1362,7 @@ const responsiveStyles = `
 `;
 
 const styles: Record<string, CSSProperties> = {
-  page: {
+    page: {
     width: "100%",
     maxWidth: 1220,
     margin: "0 auto",
@@ -1962,6 +1960,14 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 2,
   },
 
+  campaignCardActionStack: {
+    display: "grid",
+    gap: 9,
+    width: "100%",
+    minWidth: 0,
+    marginTop: "auto",
+  },
+
   primaryActionRow: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
@@ -2111,8 +2117,9 @@ const styles: Record<string, CSSProperties> = {
   },
 
   card: {
-    display: "grid",
-    gridTemplateRows: "200px 1fr",
+    display: "flex",
+    flexDirection: "column",
+    height: "100%",
     borderRadius: 26,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
@@ -2130,9 +2137,10 @@ const styles: Record<string, CSSProperties> = {
   },
 
   cardBody: {
-    display: "grid",
+    display: "flex",
+    flexDirection: "column",
+    flex: 1,
     gap: 11,
-    alignContent: "start",
     padding: 15,
     minWidth: 0,
   },
