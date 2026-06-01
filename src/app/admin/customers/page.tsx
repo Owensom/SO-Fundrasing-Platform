@@ -276,6 +276,7 @@ async function getSquaresOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
     };
   });
 }
+
 async function getEventOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
   const rows = await safeQuery(
     "events",
@@ -387,7 +388,6 @@ async function getAuctionOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
     };
   });
 }
-
 async function getDonationOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
   const rows = await safeQuery(
     "donations",
@@ -587,6 +587,7 @@ function buildCsvHref(customers: CustomerProfile[]) {
 
   return `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
 }
+
 export default async function AdminCustomersPage({
   searchParams,
 }: PageProps) {
@@ -970,8 +971,8 @@ function HeroStat({ label, value }: { label: string; value: ReactNode }) {
 function MiniMetric({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={styles.miniMetric}>
-      <span>{label}</span>
-      <strong>{value}</strong>
+      <span style={styles.miniMetricLabel}>{label}</span>
+      <strong style={styles.miniMetricValue}>{value}</strong>
     </div>
   );
 }
@@ -1032,6 +1033,10 @@ const responsiveStyles = `
     grid-template-columns: 1fr !important;
   }
 
+  .customers-page .customerStats {
+    grid-template-columns: repeat(3, minmax(96px, 1fr)) !important;
+  }
+
   .customers-page .cardActions {
     grid-template-columns: 1fr !important;
   }
@@ -1065,8 +1070,11 @@ const responsiveStyles = `
   .customers-page .heroStats,
   .customers-page .summaryGrid,
   .customers-page .heroPanelGrid,
-  .customers-page .customerStats,
   .customers-page .heroActions {
+    grid-template-columns: 1fr !important;
+  }
+
+  .customers-page .customerStats {
     grid-template-columns: 1fr !important;
   }
 
@@ -1256,13 +1264,32 @@ const styles: Record<string, CSSProperties> = {
 
   miniMetric: {
     display: "grid",
-    gap: 4,
+    gap: 5,
     padding: 12,
     borderRadius: 16,
     background: "#ffffff",
     color: "#0f172a",
     border: "1px solid rgba(217,119,6,0.34)",
     minWidth: 0,
+    overflow: "hidden",
+    overflowWrap: "normal",
+    wordBreak: "normal",
+  },
+
+  miniMetricLabel: {
+    color: "#475569",
+    fontSize: 13,
+    fontWeight: 850,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+
+  miniMetricValue: {
+    color: "#0f172a",
+    fontSize: 14,
+    lineHeight: 1.22,
+    fontWeight: 950,
     overflowWrap: "anywhere",
   },
 
@@ -1345,7 +1372,8 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "end",
     minWidth: 0,
   },
-    field: {
+
+  field: {
     display: "grid",
     gap: 7,
     minWidth: 0,
@@ -1461,7 +1489,7 @@ const styles: Record<string, CSSProperties> = {
 
   customerGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 380px), 1fr))",
     gap: 14,
     alignItems: "stretch",
   },
@@ -1519,7 +1547,7 @@ const styles: Record<string, CSSProperties> = {
 
   customerStats: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(3, minmax(96px, 1fr))",
     gap: 10,
     alignItems: "stretch",
   },
