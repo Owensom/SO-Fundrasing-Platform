@@ -980,17 +980,23 @@ export default function PublicTableSelector({
             .public-table-selector-table-scroll {
               padding: 10px !important;
               border-radius: 14px !important;
+              overflow-x: auto !important;
+              overflow-y: visible !important;
+              -webkit-overflow-scrolling: touch;
             }
 
             .public-table-selector-table-card {
+              width: max-content !important;
+              min-width: min(100%, 560px) !important;
               padding: 12px !important;
               border-radius: 18px !important;
+              overflow: visible !important;
             }
 
             .public-table-selector-table-area {
-              transform: scale(0.82);
-              transform-origin: top center;
-              margin-bottom: -52px !important;
+              transform: none !important;
+              transform-origin: center center !important;
+              margin-bottom: 0 !important;
             }
 
             .public-table-selector-table-select {
@@ -1618,7 +1624,7 @@ const styles: Record<string, CSSProperties> = {
   tableScroll: {
     width: "100%",
     overflowX: "auto",
-    overflowY: "hidden",
+    overflowY: "visible",
     padding: 14,
     borderRadius: 18,
     background: "#ffffff",
@@ -1787,7 +1793,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     minWidth: 0,
-    overflow: "hidden",
+    overflow: "visible",
   },
 
   tableHeader: {
