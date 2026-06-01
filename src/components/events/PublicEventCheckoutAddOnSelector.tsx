@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 
 export type PublicEventCheckoutAddOnType = "heads_or_tails" | "higher_or_lower";
 
@@ -169,12 +169,24 @@ export default function PublicEventCheckoutAddOnSelector({
   const showPlayerRows =
     shouldShowHigherOrLowerPlayers(addOn) && safeQuantity > 0;
 
+  const title = addOn.title || addOnFallbackTitle(addOn.type);
+  const description =
+    addOn.description || addOnFallbackDescription(addOn.type);
+
+  const [isOpen, setIsOpen] = useState(() => safeQuantity > 0);
+
   const normalisedPlayers = normalisePlayerRows({
     quantity: safeQuantity,
     players,
     buyerName,
     buyerEmail,
   });
+
+  useEffect(() => {
+    if (safeQuantity > 0) {
+      setIsOpen(true);
+    }
+  }, [safeQuantity]);
 
   function updateQuantity(nextQuantity: number) {
     const cleanNextQuantity = cleanQuantity(
@@ -183,6 +195,10 @@ export default function PublicEventCheckoutAddOnSelector({
     );
 
     onQuantityChange(cleanNextQuantity);
+
+    if (cleanNextQuantity > 0) {
+      setIsOpen(true);
+    }
 
     if (addOn.type === "higher_or_lower") {
       const nextPlayers = normalisePlayerRows({
@@ -194,6 +210,11 @@ export default function PublicEventCheckoutAddOnSelector({
 
       onPlayersChange?.(nextPlayers);
     }
+  }
+
+  function addFirstEntry() {
+    if (disabled) return;
+    updateQuantity(Math.max(1, safeQuantity || 0));
   }
 
   function updatePlayer(
@@ -217,217 +238,278 @@ export default function PublicEventCheckoutAddOnSelector({
     onPlayersChange?.(nextPlayers);
   }
 
+  const canCollapse = safeQuantity === 0;
+
   return (
     <section className="event-checkout-addon" style={styles.panel}>
       <style>{responsiveStyles}</style>
 
       <div className="event-checkout-addon-header" style={styles.header}>
-        <div style={styles.copy}>
-          <p style={styles.eyebrow}>Event-night add-on</p>
+        <button
+          type="button"
+          onClick={() => setIsOpen((current) => (canCollapse ? !current : true))}
+          style={styles.summaryButton}
+          aria-expanded={isOpen}
+        >
+          <span style={styles.summaryCopy}>
+            <span style={styles.eyebrow}>Event-night add-on</span>
 
-          <h4 style={styles.title}>
-            {addOn.title || addOnFallbackTitle(addOn.type)}
-          </h4>
+            <strong style={styles.title}>{title}</strong>
 
-          {addOn.description ? (
-            <p style={styles.description}>{addOn.description}</p>
-          ) : (
-            <p style={styles.description}>
-              {addOnFallbackDescription(addOn.type)}
-            </p>
-          )}
+            <span style={styles.description}>{description}</span>
 
-          {maxEntriesPerBooking ? (
-            <p style={styles.limitText}>
-              Maximum {maxEntriesPerBooking} per booking.
+            {maxEntriesPerBooking ? (
+              <span style={styles.limitText}>
+                Maximum {maxEntriesPerBooking} per booking.
+              </span>
+            ) : null}
+          </span>
+
+          <span style={styles.summarySide}>
+            <span className="event-checkout-addon-price" style={styles.priceBox}>
+              <span style={styles.priceLabel}>Entry</span>
+              <strong style={styles.priceValue}>
+                {currency} {moneyFromCents(addOn.entryPriceCents)}
+              </strong>
+            </span>
+
+            <span style={styles.quantitySummaryPill}>
+              {safeQuantity > 0
+                ? `${safeQuantity} selected`
+                : isOpen
+                  ? "Hide"
+                  : "Details"}
+            </span>
+          </span>
+        </button>
+      </div>
+
+      {!isOpen ? (
+        <div style={styles.collapsedActions}>
+          <button
+            type="button"
+            onClick={addFirstEntry}
+            disabled={disabled}
+            style={{
+              ...styles.addButton,
+              opacity: disabled ? 0.5 : 1,
+              cursor: disabled ? "not-allowed" : "pointer",
+            }}
+          >
+            Add {title}
+          </button>
+
+          {disabled ? (
+            <p style={styles.disabledText}>
+              Add-ons are disabled when a VIP or complimentary access code is
+              used.
             </p>
           ) : null}
         </div>
+      ) : (
+        <>
+          {showPrizeRange ? (
+            <div style={styles.rangeBox}>
+              <span style={styles.rangeLabel}>Prize value range</span>
+              <strong style={styles.rangeValue}>
+                {currency} {moneyFromCents(addOn.prizeValueRangeMinCents)} –{" "}
+                {currency} {moneyFromCents(addOn.prizeValueRangeMaxCents)}
+              </strong>
+              <span style={styles.rangeHelp}>
+                {cleanText(addOn.prizeValueRangeNote) ||
+                  "Prize values are shown to help supporters make a judgement before entering."}
+              </span>
+            </div>
+          ) : null}
 
-        <div className="event-checkout-addon-price" style={styles.priceBox}>
-          <span style={styles.priceLabel}>Entry</span>
-          <strong style={styles.priceValue}>
-            {currency} {moneyFromCents(addOn.entryPriceCents)}
-          </strong>
-        </div>
-      </div>
+          <div style={styles.controls}>
+            <button
+              type="button"
+              onClick={() => updateQuantity(safeQuantity - 1)}
+              disabled={disabled || safeQuantity <= 0}
+              style={{
+                ...styles.quantityButton,
+                opacity: disabled || safeQuantity <= 0 ? 0.45 : 1,
+                cursor:
+                  disabled || safeQuantity <= 0 ? "not-allowed" : "pointer",
+              }}
+            >
+              −
+            </button>
 
-      {showPrizeRange ? (
-        <div style={styles.rangeBox}>
-          <span style={styles.rangeLabel}>Prize value range</span>
-          <strong style={styles.rangeValue}>
-            {currency} {moneyFromCents(addOn.prizeValueRangeMinCents)} –{" "}
-            {currency} {moneyFromCents(addOn.prizeValueRangeMaxCents)}
-          </strong>
-          <span style={styles.rangeHelp}>
-            {cleanText(addOn.prizeValueRangeNote) ||
-              "Prize values are shown to help supporters make a judgement before entering."}
-          </span>
-        </div>
-      ) : null}
+            <input
+              type="number"
+              min="0"
+              max={maxEntriesPerBooking || undefined}
+              value={safeQuantity}
+              disabled={disabled}
+              onChange={(event) => updateQuantity(Number(event.target.value))}
+              style={{
+                ...styles.quantityInput,
+                opacity: disabled ? 0.55 : 1,
+              }}
+            />
 
-      <div style={styles.controls}>
-        <button
-          type="button"
-          onClick={() => updateQuantity(safeQuantity - 1)}
-          disabled={disabled || safeQuantity <= 0}
-          style={{
-            ...styles.quantityButton,
-            opacity: disabled || safeQuantity <= 0 ? 0.45 : 1,
-            cursor: disabled || safeQuantity <= 0 ? "not-allowed" : "pointer",
-          }}
-        >
-          −
-        </button>
-
-        <input
-          type="number"
-          min="0"
-          max={maxEntriesPerBooking || undefined}
-          value={safeQuantity}
-          disabled={disabled}
-          onChange={(event) => updateQuantity(Number(event.target.value))}
-          style={{
-            ...styles.quantityInput,
-            opacity: disabled ? 0.55 : 1,
-          }}
-        />
-
-        <button
-          type="button"
-          onClick={() => updateQuantity(safeQuantity + 1)}
-          disabled={
-            disabled ||
-            Boolean(maxEntriesPerBooking && safeQuantity >= maxEntriesPerBooking)
-          }
-          style={{
-            ...styles.quantityButton,
-            opacity:
-              disabled ||
-              Boolean(maxEntriesPerBooking && safeQuantity >= maxEntriesPerBooking)
-                ? 0.45
-                : 1,
-            cursor:
-              disabled ||
-              Boolean(maxEntriesPerBooking && safeQuantity >= maxEntriesPerBooking)
-                ? "not-allowed"
-                : "pointer",
-          }}
-        >
-          +
-        </button>
-      </div>
-
-      {showAnswerField ? (
-        <label style={styles.answerBox}>
-          <span style={styles.answerLabel}>Skill question</span>
-
-          <strong style={styles.answerQuestion}>
-            {cleanText(addOn.legalQuestionText)}
-          </strong>
-
-          {cleanText(addOn.legalQuestionHelperText) ? (
-            <span style={styles.answerHelp}>
-              {cleanText(addOn.legalQuestionHelperText)}
-            </span>
-          ) : (
-            <span style={styles.answerHelp}>
-              Your answer will be recorded with your Higher or Lower entry.
-            </span>
-          )}
-
-          <input
-            value={buyerAnswer}
-            disabled={disabled || safeQuantity <= 0}
-            onChange={(event) => onBuyerAnswerChange?.(event.target.value)}
-            placeholder={
-              safeQuantity > 0
-                ? "Enter your answer"
-                : "Choose entries before answering"
-            }
-            style={{
-              ...styles.answerInput,
-              opacity: disabled || safeQuantity <= 0 ? 0.6 : 1,
-            }}
-          />
-        </label>
-      ) : null}
-
-      {showPlayerRows ? (
-        <div style={styles.playersBox}>
-          <div style={styles.playersHeader}>
-            <span style={styles.playersLabel}>Player details</span>
-            <span style={styles.playersCount}>
-              {safeQuantity} player{safeQuantity === 1 ? "" : "s"}
-            </span>
+            <button
+              type="button"
+              onClick={() => updateQuantity(safeQuantity + 1)}
+              disabled={
+                disabled ||
+                Boolean(
+                  maxEntriesPerBooking &&
+                    safeQuantity >= maxEntriesPerBooking,
+                )
+              }
+              style={{
+                ...styles.quantityButton,
+                opacity:
+                  disabled ||
+                  Boolean(
+                    maxEntriesPerBooking &&
+                      safeQuantity >= maxEntriesPerBooking,
+                  )
+                    ? 0.45
+                    : 1,
+                cursor:
+                  disabled ||
+                  Boolean(
+                    maxEntriesPerBooking &&
+                      safeQuantity >= maxEntriesPerBooking,
+                  )
+                    ? "not-allowed"
+                    : "pointer",
+              }}
+            >
+              +
+            </button>
           </div>
 
-          <p style={styles.playersHelp}>
-            Add the name and email for each person playing Higher or Lower. If
-            you are buying for several people, each player can receive their own
-            game entry.
-          </p>
+          {showAnswerField ? (
+            <label style={styles.answerBox}>
+              <span style={styles.answerLabel}>Skill question</span>
 
-          <div style={styles.playersList}>
-            {normalisedPlayers.map((player, index) => (
-              <div key={`higher-or-lower-player-${index}`} style={styles.playerRow}>
-                <div style={styles.playerNumber}>Player {index + 1}</div>
+              <strong style={styles.answerQuestion}>
+                {cleanText(addOn.legalQuestionText)}
+              </strong>
 
-                <label style={styles.playerField}>
-                  <span style={styles.playerFieldLabel}>Name</span>
-                  <input
-                    value={player.name}
-                    disabled={disabled}
-                    onChange={(event) =>
-                      updatePlayer(index, {
-                        name: event.target.value,
-                      })
-                    }
-                    placeholder={
-                      index === 0 && cleanText(buyerName)
-                        ? cleanText(buyerName)
-                        : "Player name"
-                    }
-                    style={{
-                      ...styles.playerInput,
-                      opacity: disabled ? 0.6 : 1,
-                    }}
-                  />
-                </label>
+              {cleanText(addOn.legalQuestionHelperText) ? (
+                <span style={styles.answerHelp}>
+                  {cleanText(addOn.legalQuestionHelperText)}
+                </span>
+              ) : (
+                <span style={styles.answerHelp}>
+                  Your answer will be recorded with your Higher or Lower entry.
+                </span>
+              )}
 
-                <label style={styles.playerField}>
-                  <span style={styles.playerFieldLabel}>Email</span>
-                  <input
-                    value={player.email}
-                    disabled={disabled}
-                    type="email"
-                    onChange={(event) =>
-                      updatePlayer(index, {
-                        email: event.target.value,
-                      })
-                    }
-                    placeholder={
-                      index === 0 && cleanText(buyerEmail)
-                        ? cleanText(buyerEmail)
-                        : "player@example.com"
-                    }
-                    style={{
-                      ...styles.playerInput,
-                      opacity: disabled ? 0.6 : 1,
-                    }}
-                  />
-                </label>
+              <input
+                value={buyerAnswer}
+                disabled={disabled || safeQuantity <= 0}
+                onChange={(event) => onBuyerAnswerChange?.(event.target.value)}
+                placeholder={
+                  safeQuantity > 0
+                    ? "Enter your answer"
+                    : "Choose entries before answering"
+                }
+                style={{
+                  ...styles.answerInput,
+                  opacity: disabled || safeQuantity <= 0 ? 0.6 : 1,
+                }}
+              />
+            </label>
+          ) : null}
+
+          {showPlayerRows ? (
+            <div style={styles.playersBox}>
+              <div style={styles.playersHeader}>
+                <span style={styles.playersLabel}>Player details</span>
+                <span style={styles.playersCount}>
+                  {safeQuantity} player{safeQuantity === 1 ? "" : "s"}
+                </span>
               </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
 
-      {disabled ? (
-        <p style={styles.disabledText}>
-          Add-ons are disabled when a VIP or complimentary access code is used.
-        </p>
-      ) : null}
+              <p style={styles.playersHelp}>
+                Add the name and email for each person playing Higher or Lower.
+                If you are buying for several people, each player can receive
+                their own game entry.
+              </p>
+
+              <div style={styles.playersList}>
+                {normalisedPlayers.map((player, index) => (
+                  <div
+                    key={`higher-or-lower-player-${index}`}
+                    style={styles.playerRow}
+                  >
+                    <div style={styles.playerNumber}>Player {index + 1}</div>
+
+                    <label style={styles.playerField}>
+                      <span style={styles.playerFieldLabel}>Name</span>
+                      <input
+                        value={player.name}
+                        disabled={disabled}
+                        onChange={(event) =>
+                          updatePlayer(index, {
+                            name: event.target.value,
+                          })
+                        }
+                        placeholder={
+                          index === 0 && cleanText(buyerName)
+                            ? cleanText(buyerName)
+                            : "Player name"
+                        }
+                        style={{
+                          ...styles.playerInput,
+                          opacity: disabled ? 0.6 : 1,
+                        }}
+                      />
+                    </label>
+
+                    <label style={styles.playerField}>
+                      <span style={styles.playerFieldLabel}>Email</span>
+                      <input
+                        value={player.email}
+                        disabled={disabled}
+                        type="email"
+                        onChange={(event) =>
+                          updatePlayer(index, {
+                            email: event.target.value,
+                          })
+                        }
+                        placeholder={
+                          index === 0 && cleanText(buyerEmail)
+                            ? cleanText(buyerEmail)
+                            : "player@example.com"
+                        }
+                        style={{
+                          ...styles.playerInput,
+                          opacity: disabled ? 0.6 : 1,
+                        }}
+                      />
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {disabled ? (
+            <p style={styles.disabledText}>
+              Add-ons are disabled when a VIP or complimentary access code is
+              used.
+            </p>
+          ) : null}
+
+          {safeQuantity === 0 ? (
+            <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              style={styles.closeButton}
+            >
+              Collapse add-on
+            </button>
+          ) : null}
+        </>
+      )}
     </section>
   );
 }
@@ -447,10 +529,6 @@ const responsiveStyles = `
 }
 
 @media (max-width: 760px) {
-  .event-checkout-addon-header {
-    grid-template-columns: 1fr !important;
-  }
-
   .event-checkout-addon-price {
     width: fit-content !important;
     max-width: 100% !important;
@@ -486,18 +564,39 @@ const styles: Record<string, CSSProperties> = {
 
   header: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(96px, auto)",
-    gap: 12,
-    alignItems: "start",
     minWidth: 0,
   },
 
-  copy: {
+  summaryButton: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 12,
+    alignItems: "start",
+    width: "100%",
+    padding: 0,
+    border: "none",
+    background: "transparent",
+    color: "inherit",
+    textAlign: "left",
+    cursor: "pointer",
+    minWidth: 0,
+  },
+
+  summaryCopy: {
+    display: "grid",
+    gap: 5,
+    minWidth: 0,
+  },
+
+  summarySide: {
+    display: "grid",
+    gap: 8,
+    justifyItems: "end",
     minWidth: 0,
   },
 
   eyebrow: {
-    margin: "0 0 5px",
+    margin: 0,
     color: "#facc15",
     fontSize: 11,
     fontWeight: 950,
@@ -518,7 +617,7 @@ const styles: Record<string, CSSProperties> = {
   },
 
   description: {
-    margin: "7px 0 0",
+    margin: 0,
     color: "#cbd5e1",
     fontSize: 13,
     lineHeight: 1.5,
@@ -528,7 +627,7 @@ const styles: Record<string, CSSProperties> = {
   },
 
   limitText: {
-    margin: "8px 0 0",
+    margin: "3px 0 0",
     color: "#fde68a",
     fontSize: 12,
     lineHeight: 1.35,
@@ -564,6 +663,50 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.1,
     fontWeight: 950,
     whiteSpace: "nowrap",
+  },
+
+  quantitySummaryPill: {
+    display: "inline-flex",
+    justifyContent: "center",
+    width: "fit-content",
+    maxWidth: "100%",
+    padding: "6px 9px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.14)",
+    color: "#e2e8f0",
+    fontSize: 11,
+    lineHeight: 1.15,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  collapsedActions: {
+    display: "grid",
+    gap: 8,
+  },
+
+  addButton: {
+    width: "100%",
+    minHeight: 42,
+    borderRadius: 999,
+    border: "1px solid rgba(250,204,21,0.26)",
+    background: "rgba(250,204,21,0.16)",
+    color: "#fef3c7",
+    fontSize: 13,
+    fontWeight: 950,
+  },
+
+  closeButton: {
+    width: "100%",
+    minHeight: 38,
+    borderRadius: 999,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.06)",
+    color: "#cbd5e1",
+    fontSize: 12,
+    fontWeight: 900,
+    cursor: "pointer",
   },
 
   rangeBox: {
