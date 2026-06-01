@@ -1367,25 +1367,73 @@ const responsiveStyles = `
 
 @media (max-width: 680px) {
   .public-event-page .brandHeader {
-    padding: 12px !important;
-    border-radius: 22px !important;
-    margin: 10px 10px 12px !important;
+    padding: 16px !important;
+    border-radius: 24px !important;
+    margin: 10px 12px 12px !important;
+    gap: 14px !important;
   }
 
   .public-event-page .brandIdentity {
-    grid-template-columns: 56px minmax(0, 1fr) !important;
+    grid-template-columns: 1fr !important;
+    justify-items: center !important;
+    text-align: center !important;
+    gap: 12px !important;
   }
 
   .public-event-page .brandLogoWrap,
   .public-event-page .brandLogoFallback {
-    width: 56px !important;
-    height: 56px !important;
-    border-radius: 16px !important;
+    width: 92px !important;
+    height: 92px !important;
+    border-radius: 22px !important;
+  }
+
+  .public-event-page .brandLogo {
+    padding: 8px !important;
+  }
+
+  .public-event-page .brandCopy {
+    justify-items: center !important;
+    text-align: center !important;
+    width: 100% !important;
+  }
+
+  .public-event-page .brandKicker {
+    font-size: 11px !important;
+    letter-spacing: 0.16em !important;
   }
 
   .public-event-page .brandTitle {
-    font-size: clamp(24px, 8vw, 36px) !important;
-    letter-spacing: -0.06em !important;
+    font-size: clamp(34px, 11vw, 44px) !important;
+    line-height: 0.95 !important;
+    letter-spacing: -0.065em !important;
+    max-width: 100% !important;
+  }
+
+  .public-event-page .brandTagline {
+    font-size: 15px !important;
+    line-height: 1.32 !important;
+    max-width: 310px !important;
+  }
+
+  .public-event-page .brandFeature {
+    padding: 14px !important;
+    border-radius: 20px !important;
+    text-align: center !important;
+    justify-items: center !important;
+  }
+
+  .public-event-page .brandFeatureKicker {
+    font-size: 11px !important;
+    letter-spacing: 0.16em !important;
+  }
+
+  .public-event-page .brandFeatureTitle {
+    font-size: clamp(22px, 7vw, 30px) !important;
+    line-height: 1.05 !important;
+  }
+
+  .public-event-page .brandFeatureText {
+    font-size: 14px !important;
   }
 
   .public-event-page .addOnDisclosure,
