@@ -82,6 +82,14 @@ function parseDrawAt(value: FormDataEntryValue | null) {
   return date.toISOString();
 }
 
+function normaliseTierForCampaignLimit(value: unknown) {
+  const tier = String(value || "").trim().toLowerCase();
+
+  if (tier === "foundation") return "foundation";
+  if (tier === "professional") return "professional";
+  return "community";
+}
+
 async function requireTenantAccess(request: NextRequest) {
   const session = await auth();
 
@@ -149,8 +157,14 @@ async function canTenantPublishCampaign(tenantSlug: string) {
   const currentActiveCampaigns = Number(activeCampaignCounts?.total || 0);
   const tenantSettings = await getTenantSettings(tenantSlug);
 
+  if (tenantSettings?.platform_owner_bypass) {
+    return true;
+  }
+
   return canPublishAnotherCampaign({
-    subscription_tier: tenantSettings?.subscription_tier,
+    subscription_tier: normaliseTierForCampaignLimit(
+      tenantSettings?.subscription_tier,
+    ),
     currentActiveCampaigns,
   });
 }
@@ -287,4 +301,5 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     );
   }
+}
 }
