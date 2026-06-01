@@ -201,6 +201,8 @@ function stringFromConfig(source: JsonRecord, keys: string[]) {
 function hasLegalQuestionEnabled(config: JsonRecord) {
   const entryQuestion = getNestedRecord(config, "entryQuestion");
   const legalQuestion = getNestedRecord(config, "legalQuestion");
+  const question = getNestedRecord(config, "question");
+  const snakeLegalQuestion = getNestedRecord(config, "legal_question");
 
   return (
     booleanFromConfig(config, [
@@ -212,13 +214,21 @@ function hasLegalQuestionEnabled(config: JsonRecord) {
       "question_enabled",
     ]) ||
     booleanFromConfig(entryQuestion, ["enabled", "isEnabled"]) ||
-    booleanFromConfig(legalQuestion, ["enabled", "isEnabled"])
+    booleanFromConfig(legalQuestion, ["enabled", "isEnabled"]) ||
+    booleanFromConfig(question, ["enabled", "isEnabled"]) ||
+    booleanFromConfig(snakeLegalQuestion, ["enabled", "isEnabled"]) ||
+    Boolean(
+      stringFromConfig(question, ["text", "question"]) ||
+        stringFromConfig(snakeLegalQuestion, ["text", "question"]),
+    )
   );
 }
 
 function hasLegalQuestionAnswer(config: JsonRecord) {
   const entryQuestion = getNestedRecord(config, "entryQuestion");
   const legalQuestion = getNestedRecord(config, "legalQuestion");
+  const question = getNestedRecord(config, "question");
+  const snakeLegalQuestion = getNestedRecord(config, "legal_question");
 
   return Boolean(
     stringFromConfig(config, [
@@ -239,13 +249,25 @@ function hasLegalQuestionAnswer(config: JsonRecord) {
         "answer",
         "correctAnswer",
         "correct_answer",
+      ]) ||
+      stringFromConfig(question, [
+        "answer",
+        "correctAnswer",
+        "correct_answer",
+      ]) ||
+      stringFromConfig(snakeLegalQuestion, [
+        "answer",
+        "correctAnswer",
+        "correct_answer",
       ]),
   );
 }
 
 function hasPostalEntryInfo(config: JsonRecord) {
   const postal = getNestedRecord(config, "postalEntry");
+  const snakePostal = getNestedRecord(config, "postal_entry");
   const freeEntry = getNestedRecord(config, "freePostalEntry");
+  const snakeFreeEntry = getNestedRecord(config, "free_entry");
 
   return Boolean(
     stringFromConfig(config, [
@@ -256,8 +278,14 @@ function hasPostalEntryInfo(config: JsonRecord) {
       "postalAddress",
       "postal_address",
     ]) ||
-      stringFromConfig(postal, ["address", "instructions"]) ||
-      stringFromConfig(freeEntry, ["address", "instructions"]),
+      stringFromConfig(postal, ["address", "instructions", "closes_at"]) ||
+      stringFromConfig(snakePostal, ["address", "instructions", "closes_at"]) ||
+      stringFromConfig(freeEntry, ["address", "instructions", "closes_at"]) ||
+      stringFromConfig(snakeFreeEntry, [
+        "address",
+        "instructions",
+        "closes_at",
+      ]),
   );
 }
 
@@ -425,7 +453,6 @@ async function getSquares(tenantSlug: string) {
     [tenantSlug],
   );
 }
-
 async function getEvents(tenantSlug: string) {
   return query<EventReadinessRow>(
     `
@@ -614,6 +641,19 @@ function buildSquaresWarnings(squares: SquaresReadinessRow[]) {
         tone: "danger",
       });
     }
+
+    if (
+      game.status === "published" &&
+      !hasPostalEntryInfo(game.config_json || {})
+    ) {
+      warnings.push({
+        title: `${game.title}: postal entry details not detected`,
+        detail:
+          "Check that free postal entry information is present before launch.",
+        href,
+        tone: "warning",
+      });
+    }
   }
 
   return warnings;
@@ -695,7 +735,6 @@ function buildEventWarnings(events: EventReadinessRow[]) {
 
   return warnings;
 }
-
 function buildAuctionWarnings(auctions: Array<Record<string, unknown>>) {
   const warnings: CampaignWarning[] = [];
 
@@ -1084,8 +1123,7 @@ export default async function AdminLaunchReadinessPage() {
           }
         />
       </section>
-
-      <section className="readiness-grid" style={styles.readinessGrid}>
+            <section className="readiness-grid" style={styles.readinessGrid}>
         {readinessItems.map((item) => (
           <ReadinessCard key={item.title} item={item} />
         ))}
