@@ -142,8 +142,9 @@ function normaliseAddOnQuantities(input: {
   checkoutAddOns: PublicEventCheckoutAddOn[];
   addOnQuantities: Record<string, number>;
   hasAccessCode: boolean;
+  hasTicketSelection: boolean;
 }) {
-  if (input.hasAccessCode) {
+  if (input.hasAccessCode || !input.hasTicketSelection) {
     return {};
   }
 
@@ -208,10 +209,22 @@ export default function PublicGeneralAdmissionSelector({
       .filter((item) => item.quantity > 0);
   }, [ticketTypes, quantities]);
 
+  const hasTicketSelection = selectedItems.length > 0;
+  const addOnsLocked = hasAccessCode || !hasTicketSelection;
+
+  const addOnLockedTitle = hasAccessCode
+    ? "Add-ons are not used with access-code bookings"
+    : "Choose at least one ticket first";
+
+  const addOnLockedReason = hasAccessCode
+    ? "VIP and complimentary access-code bookings do not collect paid event add-ons at checkout."
+    : "Event add-ons are linked to your booking. Select a ticket first, then you can add extras such as Heads or Tails or Higher or Lower.";
+
   const safeAddOnQuantities = normaliseAddOnQuantities({
     checkoutAddOns,
     addOnQuantities,
     hasAccessCode,
+    hasTicketSelection,
   });
 
   const selectedAddOns: PublicEventCheckoutAddOnSelection[] = checkoutAddOns
@@ -278,12 +291,19 @@ export default function PublicGeneralAdmissionSelector({
       ...current,
       [ticketTypeId]: Math.max(0, Math.floor(Number(nextQuantity || 0))),
     }));
+
+    setCheckoutError("");
   }
 
   function updateAddOnQuantity(
     addOn: PublicEventCheckoutAddOn,
     nextQuantity: number,
   ) {
+    if (addOnsLocked) {
+      setCheckoutError(addOnLockedReason);
+      return;
+    }
+
     const quantity = normaliseAddOnQuantity(nextQuantity, addOn);
 
     setAddOnQuantities((current) => ({
@@ -302,6 +322,8 @@ export default function PublicGeneralAdmissionSelector({
         }),
       }));
     }
+
+    setCheckoutError("");
   }
 
   function updateAddOnBuyerAnswer(
@@ -461,6 +483,17 @@ export default function PublicGeneralAdmissionSelector({
   return (
     <div style={styles.shell}>
       <section style={styles.ticketPanel}>
+        <div style={styles.workflowGuide}>
+          <span style={styles.workflowBadge}>Step 1</span>
+          <div>
+            <h3 style={styles.workflowTitle}>Choose your ticket first</h3>
+            <p style={styles.workflowText}>
+              Select at least one event ticket. Add-ons become available after
+              your ticket choice because they are linked to your event booking.
+            </p>
+          </div>
+        </div>
+
         <h3 style={styles.panelTitle}>Select tickets</h3>
 
         <div style={styles.ticketList}>
@@ -490,7 +523,11 @@ export default function PublicGeneralAdmissionSelector({
                   <button
                     type="button"
                     onClick={() => updateQuantity(ticketType.id, quantity - 1)}
-                    style={styles.quantityButton}
+                    style={{
+                      ...styles.quantityButton,
+                      opacity: quantity <= 0 ? 0.45 : 1,
+                      cursor: quantity <= 0 ? "not-allowed" : "pointer",
+                    }}
                     disabled={quantity <= 0}
                   >
                     −
@@ -535,7 +572,10 @@ export default function PublicGeneralAdmissionSelector({
           <span style={styles.accessCodeLabel}>VIP / complimentary code</span>
           <input
             value={accessCode}
-            onChange={(event) => setAccessCode(event.target.value)}
+            onChange={(event) => {
+              setAccessCode(event.target.value);
+              setCheckoutError("");
+            }}
             placeholder="Enter access code"
             style={styles.accessCodeInput}
           />
@@ -549,6 +589,17 @@ export default function PublicGeneralAdmissionSelector({
           <>
             <div style={styles.summarySpacer} />
 
+            <div style={styles.addOnWorkflowBox}>
+              <span style={styles.addOnWorkflowBadge}>Step 2</span>
+              <strong style={styles.addOnWorkflowTitle}>
+                Add event extras after your ticket
+              </strong>
+              <span style={styles.addOnWorkflowText}>
+                Heads or Tails and Higher or Lower entries can be added once
+                your ticket selection is started.
+              </span>
+            </div>
+
             <div style={styles.addOnStack}>
               {checkoutAddOns.map((addOn) => (
                 <PublicEventCheckoutAddOnSelector
@@ -560,7 +611,9 @@ export default function PublicGeneralAdmissionSelector({
                   buyerName={buyerName}
                   buyerEmail={buyerEmail}
                   players={addOnPlayers[addOn.type] || []}
-                  disabled={hasAccessCode}
+                  disabled={addOnsLocked}
+                  disabledTitle={addOnLockedTitle}
+                  disabledReason={addOnLockedReason}
                   onQuantityChange={(nextQuantity) =>
                     updateAddOnQuantity(addOn, nextQuantity)
                   }
@@ -585,7 +638,8 @@ export default function PublicGeneralAdmissionSelector({
           <div style={styles.emptyBox}>
             <p style={styles.emptyTitle}>Choose tickets to begin</p>
             <p style={styles.emptyText}>
-              Your selected ticket quantities will appear here.
+              Your selected ticket quantities will appear here. Event add-ons
+              unlock after you choose at least one ticket.
             </p>
           </div>
         ) : (
@@ -715,6 +769,7 @@ const styles: Record<string, CSSProperties> = {
     width: "100%",
     minWidth: 0,
   },
+
   ticketPanel: {
     padding: "clamp(14px, 4vw, 18px)",
     borderRadius: 24,
@@ -722,16 +777,63 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     minWidth: 0,
   },
+
+  workflowGuide: {
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0, 1fr)",
+    gap: 12,
+    alignItems: "start",
+    marginBottom: 16,
+    padding: 14,
+    borderRadius: 18,
+    background: "linear-gradient(135deg, #ffffff 0%, #eff6ff 100%)",
+    border: "1px solid #bfdbfe",
+  },
+
+  workflowBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 34,
+    padding: "0 12px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    whiteSpace: "nowrap",
+  },
+
+  workflowTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 18,
+    lineHeight: 1.15,
+    fontWeight: 950,
+  },
+
+  workflowText: {
+    margin: "5px 0 0",
+    color: "#475569",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 750,
+  },
+
   panelTitle: {
     margin: "0 0 14px",
     color: "#111827",
     fontSize: "clamp(21px, 5vw, 24px)",
     fontWeight: 950,
   },
+
   ticketList: {
     display: "grid",
     gap: 12,
   },
+
   ticketRow: {
     display: "flex",
     justifyContent: "space-between",
@@ -744,10 +846,12 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     minWidth: 0,
   },
+
   ticketInfo: {
     flex: "1 1 220px",
     minWidth: 0,
   },
+
   ticketName: {
     margin: 0,
     color: "#111827",
@@ -756,6 +860,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.15,
     overflowWrap: "break-word",
   },
+
   ticketDescription: {
     margin: "5px 0 0",
     color: "#64748b",
@@ -763,11 +868,13 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
     overflowWrap: "break-word",
   },
+
   ticketPrice: {
     margin: "8px 0 0",
     color: "#9a3412",
     fontWeight: 950,
   },
+
   quantityControls: {
     display: "grid",
     gridTemplateColumns: "42px minmax(62px, 72px) 42px",
@@ -775,6 +882,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 8,
     flex: "0 0 auto",
   },
+
   quantityButton: {
     width: 42,
     height: 42,
@@ -786,6 +894,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     cursor: "pointer",
   },
+
   quantityInput: {
     width: "100%",
     height: 42,
@@ -798,6 +907,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     boxSizing: "border-box",
   },
+
   summaryPanel: {
     position: "sticky",
     top: 18,
@@ -808,13 +918,54 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 18px 45px rgba(15,23,42,0.24)",
     minWidth: 0,
   },
+
   summarySpacer: {
     height: 16,
   },
+
+  addOnWorkflowBox: {
+    display: "grid",
+    gap: 6,
+    marginBottom: 12,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(250,204,21,0.12)",
+    border: "1px solid rgba(250,204,21,0.22)",
+  },
+
+  addOnWorkflowBadge: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "5px 8px",
+    borderRadius: 999,
+    background: "rgba(250,204,21,0.18)",
+    color: "#fde68a",
+    border: "1px solid rgba(250,204,21,0.24)",
+    fontSize: 10,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  addOnWorkflowTitle: {
+    color: "#ffffff",
+    fontSize: 15,
+    lineHeight: 1.25,
+    fontWeight: 950,
+  },
+
+  addOnWorkflowText: {
+    color: "#dbeafe",
+    fontSize: 12,
+    lineHeight: 1.45,
+    fontWeight: 800,
+  },
+
   addOnStack: {
     display: "grid",
     gap: 12,
   },
+
   eyebrow: {
     margin: 0,
     color: "#facc15",
@@ -823,11 +974,13 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.14em",
   },
+
   summaryTitle: {
     margin: "5px 0 14px",
     fontSize: "clamp(23px, 5vw, 26px)",
     fontWeight: 950,
   },
+
   emptyBox: {
     padding: 18,
     borderRadius: 18,
@@ -835,19 +988,24 @@ const styles: Record<string, CSSProperties> = {
     background: "rgba(255,255,255,0.05)",
     textAlign: "center",
   },
+
   emptyTitle: {
     margin: 0,
     fontWeight: 950,
   },
+
   emptyText: {
     margin: "5px 0 0",
     color: "#94a3b8",
     fontSize: 13,
+    lineHeight: 1.45,
   },
+
   summaryList: {
     display: "grid",
     gap: 10,
   },
+
   summaryRow: {
     display: "flex",
     justifyContent: "space-between",
@@ -858,6 +1016,7 @@ const styles: Record<string, CSSProperties> = {
     background: "rgba(255,255,255,0.06)",
     fontWeight: 850,
   },
+
   totalBox: {
     display: "flex",
     justifyContent: "space-between",
@@ -871,6 +1030,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     fontSize: 18,
   },
+
   totalBoxStrong: {
     display: "flex",
     justifyContent: "space-between",
@@ -885,6 +1045,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 18,
     border: "1px solid rgba(187,247,208,0.18)",
   },
+
   totalBoxComplimentary: {
     display: "flex",
     justifyContent: "space-between",
@@ -899,6 +1060,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 18,
     border: "1px solid rgba(147,197,253,0.22)",
   },
+
   feeBox: {
     display: "flex",
     gap: 10,
@@ -912,12 +1074,14 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
     lineHeight: 1.35,
   },
+
   feeSmall: {
     display: "block",
     marginTop: 4,
     color: "#cbd5e1",
     lineHeight: 1.4,
   },
+
   accessCodeBox: {
     display: "grid",
     gap: 7,
@@ -926,6 +1090,7 @@ const styles: Record<string, CSSProperties> = {
     background: "rgba(255,255,255,0.06)",
     border: "1px solid rgba(255,255,255,0.14)",
   },
+
   accessCodeLabel: {
     color: "#facc15",
     fontSize: 12,
@@ -933,6 +1098,7 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
+
   accessCodeInput: {
     width: "100%",
     minHeight: 44,
@@ -946,12 +1112,14 @@ const styles: Record<string, CSSProperties> = {
     boxSizing: "border-box",
     textTransform: "uppercase",
   },
+
   accessCodeHelp: {
     color: "#cbd5e1",
     lineHeight: 1.4,
     fontSize: 12,
     fontWeight: 750,
   },
+
   accessCodeNotice: {
     display: "grid",
     gap: 4,
@@ -965,6 +1133,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.4,
     fontWeight: 800,
   },
+
   checkoutButton: {
     marginTop: 14,
     width: "100%",
@@ -977,6 +1146,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 15,
     boxShadow: "0 16px 30px rgba(22,131,248,0.25)",
   },
+
   errorBox: {
     marginTop: 10,
     padding: 12,
@@ -985,6 +1155,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#991b1b",
     fontWeight: 900,
   },
+
   emptyLarge: {
     padding: 26,
     borderRadius: 16,
@@ -994,6 +1165,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#111827",
     fontSize: 18,
   },
+
   muted: {
     margin: "5px 0 0",
     color: "#64748b",
