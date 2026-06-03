@@ -2402,4 +2402,4 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     lineHeight: 1.5,
   },
-};o
+};
