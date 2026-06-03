@@ -22,6 +22,10 @@ type PageProps = {
   searchParams?: Promise<{
     adminReturn?: string;
     type?: string;
+    payment?: string;
+    checkout?: string;
+    campaignType?: string;
+    campaignId?: string;
   }>;
 };
 
@@ -308,7 +312,9 @@ function getFilterHref({
 
   const query = params.toString();
 
-  return query ? `/c/${tenantSlug}?${query}#live-campaigns` : `/c/${tenantSlug}#live-campaigns`;
+  return query
+    ? `/c/${tenantSlug}?${query}#live-campaigns`
+    : `/c/${tenantSlug}#live-campaigns`;
 }
 
 function pluralise(value: number, singular: string, plural: string) {
@@ -393,6 +399,15 @@ function getActiveChooserText(activeType: FilterType) {
   return "Showing all campaigns";
 }
 
+function getCompletedPurchaseTitle(type: CampaignType | null) {
+  if (type === "raffle") return "Thank you — your raffle entry is complete";
+  if (type === "squares") return "Thank you — your squares purchase is complete";
+  if (type === "event") return "Thank you — your event booking is complete";
+  if (type === "auction") return "Thank you — your auction payment is complete";
+
+  return "Thank you — your support is complete";
+}
+
 export default async function TenantCampaignsPage({
   params,
   searchParams,
@@ -416,6 +431,18 @@ export default async function TenantCampaignsPage({
 
   const adminReturn = canShowAdminReturn ? requestedAdminReturn : "";
   const activeType = getActiveType(resolvedSearchParams?.type);
+
+  const completedCampaignType = isCampaignType(
+    resolvedSearchParams?.campaignType,
+  )
+    ? resolvedSearchParams?.campaignType
+    : null;
+
+  const completedCampaignId = cleanText(resolvedSearchParams?.campaignId);
+
+  const showPaymentSuccessPanel =
+    resolvedSearchParams?.payment === "success" ||
+    resolvedSearchParams?.checkout === "success";
 
   const [campaigns, tenantSettingsRaw, highlightedSettings, brandingSettings] =
     await Promise.all([
@@ -477,6 +504,21 @@ export default async function TenantCampaignsPage({
     highlightedSettings,
   });
 
+  const followOnCampaigns = showPaymentSuccessPanel
+    ? publicCampaigns
+        .filter((campaign) => {
+          if (!completedCampaignType || !completedCampaignId) {
+            return true;
+          }
+
+          return !(
+            campaign.type === completedCampaignType &&
+            String(campaign.id) === completedCampaignId
+          );
+        })
+        .slice(0, 3)
+    : [];
+
   const campaignTypeNames = auctionCapability.allowed
     ? "raffles, squares, events and auctions"
     : "raffles, squares and events";
@@ -512,8 +554,7 @@ export default async function TenantCampaignsPage({
   const brandLogoSrc = publicLogoMarkUrl || publicLogoUrl;
   const primaryTextColour = getReadableTextColour(primaryColour);
   const accentTextColour = getReadableTextColour(accentColour);
-
-  const chooserItems: CampaignChooserItem[] = [
+    const chooserItems: CampaignChooserItem[] = [
     {
       type: "all",
       label: "All campaigns",
@@ -623,7 +664,8 @@ export default async function TenantCampaignsPage({
         color: "#ffffff",
         boxShadow: "0 18px 34px rgba(22,131,248,0.20)",
       };
-    return (
+
+  return (
     <main className="tenant-campaigns-page" style={brandedPageStyle}>
       <style>{responsiveStyles}</style>
 
@@ -767,7 +809,10 @@ export default async function TenantCampaignsPage({
               style={styles.campaignChooser}
               aria-label="Browse campaigns by type"
             >
-              <div className="campaignChooserHeader" style={styles.campaignChooserHeader}>
+              <div
+                className="campaignChooserHeader"
+                style={styles.campaignChooserHeader}
+              >
                 <div>
                   <p
                     style={{
@@ -796,7 +841,10 @@ export default async function TenantCampaignsPage({
                 </span>
               </div>
 
-              <div className="campaignChooserGrid" style={styles.campaignChooserGrid}>
+              <div
+                className="campaignChooserGrid"
+                style={styles.campaignChooserGrid}
+              >
                 {chooserItems.map((item) => {
                   const isActive = activeType === item.type;
                   const isUnavailable = item.value === 0 && item.type !== "all";
@@ -1020,8 +1068,7 @@ export default async function TenantCampaignsPage({
           </div>
         ) : null}
       </section>
-
-      <section className="contactStrip" style={styles.contactStrip}>
+            <section className="contactStrip" style={styles.contactStrip}>
         <div
           style={{
             ...styles.contactStripIcon,
@@ -1062,7 +1109,125 @@ export default async function TenantCampaignsPage({
           Contact organiser →
         </Link>
       </section>
-            {featuredCampaign ? (
+
+      {showPaymentSuccessPanel ? (
+        <section
+          className="purchaseSuccessPanel"
+          style={{
+            ...styles.purchaseSuccessPanel,
+            borderColor: canUseAdvancedBranding
+              ? `${accentColour}78`
+              : "#bbf7d0",
+            background: canUseAdvancedBranding
+              ? `radial-gradient(circle at top left, ${accentColour}22, transparent 34%), linear-gradient(135deg, #ffffff 0%, #f8fafc 58%, #ecfdf5 100%)`
+              : "linear-gradient(135deg, #ffffff 0%, #f8fafc 58%, #ecfdf5 100%)",
+          }}
+        >
+          <div
+            className="purchaseSuccessHeader"
+            style={styles.purchaseSuccessHeader}
+          >
+            <div
+              style={{
+                ...styles.purchaseSuccessIcon,
+                background: canUseAdvancedBranding
+                  ? `${primaryColour}12`
+                  : "#dcfce7",
+                color: canUseAdvancedBranding ? primaryColour : "#166534",
+                borderColor: canUseAdvancedBranding
+                  ? `${primaryColour}28`
+                  : "#bbf7d0",
+              }}
+            >
+              ✓
+            </div>
+
+            <div style={styles.purchaseSuccessCopy}>
+              <p
+                style={{
+                  ...styles.purchaseSuccessKicker,
+                  color: canUseAdvancedBranding ? primaryColour : "#166534",
+                }}
+              >
+                Purchase complete
+              </p>
+
+              <h2 style={styles.purchaseSuccessTitle}>
+                {getCompletedPurchaseTitle(completedCampaignType)}
+              </h2>
+
+              <p style={styles.purchaseSuccessText}>
+                Your payment has been processed securely. You can keep
+                supporting this organiser by viewing another live campaign or
+                making a simple donation.
+              </p>
+            </div>
+          </div>
+
+          {followOnCampaigns.length > 0 ? (
+            <div className="followOnGrid" style={styles.followOnGrid}>
+              {followOnCampaigns.map((campaign) => (
+                <article
+                  key={`follow-on-${campaign.type}-${campaign.id}`}
+                  style={styles.followOnCard}
+                >
+                  <div style={styles.followOnCardTop}>
+                    <span
+                      style={{
+                        ...styles.typePill,
+                        ...getTypeStyle(campaign.type),
+                      }}
+                    >
+                      {getTypeIcon(campaign.type)}{" "}
+                      {getTypeLabel(campaign.type)}
+                    </span>
+                  </div>
+
+                  <h3 style={styles.followOnTitle}>{campaign.title}</h3>
+
+                  <p style={styles.followOnText}>
+                    {campaign.description?.trim() || getTypeMeta(campaign.type)}
+                  </p>
+
+                  <div
+                    className="followOnActions"
+                    style={styles.followOnActions}
+                  >
+                    <Link
+                      href={getCampaignUrl(campaign)}
+                      style={{
+                        ...brandedPrimaryActionStyle,
+                        minHeight: 42,
+                        padding: "10px 12px",
+                      }}
+                    >
+                      See campaign
+                    </Link>
+
+                    <Link
+                      href={getSupportUrl({ tenantSlug, campaign })}
+                      style={{
+                        ...brandedGhostActionStyle,
+                        minHeight: 42,
+                        padding: "10px 12px",
+                      }}
+                    >
+                      Donate
+                    </Link>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div style={styles.followOnEmpty}>
+              There are no other live campaigns available just now. Thank you
+              for supporting this organiser.
+            </div>
+          )}
+        </section>
+      ) : null}
+
+      {featuredCampaign ? (
         <section className="featuredCard" style={styles.featuredCard}>
           <div style={styles.featuredImageWrap}>
             <img
@@ -1112,7 +1277,7 @@ export default async function TenantCampaignsPage({
                 getTypeMeta(featuredCampaign.type)}
             </p>
 
-            <div style={styles.featuredMetaGrid}>
+            <div className="featuredMetaGrid" style={styles.featuredMetaGrid}>
               <MiniMeta
                 label="Campaign type"
                 value={getTypeLabel(featuredCampaign.type)}
@@ -1155,7 +1320,11 @@ export default async function TenantCampaignsPage({
         </section>
       ) : null}
 
-      <section id="live-campaigns" style={styles.liveCampaignsHeader}>
+      <section
+        id="live-campaigns"
+        className="liveCampaignsHeader"
+        style={styles.liveCampaignsHeader}
+      >
         <div>
           <p
             style={{
@@ -1348,6 +1517,10 @@ const responsiveStyles = `
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
+  .tenant-campaigns-page .followOnGrid {
+    grid-template-columns: 1fr !important;
+  }
+
   .tenant-campaigns-page .featuredCard {
     margin: 12px 18px 16px !important;
   }
@@ -1364,7 +1537,8 @@ const responsiveStyles = `
   .tenant-campaigns-page .campaigns-hero,
   .tenant-campaigns-page .featuredCard,
   .tenant-campaigns-page .contactStrip,
-  .tenant-campaigns-page .liveCampaignsHeader {
+  .tenant-campaigns-page .liveCampaignsHeader,
+  .tenant-campaigns-page .purchaseSuccessPanel {
     padding: 14px !important;
     border-radius: 22px !important;
   }
@@ -1397,9 +1571,15 @@ const responsiveStyles = `
     border-radius: 22px !important;
   }
 
-  .tenant-campaigns-page .campaignChooserHeader {
+  .tenant-campaigns-page .campaignChooserHeader,
+  .tenant-campaigns-page .purchaseSuccessHeader {
     grid-template-columns: 1fr !important;
     gap: 10px !important;
+  }
+
+  .tenant-campaigns-page .purchaseSuccessHeader {
+    text-align: center !important;
+    justify-items: center !important;
   }
 
   .tenant-campaigns-page .campaignChooserStatus {
@@ -1442,7 +1622,8 @@ const responsiveStyles = `
   }
 
   .tenant-campaigns-page .primaryActionRow,
-  .tenant-campaigns-page .emptyActions {
+  .tenant-campaigns-page .emptyActions,
+  .tenant-campaigns-page .followOnActions {
     grid-template-columns: 1fr !important;
   }
 
@@ -2031,6 +2212,134 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     fontWeight: 950,
     whiteSpace: "nowrap",
+  },
+
+  purchaseSuccessPanel: {
+    display: "grid",
+    gap: 16,
+    padding: 18,
+    borderRadius: 26,
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 58%, #ecfdf5 100%)",
+    border: "1px solid",
+    boxShadow: "0 18px 44px rgba(15,23,42,0.075)",
+    margin: "0 0 16px",
+    minWidth: 0,
+  },
+
+  purchaseSuccessHeader: {
+    display: "grid",
+    gridTemplateColumns: "58px minmax(0, 1fr)",
+    gap: 14,
+    alignItems: "center",
+    minWidth: 0,
+  },
+
+  purchaseSuccessIcon: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    border: "1px solid",
+    fontSize: 24,
+    fontWeight: 950,
+  },
+
+  purchaseSuccessCopy: {
+    display: "grid",
+    gap: 5,
+    minWidth: 0,
+  },
+
+  purchaseSuccessKicker: {
+    margin: 0,
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  purchaseSuccessTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(28px, 4vw, 40px)",
+    lineHeight: 1.02,
+    letterSpacing: "-0.055em",
+    overflowWrap: "anywhere",
+  },
+
+  purchaseSuccessText: {
+    margin: 0,
+    color: "#475569",
+    fontSize: 14,
+    lineHeight: 1.55,
+    fontWeight: 760,
+    overflowWrap: "anywhere",
+  },
+
+  followOnGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 12,
+    minWidth: 0,
+  },
+
+  followOnCard: {
+    display: "grid",
+    gap: 10,
+    padding: 14,
+    borderRadius: 20,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 10px 24px rgba(15,23,42,0.06)",
+    minWidth: 0,
+  },
+
+  followOnCardTop: {
+    display: "flex",
+    justifyContent: "flex-start",
+    gap: 8,
+    flexWrap: "wrap",
+    minWidth: 0,
+  },
+
+  followOnTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 21,
+    lineHeight: 1.08,
+    letterSpacing: "-0.045em",
+    overflowWrap: "anywhere",
+  },
+
+  followOnText: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.5,
+    fontWeight: 730,
+    overflowWrap: "anywhere",
+  },
+
+  followOnActions: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 8,
+    marginTop: 2,
+    minWidth: 0,
+  },
+
+  followOnEmpty: {
+    padding: 14,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    color: "#475569",
+    fontSize: 14,
+    lineHeight: 1.55,
+    fontWeight: 760,
   },
 
   featuredCard: {
