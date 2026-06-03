@@ -376,12 +376,18 @@ const responsiveStyles = `
     }
 
     .public-squares-legal-notice,
+    .public-squares-buying-guide,
     .public-squares-prizes,
     .public-squares-winners,
     .public-squares-quick-select,
     .public-squares-total-box {
       border-radius: 22px !important;
       padding: 16px !important;
+    }
+
+    .public-squares-guide-grid {
+      grid-template-columns: 1fr !important;
+      gap: 10px !important;
     }
 
     .public-squares-prize-card {
@@ -472,7 +478,6 @@ const responsiveStyles = `
     }
   }
 `;
-
 export default function PublicSquaresPage({ params }: Props) {
   const { slug } = params;
 
@@ -530,7 +535,8 @@ export default function PublicSquaresPage({ params }: Props) {
     if (!slug) return;
     loadGame();
   }, [slug]);
-    const unavailableSquares = useMemo(() => {
+
+  const unavailableSquares = useMemo(() => {
     const set = new Set<number>();
 
     for (const square of game?.soldSquares ?? []) {
@@ -589,6 +595,43 @@ export default function PublicSquaresPage({ params }: Props) {
     selectedSquares.length * Number(game?.pricePerSquareCents || 0);
   const feeCents = coverFees ? Math.round(subtotalCents * 0.1) : 0;
   const totalCents = subtotalCents + feeCents;
+
+  const hasSelectedSquares = selectedSquares.length > 0;
+  const hasCustomerName = customerName.trim().length > 0;
+  const hasCustomerEmail = customerEmail.trim().length > 0;
+  const hasEntryAnswer = !requiresQuestion || entryAnswer.trim().length > 0;
+
+  const checkoutReady =
+    canReserve &&
+    hasSelectedSquares &&
+    hasCustomerName &&
+    hasCustomerEmail &&
+    hasEntryAnswer &&
+    acceptedTerms;
+
+  const checkoutChecklist = [
+    { label: "Choose at least one square", complete: hasSelectedSquares },
+    { label: "Enter your name", complete: hasCustomerName },
+    { label: "Enter your email", complete: hasCustomerEmail },
+    ...(requiresQuestion
+      ? [{ label: "Answer the required entry question", complete: hasEntryAnswer }]
+      : []),
+    { label: "Accept the terms and privacy policy", complete: acceptedTerms },
+  ];
+
+  const nextCheckoutHelp = !canReserve
+    ? "This squares game is not currently open for checkout."
+    : !hasSelectedSquares
+      ? "Choose at least one square before checkout."
+      : !hasCustomerName
+        ? "Enter your name before checkout."
+        : !hasCustomerEmail
+          ? "Enter your email before checkout."
+          : requiresQuestion && !hasEntryAnswer
+            ? "Answer the required entry question before checkout."
+            : !acceptedTerms
+              ? "Accept the terms and privacy policy before checkout."
+              : "Ready for secure checkout.";
 
   const brandedPrimaryButtonStyle: React.CSSProperties = {
     ...styles.primaryButton,
@@ -693,7 +736,7 @@ export default function PublicSquaresPage({ params }: Props) {
       }
 
       if (requiresQuestion && !entryAnswer.trim()) {
-        throw new Error("Please answer the entry question.");
+        throw new Error("Please answer the required entry question before checkout.");
       }
 
       if (!acceptedTerms) {
@@ -799,13 +842,6 @@ export default function PublicSquaresPage({ params }: Props) {
 
   const visiblePrizes = showAllPrizes ? game.prizes : game.prizes.slice(0, 3);
 
-  const reserveDisabled =
-    saving ||
-    selectedSquares.length === 0 ||
-    !canReserve ||
-    !acceptedTerms ||
-    (requiresQuestion && !entryAnswer.trim());
-
   return (
     <div className="public-squares-page" style={styles.page}>
       <style>{responsiveStyles}</style>
@@ -893,8 +929,7 @@ export default function PublicSquaresPage({ params }: Props) {
               </div>
             </div>
           ) : null}
-
-          <div className="public-squares-badge-row" style={styles.badgeRow}>
+                    <div className="public-squares-badge-row" style={styles.badgeRow}>
             <span
               className="public-squares-type-badge"
               style={{
@@ -979,6 +1014,135 @@ export default function PublicSquaresPage({ params }: Props) {
             applicable laws.
           </div>
 
+          {canReserve ? (
+            <section
+              className="public-squares-buying-guide"
+              style={{
+                ...styles.buyingGuide,
+                borderColor: `${primaryColour}35`,
+              }}
+            >
+              <div style={styles.buyingGuideHeader}>
+                <div>
+                  <p style={{ ...styles.guideKicker, color: primaryColour }}>
+                    Start here
+                  </p>
+
+                  <h2 style={styles.guideTitle}>How to play squares</h2>
+
+                  <p style={styles.guideLead}>
+                    Follow these steps in order. If this squares game has an
+                    entry question, you must answer it before checkout opens.
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    ...styles.guideBadge,
+                    background: `${primaryColour}12`,
+                    borderColor: `${primaryColour}35`,
+                    color: primaryColour,
+                  }}
+                >
+                  Secure checkout at the end
+                </div>
+              </div>
+
+              <div
+                className="public-squares-guide-grid"
+                style={styles.guideGrid}
+              >
+                <div style={styles.guideStepCard}>
+                  <span
+                    style={{
+                      ...styles.guideStepNumber,
+                      background: primaryColour,
+                    }}
+                  >
+                    1
+                  </span>
+
+                  <div>
+                    <strong style={styles.guideStepTitle}>
+                      Choose your squares
+                    </strong>
+                    <p style={styles.guideStepText}>
+                      Use quick buy or tap the square numbers you want.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={styles.guideStepCard}>
+                  <span
+                    style={{
+                      ...styles.guideStepNumber,
+                      background: primaryColour,
+                    }}
+                  >
+                    2
+                  </span>
+
+                  <div>
+                    <strong style={styles.guideStepTitle}>
+                      Add your details
+                    </strong>
+                    <p style={styles.guideStepText}>
+                      Enter your name and email so the organiser can confirm
+                      your entry.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={styles.guideStepCard}>
+                  <span
+                    style={{
+                      ...styles.guideStepNumber,
+                      background: requiresQuestion
+                        ? accentColour
+                        : primaryColour,
+                    }}
+                  >
+                    3
+                  </span>
+
+                  <div>
+                    <strong style={styles.guideStepTitle}>
+                      {requiresQuestion
+                        ? "Answer the required question"
+                        : "Check the entry rules"}
+                    </strong>
+                    <p style={styles.guideStepText}>
+                      {requiresQuestion
+                        ? "This squares game requires an answer before you can pay."
+                        : "This squares game does not need an entry question answer."}
+                    </p>
+                  </div>
+                </div>
+
+                <div style={styles.guideStepCard}>
+                  <span
+                    style={{
+                      ...styles.guideStepNumber,
+                      background: primaryColour,
+                    }}
+                  >
+                    4
+                  </span>
+
+                  <div>
+                    <strong style={styles.guideStepTitle}>
+                      Accept terms and pay
+                    </strong>
+                    <p style={styles.guideStepText}>
+                      Review your basket, accept the terms, then continue to
+                      secure checkout.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
           {game.prizes.length > 0 ? (
             <section className="public-squares-prizes" style={styles.prizesBox}>
               <div style={styles.prizesTitle}>Prizes</div>
@@ -1026,7 +1190,8 @@ export default function PublicSquaresPage({ params }: Props) {
               ) : null}
             </section>
           ) : null}
-                    {isDrawn ? (
+
+          {isDrawn ? (
             <section
               className="public-squares-winners"
               style={styles.winnersBox}
@@ -1090,12 +1255,23 @@ export default function PublicSquaresPage({ params }: Props) {
               className="public-squares-quick-select"
               style={styles.quickSelect}
             >
-              <div>
-                <h2 style={{ margin: 0 }}>Quick buy</h2>
-                <p style={{ margin: "6px 0 0", color: "#64748b" }}>
-                  Choose how many squares you would like and we’ll randomly
-                  auto-select available numbers.
-                </p>
+              <div style={styles.sectionIntroRow}>
+                <span
+                  style={{
+                    ...styles.sectionStepBadge,
+                    background: primaryColour,
+                  }}
+                >
+                  Step 1
+                </span>
+
+                <div>
+                  <h2 style={{ margin: 0 }}>Choose your squares</h2>
+                  <p style={{ margin: "6px 0 0", color: "#64748b" }}>
+                    Choose how many squares you would like and we’ll randomly
+                    auto-select available numbers.
+                  </p>
+                </div>
               </div>
 
               <div
@@ -1253,157 +1429,241 @@ export default function PublicSquaresPage({ params }: Props) {
             </div>
           </div>
 
-          <h2 className="public-squares-heading" style={styles.heading}>
-            Your details
-          </h2>
-
-          <div style={styles.form}>
-            <input
-              className="public-squares-input"
-              value={customerName}
-              onChange={(event) => setCustomerName(event.target.value)}
-              placeholder="Your name"
-              style={styles.input}
-              disabled={!canReserve}
-            />
-
-            <input
-              className="public-squares-input"
-              value={customerEmail}
-              onChange={(event) => setCustomerEmail(event.target.value)}
-              placeholder="Your email"
-              type="email"
-              style={styles.input}
-              disabled={!canReserve}
-            />
-
-            {requiresQuestion ? (
-              <section
+          <section style={styles.checkoutSection}>
+            <div style={styles.sectionIntroRow}>
+              <span
                 style={{
-                  ...styles.questionBox,
-                  borderColor: `${primaryColour}55`,
+                  ...styles.sectionStepBadge,
+                  background: primaryColour,
                 }}
               >
-                <div style={{ ...styles.questionLabel, color: primaryColour }}>
-                  Entry question
-                </div>
-                <div style={styles.questionText}>{game.question?.text}</div>
+                Step 2
+              </span>
 
-                <input
-                  className="public-squares-input"
-                  value={entryAnswer}
-                  onChange={(event) => setEntryAnswer(event.target.value)}
-                  placeholder="Your answer"
-                  style={styles.input}
-                  disabled={!canReserve}
-                />
-              </section>
-            ) : null}
+              <div>
+                <h2 className="public-squares-heading" style={styles.heading}>
+                  Your details
+                </h2>
 
-            {showFreeEntry ? (
-              <section style={styles.postalMiniBox}>
-                <button
-                  type="button"
-                  onClick={() => setShowPostalDetails((value) => !value)}
-                  style={{
-                    ...styles.postalMiniButton,
-                    color: primaryColour,
-                    borderColor: `${primaryColour}55`,
-                  }}
-                >
-                  No purchase necessary — free postal entry available
-                </button>
+                <p style={styles.sectionHelpText}>
+                  Add your details, answer the required entry question if shown,
+                  then accept the terms before checkout.
+                </p>
+              </div>
+            </div>
 
-                {showPostalDetails ? (
-                  <div style={styles.postalDetails}>
-                    {game.freeEntry?.address ? (
-                      <div style={styles.freeEntryBlock}>
-                        <div style={styles.freeEntryLabel}>Postal address</div>
-                        <div style={styles.freeEntryText}>
-                          {game.freeEntry.address}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {game.freeEntry?.instructions ? (
-                      <div style={styles.freeEntryBlock}>
-                        <div style={styles.freeEntryLabel}>Instructions</div>
-                        <div style={styles.freeEntryText}>
-                          {game.freeEntry.instructions}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {game.freeEntry?.closes_at || game.freeEntry?.closesAt ? (
-                      <div style={styles.freeEntryBlock}>
-                        <div style={styles.freeEntryLabel}>
-                          Postal entry closes
-                        </div>
-
-                        <div style={styles.freeEntryText}>
-                          {formatDateTime(
-                            game.freeEntry.closes_at ?? game.freeEntry.closesAt,
-                          )}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    <div style={styles.freeEntryNotice}>
-                      Postal entries are included in the same draw as paid
-                      entries. Please include your full name, email address, this
-                      squares game name, your answer to the entry question if one
-                      is shown, and your preferred square number where
-                      applicable. One entry per postcard/envelope.
-                    </div>
-                  </div>
-                ) : null}
-              </section>
-            ) : null}
-
-            <label
-              className="public-squares-terms-box"
-              style={styles.termsBox}
-            >
+            <div style={styles.form}>
               <input
-                type="checkbox"
-                checked={acceptedTerms}
-                onChange={(event) => setAcceptedTerms(event.target.checked)}
+                className="public-squares-input"
+                value={customerName}
+                onChange={(event) => setCustomerName(event.target.value)}
+                placeholder="Your name"
+                style={styles.input}
                 disabled={!canReserve}
               />
 
-              <span>
-                I confirm I have read and accept the{" "}
-                <Link
-                  href="/terms"
-                  style={{ ...styles.inlineLink, color: primaryColour }}
-                >
-                  terms
-                </Link>{" "}
-                and{" "}
-                <Link
-                  href="/privacy"
-                  style={{ ...styles.inlineLink, color: primaryColour }}
-                >
-                  privacy policy
-                </Link>
-                .
-              </span>
-            </label>
+              <input
+                className="public-squares-input"
+                value={customerEmail}
+                onChange={(event) => setCustomerEmail(event.target.value)}
+                placeholder="Your email"
+                type="email"
+                style={styles.input}
+                disabled={!canReserve}
+              />
 
-            <button
-              className="public-squares-primary-button"
-              type="button"
-              onClick={reserveSquares}
-              disabled={reserveDisabled}
-              style={{
-                ...brandedPrimaryButtonStyle,
-                opacity: reserveDisabled ? 0.6 : 1,
-                cursor: reserveDisabled ? "not-allowed" : "pointer",
-              }}
-            >
-              {saving ? "Redirecting to checkout..." : "Reserve and pay"}
-            </button>
-          </div>
+              {requiresQuestion ? (
+                <section
+                  style={{
+                    ...styles.questionBox,
+                    borderColor: `${accentColour}88`,
+                  }}
+                >
+                  <div style={styles.questionHeader}>
+                    <span
+                      style={{
+                        ...styles.sectionStepBadge,
+                        background: accentColour,
+                      }}
+                    >
+                      Required
+                    </span>
+
+                    <div>
+                      <div
+                        style={{
+                          ...styles.questionLabel,
+                          color: "#92400e",
+                        }}
+                      >
+                        Entry question needed before checkout
+                      </div>
+
+                      <p style={styles.questionHelp}>
+                        You must answer this question before you can reserve and
+                        pay for your squares.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={styles.questionText}>{game.question?.text}</div>
+
+                  <input
+                    className="public-squares-input"
+                    value={entryAnswer}
+                    onChange={(event) => setEntryAnswer(event.target.value)}
+                    placeholder="Type your answer here"
+                    style={styles.input}
+                    disabled={!canReserve}
+                    aria-label="Entry question answer"
+                  />
+                </section>
+              ) : null}
+                            {showFreeEntry ? (
+                <section style={styles.postalMiniBox}>
+                  <button
+                    type="button"
+                    onClick={() => setShowPostalDetails((value) => !value)}
+                    style={{
+                      ...styles.postalMiniButton,
+                      color: primaryColour,
+                      borderColor: `${primaryColour}55`,
+                    }}
+                  >
+                    No purchase necessary — free postal entry available
+                  </button>
+
+                  {showPostalDetails ? (
+                    <div style={styles.postalDetails}>
+                      {game.freeEntry?.address ? (
+                        <div style={styles.freeEntryBlock}>
+                          <div style={styles.freeEntryLabel}>
+                            Postal address
+                          </div>
+                          <div style={styles.freeEntryText}>
+                            {game.freeEntry.address}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {game.freeEntry?.instructions ? (
+                        <div style={styles.freeEntryBlock}>
+                          <div style={styles.freeEntryLabel}>Instructions</div>
+                          <div style={styles.freeEntryText}>
+                            {game.freeEntry.instructions}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {game.freeEntry?.closes_at || game.freeEntry?.closesAt ? (
+                        <div style={styles.freeEntryBlock}>
+                          <div style={styles.freeEntryLabel}>
+                            Postal entry closes
+                          </div>
+
+                          <div style={styles.freeEntryText}>
+                            {formatDateTime(
+                              game.freeEntry.closes_at ??
+                                game.freeEntry.closesAt,
+                            )}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      <div style={styles.freeEntryNotice}>
+                        Postal entries are included in the same draw as paid
+                        entries. Please include your full name, email address,
+                        this squares game name, your answer to the entry
+                        question if one is shown, and your preferred square
+                        number where applicable. One entry per
+                        postcard/envelope.
+                      </div>
+                    </div>
+                  ) : null}
+                </section>
+              ) : null}
+
+              <label
+                className="public-squares-terms-box"
+                style={styles.termsBox}
+              >
+                <input
+                  type="checkbox"
+                  checked={acceptedTerms}
+                  onChange={(event) => setAcceptedTerms(event.target.checked)}
+                  disabled={!canReserve}
+                />
+
+                <span>
+                  I confirm I have read and accept the{" "}
+                  <Link
+                    href="/terms"
+                    style={{ ...styles.inlineLink, color: primaryColour }}
+                  >
+                    terms
+                  </Link>{" "}
+                  and{" "}
+                  <Link
+                    href="/privacy"
+                    style={{ ...styles.inlineLink, color: primaryColour }}
+                  >
+                    privacy policy
+                  </Link>
+                  .
+                </span>
+              </label>
+
+              <div style={styles.checkoutStatusBox}>
+                <div style={styles.checkoutStatusHeader}>
+                  <strong>Checkout checklist</strong>
+                  <span
+                    style={{
+                      ...styles.checkoutStatusPill,
+                      background: checkoutReady ? "#dcfce7" : "#fff7ed",
+                      borderColor: checkoutReady ? "#bbf7d0" : "#fed7aa",
+                      color: checkoutReady ? "#166534" : "#9a3412",
+                    }}
+                  >
+                    {checkoutReady ? "Ready" : "Not ready yet"}
+                  </span>
+                </div>
+
+                <div style={styles.checkoutChecklist}>
+                  {checkoutChecklist.map((item) => (
+                    <div key={item.label} style={styles.checkoutChecklistItem}>
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          ...styles.checkoutDot,
+                          background: item.complete ? "#16a34a" : "#f59e0b",
+                        }}
+                      >
+                        {item.complete ? "✓" : "!"}
+                      </span>
+
+                      <span>{item.label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <p style={styles.checkoutHelpText}>{nextCheckoutHelp}</p>
+              </div>
+
+              <button
+                className="public-squares-primary-button"
+                type="button"
+                onClick={reserveSquares}
+                disabled={saving || !checkoutReady}
+                style={{
+                  ...brandedPrimaryButtonStyle,
+                  opacity: saving || !checkoutReady ? 0.6 : 1,
+                  cursor: saving || !checkoutReady ? "not-allowed" : "pointer",
+                }}
+              >
+                {saving ? "Redirecting to checkout..." : "Reserve and pay"}
+              </button>
+            </div>
+          </section>
 
           {reservationMessage ? (
             <div style={styles.success}>{reservationMessage}</div>
@@ -1700,6 +1960,146 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: "0 8px 24px rgba(15,23,42,0.05)",
   },
 
+  buyingGuide: {
+    padding: 24,
+    borderRadius: 28,
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 48%, #eff6ff 100%)",
+    border: "1px solid #dbeafe",
+    boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
+    display: "grid",
+    gap: 18,
+  },
+
+  buyingGuideHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 16,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+
+  guideKicker: {
+    margin: 0,
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.1em",
+  },
+
+  guideTitle: {
+    margin: "4px 0 0",
+    color: "#0f172a",
+    fontSize: "clamp(26px, 5vw, 38px)",
+    lineHeight: 1,
+    letterSpacing: "-0.055em",
+    fontWeight: 950,
+  },
+
+  guideLead: {
+    margin: "10px 0 0",
+    maxWidth: 760,
+    color: "#475569",
+    fontSize: 15,
+    lineHeight: 1.65,
+    fontWeight: 700,
+  },
+
+  guideBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "10px 14px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  guideGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: 12,
+  },
+
+  guideStepCard: {
+    display: "grid",
+    gridTemplateColumns: "42px minmax(0, 1fr)",
+    gap: 12,
+    alignItems: "flex-start",
+    padding: 14,
+    borderRadius: 20,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+
+  guideStepNumber: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    color: "#ffffff",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 16,
+    fontWeight: 950,
+    boxShadow: "0 8px 18px rgba(15,23,42,0.12)",
+  },
+
+  guideStepTitle: {
+    display: "block",
+    color: "#0f172a",
+    fontSize: 15,
+    lineHeight: 1.25,
+    fontWeight: 950,
+  },
+
+  guideStepText: {
+    margin: "5px 0 0",
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.5,
+    fontWeight: 700,
+  },
+
+  sectionIntroRow: {
+    display: "flex",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+
+  sectionStepBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 34,
+    padding: "0 12px",
+    borderRadius: 999,
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    whiteSpace: "nowrap",
+    boxShadow: "0 8px 18px rgba(15,23,42,0.12)",
+  },
+
+  sectionHelpText: {
+    margin: "-6px 0 4px",
+    color: "#64748b",
+    fontSize: 15,
+    lineHeight: 1.65,
+    fontWeight: 700,
+  },
+
+  checkoutSection: {
+    display: "grid",
+    gap: 14,
+  },
+
   prizesBox: {
     padding: 24,
     borderRadius: 28,
@@ -1948,21 +2348,38 @@ const styles: Record<string, React.CSSProperties> = {
   questionBox: {
     padding: 20,
     borderRadius: 22,
-    background: "#eff6ff",
-    border: "1px solid #bfdbfe",
+    background: "#fffbeb",
+    border: "1px solid #fde68a",
     display: "grid",
     gap: 12,
+    boxShadow: "0 10px 24px rgba(245,158,11,0.08)",
+  },
+
+  questionHeader: {
+    display: "flex",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
   },
 
   questionLabel: {
-    color: "#1d4ed8",
+    color: "#92400e",
     fontWeight: 950,
   },
 
-  questionText: {
-    color: "#1e40af",
+  questionHelp: {
+    margin: "4px 0 0",
+    color: "#92400e",
+    fontSize: 14,
+    lineHeight: 1.55,
     fontWeight: 700,
+  },
+
+  questionText: {
+    color: "#78350f",
+    fontWeight: 850,
     lineHeight: 1.65,
+    fontSize: 17,
   },
 
   postalMiniBox: {
@@ -2034,6 +2451,72 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#ffffff",
     lineHeight: 1.6,
     fontWeight: 700,
+  },
+
+  checkoutStatusBox: {
+    padding: 16,
+    borderRadius: 20,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    display: "grid",
+    gap: 12,
+    boxShadow: "0 8px 22px rgba(15,23,42,0.04)",
+  },
+
+  checkoutStatusHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    alignItems: "center",
+    color: "#0f172a",
+  },
+
+  checkoutStatusPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "7px 11px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  checkoutChecklist: {
+    display: "grid",
+    gap: 8,
+  },
+
+  checkoutChecklistItem: {
+    display: "flex",
+    gap: 10,
+    alignItems: "center",
+    color: "#334155",
+    fontWeight: 750,
+    lineHeight: 1.45,
+  },
+
+  checkoutDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 999,
+    color: "#ffffff",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 12,
+    fontWeight: 950,
+    flexShrink: 0,
+  },
+
+  checkoutHelpText: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.55,
+    fontWeight: 750,
   },
 
   inlineLink: {
