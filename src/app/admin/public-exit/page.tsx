@@ -4,7 +4,7 @@ import type { CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
-function cleanInternalPath(value: string | null, fallback: string) {
+function cleanInternalPath(value: string | null | undefined, fallback: string) {
   const clean = String(value || "").trim();
 
   if (!clean) return fallback;
@@ -18,7 +18,10 @@ export default function PublicExitWarningPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const continueTo = cleanInternalPath(searchParams.get("continueTo"), "/admin");
+  const continueTo = cleanInternalPath(
+    searchParams?.get("continueTo"),
+    "/admin",
+  );
 
   return (
     <main style={styles.page}>
@@ -39,7 +42,8 @@ export default function PublicExitWarningPage() {
 
         <p style={styles.text}>
           Buyers should stay on the public campaign page to buy raffle tickets,
-          choose squares, book event seats, bid, donate or contact the organiser.
+          choose squares, book event seats, bid, donate or contact the
+          organiser.
         </p>
 
         <div style={styles.notice}>
@@ -161,6 +165,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     lineHeight: 1.55,
     fontWeight: 800,
+    boxSizing: "border-box",
   },
 
   actions: {
