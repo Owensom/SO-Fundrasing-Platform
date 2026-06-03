@@ -12,6 +12,9 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const CONTACT_EMAIL_LOGO_PATH = "/brand/contact-emails-gold.png";
 const PLATFORM_LOGO_PATH = "/brand/contact-emails-gold.png";
 
+const OWNER_PRIMARY_COLOUR = "#0F172A";
+const OWNER_ACCENT_COLOUR = "#D4AF37";
+
 type ContactEmailBranding = {
   advancedBranding?: boolean | null;
   displayName?: string | null;
@@ -163,8 +166,8 @@ function resolveEmailBranding({
       advancedBranding: false,
       displayName: "SO Fundraising Platform",
       logoUrl: getAssetUrl(PLATFORM_LOGO_PATH),
-      primaryColour: "#1683F8",
-      accentColour: "#FACC15",
+      primaryColour: OWNER_PRIMARY_COLOUR,
+      accentColour: OWNER_ACCENT_COLOUR,
       footerText: "",
     };
   }
@@ -192,13 +195,13 @@ function resolveEmailBranding({
       branding?.primaryColour ||
         branding?.primaryColor ||
         branding?.public_primary_colour,
-      "#1683F8",
+      OWNER_PRIMARY_COLOUR,
     ),
     accentColour: normaliseHexColour(
       branding?.accentColour ||
         branding?.accentColor ||
         branding?.public_accent_colour,
-      "#FACC15",
+      OWNER_ACCENT_COLOUR,
     ),
     footerText:
       cleanOptionalText(branding?.footerText) ||
@@ -224,8 +227,8 @@ function renderContactLogo(brand: ResolvedEmailBranding) {
       text-align:center;
       padding:30px 22px 22px;
       background:
-        radial-gradient(circle at 8% 10%, ${escapeHtml(brand.accentColour)}20, transparent 30%),
-        radial-gradient(circle at 92% 12%, ${escapeHtml(brand.primaryColour)}16, transparent 32%),
+        radial-gradient(circle at 8% 10%, ${escapeHtml(brand.accentColour)}24, transparent 30%),
+        radial-gradient(circle at 92% 12%, ${escapeHtml(brand.primaryColour)}10, transparent 32%),
         linear-gradient(135deg,#ffffff 0%,#f8fafc 58%,#ffffff 100%);
       border-bottom:1px solid #e2e8f0;
     ">
@@ -260,7 +263,7 @@ function renderContactLogo(brand: ResolvedEmailBranding) {
       <div style="
         margin:14px auto 0;
         max-width:520px;
-        color:#0f172a;
+        color:${escapeHtml(brand.primaryColour)};
         font-size:18px;
         line-height:1.25;
         font-weight:900;
@@ -588,15 +591,15 @@ export async function sendCustomerContactEmail({
     ">
       ${renderSummaryPill({
         label: `Tenant: ${safeTenantSlug}`,
-        background: `${brand.primaryColour}14`,
-        border: `${brand.primaryColour}40`,
+        background: `${brand.primaryColour}10`,
+        border: `${brand.primaryColour}30`,
         colour: brand.primaryColour,
       })}
 
       ${renderSummaryPill({
         label: safeCampaignType,
-        background: `${brand.accentColour}18`,
-        border: `${brand.accentColour}55`,
+        background: `${brand.accentColour}22`,
+        border: `${brand.accentColour}66`,
         colour: "#0f172a",
       })}
 
@@ -784,15 +787,15 @@ export async function sendTenantContactTestEmail({
     ">
       ${renderSummaryPill({
         label: `Tenant: ${safeTenantSlug}`,
-        background: `${brand.primaryColour}14`,
-        border: `${brand.primaryColour}40`,
+        background: `${brand.primaryColour}10`,
+        border: `${brand.primaryColour}30`,
         colour: brand.primaryColour,
       })}
 
       ${renderSummaryPill({
         label: "Contact email test",
-        background: `${brand.accentColour}18`,
-        border: `${brand.accentColour}55`,
+        background: `${brand.accentColour}22`,
+        border: `${brand.accentColour}66`,
         colour: "#0f172a",
       })}
     </div>
