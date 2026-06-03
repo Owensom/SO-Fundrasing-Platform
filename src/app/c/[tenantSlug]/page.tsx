@@ -1153,7 +1153,7 @@ export default async function TenantCampaignsPage({
               </p>
 
               <h2 style={styles.purchaseSuccessTitle}>
-                {getCompletedPurchaseTitle(completedCampaignType)}
+               Thank you — your support is complete
               </h2>
 
               <p style={styles.purchaseSuccessText}>
