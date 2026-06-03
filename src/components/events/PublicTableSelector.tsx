@@ -168,8 +168,9 @@ function normaliseAddOnQuantities(input: {
   checkoutAddOns: PublicEventCheckoutAddOn[];
   addOnQuantities: Record<string, number>;
   hasAccessCode: boolean;
+  hasSeatSelection: boolean;
 }) {
-  if (input.hasAccessCode) {
+  if (input.hasAccessCode || !input.hasSeatSelection) {
     return {};
   }
 
@@ -500,6 +501,7 @@ function tableAreaStyle(shape: TableShape): CSSProperties {
     borderRadius: 999,
   };
 }
+
 function tablePlateStyle(shape: TableShape): CSSProperties {
   if (shape === "square") {
     return {
@@ -633,13 +635,6 @@ export default function PublicTableSelector({
       });
   }, [groupedTables, seatingLayoutJson]);
 
-  const activeTableIndex = Math.max(
-    0,
-    tableEntries.findIndex(
-      (table) => table.tableNumber === selectedTableNumber,
-    ),
-  );
-
   const activeTable =
     tableEntries.find((table) => table.tableNumber === selectedTableNumber) ||
     tableEntries[0] ||
@@ -719,10 +714,22 @@ export default function PublicTableSelector({
       .filter(Boolean) as { seat: Seat; ticketType: TicketType }[];
   }, [cartItems, seats, ticketTypes]);
 
+  const hasSeatSelection = cartItems.length > 0;
+  const addOnsLocked = hasAccessCode || !hasSeatSelection;
+
+  const addOnLockedTitle = hasAccessCode
+    ? "Add-ons are not used with access-code bookings"
+    : "Choose at least one table seat first";
+
+  const addOnLockedReason = hasAccessCode
+    ? "VIP and complimentary access-code bookings do not collect paid event add-ons at checkout."
+    : "Event add-ons are linked to your booking. Select a table seat first, then you can add extras such as Heads or Tails or Higher or Lower.";
+
   const safeAddOnQuantities = normaliseAddOnQuantities({
     checkoutAddOns,
     addOnQuantities,
     hasAccessCode,
+    hasSeatSelection,
   });
 
   const selectedAddOns: PublicEventCheckoutAddOnSelection[] = checkoutAddOns
@@ -794,6 +801,11 @@ export default function PublicTableSelector({
     addOn: PublicEventCheckoutAddOn,
     nextQuantity: number,
   ) {
+    if (addOnsLocked) {
+      setCheckoutError(addOnLockedReason);
+      return;
+    }
+
     const quantity = normaliseAddOnQuantity(nextQuantity, addOn);
 
     setAddOnQuantities((current) => ({
@@ -812,6 +824,8 @@ export default function PublicTableSelector({
         }),
       }));
     }
+
+    setCheckoutError("");
   }
 
   function updateAddOnBuyerAnswer(
@@ -902,7 +916,8 @@ export default function PublicTableSelector({
 
     return true;
   }
-    function toggleSeat(seat: Seat) {
+
+  function toggleSeat(seat: Seat) {
     if (seat.status !== "available") return;
 
     setCartItems((current) => {
@@ -918,6 +933,8 @@ export default function PublicTableSelector({
 
       return [...current, { seatId: seat.id, ticketTypeId }];
     });
+
+    setCheckoutError("");
   }
 
   function updateTicketType(seatId: string, ticketTypeId: string) {
@@ -930,6 +947,7 @@ export default function PublicTableSelector({
 
   function removeSeat(seatId: string) {
     setCartItems((current) => current.filter((item) => item.seatId !== seatId));
+    setCheckoutError("");
   }
 
   async function startCheckout() {
@@ -1082,6 +1100,18 @@ export default function PublicTableSelector({
 
       <div className="public-table-selector-shell" style={styles.shell}>
         <div className="public-table-selector-map-panel" style={styles.mapPanel}>
+          <div style={styles.workflowGuide}>
+            <span style={styles.workflowBadge}>Step 1</span>
+            <div>
+              <h3 style={styles.workflowTitle}>Choose your table seat first</h3>
+              <p style={styles.workflowText}>
+                Select at least one available table seat. Add-ons become
+                available after your seat choice because they are linked to your
+                event booking.
+              </p>
+            </div>
+          </div>
+
           <div style={styles.mapHeader}>
             <div>
               <h3
@@ -1367,11 +1397,15 @@ export default function PublicTableSelector({
               />
 
               <div style={styles.summarySpacer} />
-                            <label style={styles.accessCodeBox}>
+
+              <label style={styles.accessCodeBox}>
                 <span style={styles.accessCodeLabel}>VIP / complimentary code</span>
                 <input
                   value={accessCode}
-                  onChange={(event) => setAccessCode(event.target.value)}
+                  onChange={(event) => {
+                    setAccessCode(event.target.value);
+                    setCheckoutError("");
+                  }}
                   placeholder="Enter access code"
                   style={styles.accessCodeInput}
                 />
@@ -1385,6 +1419,17 @@ export default function PublicTableSelector({
                 <>
                   <div style={styles.summarySpacer} />
 
+                  <div style={styles.addOnWorkflowBox}>
+                    <span style={styles.addOnWorkflowBadge}>Step 2</span>
+                    <strong style={styles.addOnWorkflowTitle}>
+                      Add event extras after your table seat
+                    </strong>
+                    <span style={styles.addOnWorkflowText}>
+                      Heads or Tails and Higher or Lower entries can be added
+                      once your table seat selection is started.
+                    </span>
+                  </div>
+
                   <div style={styles.addOnStack}>
                     {checkoutAddOns.map((addOn) => (
                       <PublicEventCheckoutAddOnSelector
@@ -1396,7 +1441,9 @@ export default function PublicTableSelector({
                         buyerName={buyerName}
                         buyerEmail={buyerEmail}
                         players={addOnPlayers[addOn.type] || []}
-                        disabled={hasAccessCode}
+                        disabled={addOnsLocked}
+                        disabledTitle={addOnLockedTitle}
+                        disabledReason={addOnLockedReason}
                         onQuantityChange={(nextQuantity) =>
                           updateAddOnQuantity(addOn, nextQuantity)
                         }
@@ -1439,6 +1486,8 @@ export default function PublicTableSelector({
                   <p style={styles.emptyTitle}>Select seats to begin</p>
                   <p style={styles.emptyText}>
                     Your selected table seats and guest details will appear here.
+                    Event add-ons unlock after you choose at least one table
+                    seat.
                   </p>
                 </div>
               ) : (
@@ -1694,6 +1743,50 @@ const styles: Record<string, CSSProperties> = {
     overflow: "hidden",
   },
 
+  workflowGuide: {
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0, 1fr)",
+    gap: 12,
+    alignItems: "start",
+    marginBottom: 16,
+    padding: 14,
+    borderRadius: 18,
+    background: "linear-gradient(135deg, #ffffff 0%, #eff6ff 100%)",
+    border: "1px solid #bfdbfe",
+  },
+
+  workflowBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 34,
+    padding: "0 12px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    whiteSpace: "nowrap",
+  },
+
+  workflowTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 18,
+    lineHeight: 1.15,
+    fontWeight: 950,
+  },
+
+  workflowText: {
+    margin: "5px 0 0",
+    color: "#475569",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 750,
+  },
+
   mapHeader: {
     display: "flex",
     justifyContent: "space-between",
@@ -1840,7 +1933,8 @@ const styles: Record<string, CSSProperties> = {
 
   tableNavRow: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 0.25fr) minmax(220px, 0.5fr) minmax(0, 0.25fr)",
+    gridTemplateColumns:
+      "minmax(0, 0.25fr) minmax(220px, 0.5fr) minmax(0, 0.25fr)",
     gap: 10,
     alignItems: "stretch",
   },
@@ -2030,10 +2124,10 @@ const styles: Record<string, CSSProperties> = {
     position: "relative",
     margin: "0 auto",
     background:
-      "radial-gradient(circle at 50% 50%, rgba(250,204,21,0.13), transparent 46%), linear-gradient(135deg, #ffffff 0%, #eff6ff 100%)",
-    border: "1px solid #dbeafe",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.9)",
-    flexShrink: 0,
+      "radial-gradient(circle at top left, rgba(22,131,248,0.08), transparent 34%), #ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.8)",
+    overflow: "visible",
   },
 
   tablePlate: {
@@ -2044,24 +2138,20 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: 10,
     background:
       "linear-gradient(135deg, #0f172a 0%, #1e293b 58%, #020617 100%)",
     color: "#fef3c7",
     border: "1px solid rgba(250,204,21,0.28)",
-    boxShadow: "0 14px 34px rgba(15,23,42,0.18)",
+    boxShadow: "0 16px 34px rgba(15,23,42,0.18)",
     textAlign: "center",
-    boxSizing: "border-box",
+    padding: 12,
   },
 
   tablePlateLabel: {
-    display: "block",
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: 950,
     lineHeight: 1.2,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-    overflowWrap: "break-word",
+    overflowWrap: "anywhere",
   },
 
   tableSeat: {
@@ -2070,9 +2160,9 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 999,
     fontSize: 13,
     fontWeight: 950,
-    padding: 0,
     cursor: "pointer",
     boxSizing: "border-box",
+    zIndex: 2,
   },
 
   helperNotice: {
@@ -2101,16 +2191,6 @@ const styles: Record<string, CSSProperties> = {
     color: "#1d4ed8",
     fontWeight: 950,
     flexShrink: 0,
-  },
-
-  emptyLight: {
-    padding: 26,
-    borderRadius: 18,
-    background: "#f8fafc",
-    border: "1px dashed #cbd5e1",
-    color: "#111827",
-    textAlign: "center",
-    minWidth: 320,
   },
 
   cart: {
@@ -2172,6 +2252,44 @@ const styles: Record<string, CSSProperties> = {
     height: 16,
   },
 
+  addOnWorkflowBox: {
+    display: "grid",
+    gap: 6,
+    marginBottom: 12,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(250,204,21,0.12)",
+    border: "1px solid rgba(250,204,21,0.22)",
+  },
+
+  addOnWorkflowBadge: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "5px 8px",
+    borderRadius: 999,
+    background: "rgba(250,204,21,0.18)",
+    color: "#fde68a",
+    border: "1px solid rgba(250,204,21,0.24)",
+    fontSize: 10,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  addOnWorkflowTitle: {
+    color: "#ffffff",
+    fontSize: 15,
+    lineHeight: 1.25,
+    fontWeight: 950,
+  },
+
+  addOnWorkflowText: {
+    color: "#dbeafe",
+    fontSize: 12,
+    lineHeight: 1.45,
+    fontWeight: 800,
+  },
+
   addOnStack: {
     display: "grid",
     gap: 12,
@@ -2185,6 +2303,17 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 18,
     border: "1px dashed rgba(255,255,255,0.22)",
     background: "rgba(255,255,255,0.05)",
+    textAlign: "center",
+  },
+
+  emptyLight: {
+    display: "grid",
+    gap: 8,
+    padding: 18,
+    borderRadius: 18,
+    border: "1px dashed #cbd5e1",
+    background: "#f8fafc",
+    color: "#0f172a",
     textAlign: "center",
   },
 
@@ -2215,20 +2344,18 @@ const styles: Record<string, CSSProperties> = {
 
   cartItem: {
     display: "grid",
-    gap: 10,
+    gap: 11,
     padding: 14,
     borderRadius: 18,
     background: "rgba(255,255,255,0.06)",
-    border: "1px solid rgba(255,255,255,0.14)",
-    minWidth: 0,
+    border: "1px solid rgba(255,255,255,0.12)",
   },
 
   cartItemHeader: {
     display: "flex",
     justifyContent: "space-between",
-    gap: 10,
+    gap: 12,
     alignItems: "flex-start",
-    flexWrap: "wrap",
   },
 
   cartSeatLabel: {
@@ -2236,23 +2363,19 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     fontSize: 15,
     fontWeight: 950,
-    lineHeight: 1.25,
   },
 
   cartPrice: {
-    margin: "4px 0 0",
+    margin: "5px 0 0",
     color: "#fde68a",
     fontSize: 13,
-    fontWeight: 950,
+    fontWeight: 900,
   },
 
   removeButton: {
-    border: "1px solid rgba(254,202,202,0.28)",
-    background: "rgba(254,202,202,0.1)",
+    border: "none",
+    background: "transparent",
     color: "#fecaca",
-    borderRadius: 999,
-    padding: "7px 10px",
-    fontSize: 12,
     fontWeight: 950,
     cursor: "pointer",
   },
@@ -2260,7 +2383,6 @@ const styles: Record<string, CSSProperties> = {
   field: {
     display: "grid",
     gap: 6,
-    minWidth: 0,
   },
 
   label: {
@@ -2279,20 +2401,19 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     fontSize: 15,
     boxSizing: "border-box",
-    minWidth: 0,
   },
 
   textarea: {
     width: "100%",
+    minHeight: 72,
     padding: "10px 11px",
     borderRadius: 13,
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
     fontSize: 15,
-    resize: "vertical",
     boxSizing: "border-box",
-    minWidth: 0,
+    resize: "vertical",
   },
 
   totalBox: {
@@ -2316,42 +2437,10 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
     marginTop: 8,
     padding: 12,
-    borderRadius: 16,
+    borderRadius: 14,
     background: "rgba(255,255,255,0.06)",
     color: "#e2e8f0",
-    border: "1px solid rgba(255,255,255,0.1)",
-    fontSize: 13,
     fontWeight: 850,
-  },
-
-  totalBoxStrong: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    flexWrap: "wrap",
-    marginTop: 10,
-    padding: 15,
-    borderRadius: 18,
-    background: "rgba(34,197,94,0.16)",
-    color: "#bbf7d0",
-    fontWeight: 950,
-    fontSize: 18,
-    border: "1px solid rgba(187,247,208,0.18)",
-  },
-
-  totalBoxComplimentary: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    flexWrap: "wrap",
-    marginTop: 10,
-    padding: 15,
-    borderRadius: 18,
-    background: "rgba(96,165,250,0.18)",
-    color: "#bfdbfe",
-    fontWeight: 950,
-    fontSize: 18,
-    border: "1px solid rgba(147,197,253,0.22)",
   },
 
   feeBox: {
@@ -2425,6 +2514,36 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.4,
     fontWeight: 800,
+  },
+
+  totalBoxStrong: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    marginTop: 10,
+    padding: 15,
+    borderRadius: 18,
+    background: "rgba(34,197,94,0.16)",
+    color: "#bbf7d0",
+    fontWeight: 950,
+    fontSize: 18,
+    border: "1px solid rgba(187,247,208,0.18)",
+  },
+
+  totalBoxComplimentary: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    marginTop: 10,
+    padding: 15,
+    borderRadius: 18,
+    background: "rgba(96,165,250,0.18)",
+    color: "#bfdbfe",
+    fontWeight: 950,
+    fontSize: 18,
+    border: "1px solid rgba(147,197,253,0.22)",
   },
 
   errorBox: {
