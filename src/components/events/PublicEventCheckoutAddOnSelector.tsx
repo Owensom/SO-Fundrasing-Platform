@@ -138,6 +138,8 @@ export default function PublicEventCheckoutAddOnSelector({
   currency,
   quantity,
   disabled = false,
+  disabledTitle,
+  disabledReason,
   buyerAnswer = "",
   buyerName = "",
   buyerEmail = "",
@@ -150,6 +152,8 @@ export default function PublicEventCheckoutAddOnSelector({
   currency: string;
   quantity: number;
   disabled?: boolean;
+  disabledTitle?: string;
+  disabledReason?: string;
   buyerAnswer?: string;
   buyerName?: string;
   buyerEmail?: string;
@@ -175,6 +179,13 @@ export default function PublicEventCheckoutAddOnSelector({
     buyerName,
     buyerEmail,
   });
+
+  const lockedTitle =
+    disabledTitle || "Choose your ticket, seat or table first";
+
+  const lockedReason =
+    disabledReason ||
+    "Add-ons are disabled when a VIP or complimentary access code is used.";
 
   function updateQuantity(nextQuantity: number) {
     const cleanNextQuantity = cleanQuantity(
@@ -251,6 +262,14 @@ export default function PublicEventCheckoutAddOnSelector({
           </strong>
         </div>
       </div>
+
+      {disabled ? (
+        <div style={styles.lockedNotice}>
+          <span style={styles.lockedBadge}>Step required first</span>
+          <strong style={styles.lockedTitle}>{lockedTitle}</strong>
+          <span style={styles.lockedText}>{lockedReason}</span>
+        </div>
+      ) : null}
 
       {showPrizeRange ? (
         <div style={styles.rangeBox}>
@@ -370,7 +389,10 @@ export default function PublicEventCheckoutAddOnSelector({
 
           <div style={styles.playersList}>
             {normalisedPlayers.map((player, index) => (
-              <div key={`higher-or-lower-player-${index}`} style={styles.playerRow}>
+              <div
+                key={`higher-or-lower-player-${index}`}
+                style={styles.playerRow}
+              >
                 <div style={styles.playerNumber}>Player {index + 1}</div>
 
                 <label style={styles.playerField}>
@@ -423,11 +445,7 @@ export default function PublicEventCheckoutAddOnSelector({
         </div>
       ) : null}
 
-      {disabled ? (
-        <p style={styles.disabledText}>
-          Add-ons are disabled when a VIP or complimentary access code is used.
-        </p>
-      ) : null}
+      {disabled ? <p style={styles.disabledText}>{lockedReason}</p> : null}
     </section>
   );
 }
@@ -564,6 +582,47 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.1,
     fontWeight: 950,
     whiteSpace: "nowrap",
+  },
+
+  lockedNotice: {
+    display: "grid",
+    gap: 6,
+    padding: 13,
+    borderRadius: 16,
+    background:
+      "linear-gradient(135deg, rgba(250,204,21,0.16), rgba(255,255,255,0.055))",
+    border: "1px solid rgba(250,204,21,0.28)",
+    minWidth: 0,
+  },
+
+  lockedBadge: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "5px 8px",
+    borderRadius: 999,
+    background: "rgba(250,204,21,0.18)",
+    border: "1px solid rgba(250,204,21,0.24)",
+    color: "#fde68a",
+    fontSize: 10,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  lockedTitle: {
+    color: "#ffffff",
+    fontSize: 15,
+    lineHeight: 1.25,
+    fontWeight: 950,
+    overflowWrap: "break-word",
+  },
+
+  lockedText: {
+    color: "#dbeafe",
+    fontSize: 12,
+    lineHeight: 1.45,
+    fontWeight: 800,
+    overflowWrap: "break-word",
   },
 
   rangeBox: {
