@@ -36,19 +36,19 @@ export default function PublicExitWarningPage() {
 
         <div style={styles.icon}>!</div>
 
-        <p style={styles.kicker}>Leaving the public campaign page</p>
+        <p style={styles.kicker}>You are leaving the public site</p>
 
-        <h1 style={styles.title}>This area is for organisers and admins</h1>
+        <h1 style={styles.title}>This next area is for organisers and admins</h1>
 
         <p style={styles.text}>
-          Buyers should stay on the public campaign page to buy raffle tickets,
-          choose squares, book event seats, bid, donate or contact the
-          organiser.
+          If you are buying raffle tickets, choosing squares, booking an event,
+          bidding, donating or contacting the organiser, stay on the public
+          campaign page.
         </p>
 
         <div style={styles.notice}>
-          If you are a supporter, use the public campaign buttons instead. If
-          you are the organiser, you can continue to the admin area.
+          Supporters and buyers do not need an admin account. Organisers can
+          continue to the admin area.
         </div>
 
         <div style={styles.actions}>
@@ -98,6 +98,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     boxShadow: "0 24px 70px rgba(15,23,42,0.14)",
     textAlign: "center",
+    boxSizing: "border-box",
   },
 
   logoPlate: {
@@ -107,6 +108,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
     boxShadow: "0 12px 30px rgba(15,23,42,0.08)",
+    boxSizing: "border-box",
   },
 
   logo: {
@@ -140,7 +142,7 @@ const styles: Record<string, CSSProperties> = {
 
   title: {
     margin: 0,
-    maxWidth: 600,
+    maxWidth: 620,
     fontSize: "clamp(32px, 7vw, 54px)",
     lineHeight: 0.98,
     letterSpacing: "-0.065em",
@@ -148,7 +150,7 @@ const styles: Record<string, CSSProperties> = {
 
   text: {
     margin: 0,
-    maxWidth: 580,
+    maxWidth: 600,
     color: "#475569",
     fontSize: 16,
     lineHeight: 1.6,
