@@ -173,8 +173,9 @@ function normaliseAddOnQuantities(input: {
   checkoutAddOns: PublicEventCheckoutAddOn[];
   addOnQuantities: Record<string, number>;
   hasAccessCode: boolean;
+  hasSeatSelection: boolean;
 }) {
-  if (input.hasAccessCode) {
+  if (input.hasAccessCode || !input.hasSeatSelection) {
     return {};
   }
 
@@ -398,10 +399,22 @@ export default function PublicReservedSeatSelector({
       .filter(Boolean) as { seat: Seat; ticketType: TicketType }[];
   }, [cartItems, seats, ticketTypes]);
 
+  const hasSeatSelection = cartItems.length > 0;
+  const addOnsLocked = hasAccessCode || !hasSeatSelection;
+
+  const addOnLockedTitle = hasAccessCode
+    ? "Add-ons are not used with access-code bookings"
+    : "Choose at least one seat first";
+
+  const addOnLockedReason = hasAccessCode
+    ? "VIP and complimentary access-code bookings do not collect paid event add-ons at checkout."
+    : "Event add-ons are linked to your booking. Select a seat first, then you can add extras such as Heads or Tails or Higher or Lower.";
+
   const safeAddOnQuantities = normaliseAddOnQuantities({
     checkoutAddOns,
     addOnQuantities,
     hasAccessCode,
+    hasSeatSelection,
   });
 
   const selectedAddOns: PublicEventCheckoutAddOnSelection[] = checkoutAddOns
@@ -473,6 +486,11 @@ export default function PublicReservedSeatSelector({
     addOn: PublicEventCheckoutAddOn,
     nextQuantity: number,
   ) {
+    if (addOnsLocked) {
+      setCheckoutError(addOnLockedReason);
+      return;
+    }
+
     const quantity = normaliseAddOnQuantity(nextQuantity, addOn);
 
     setAddOnQuantities((current) => ({
@@ -491,6 +509,8 @@ export default function PublicReservedSeatSelector({
         }),
       }));
     }
+
+    setCheckoutError("");
   }
 
   function updateAddOnBuyerAnswer(
@@ -598,6 +618,8 @@ export default function PublicReservedSeatSelector({
 
       return [...current, { seatId: seat.id, ticketTypeId }];
     });
+
+    setCheckoutError("");
   }
 
   function updateTicketType(seatId: string, ticketTypeId: string) {
@@ -610,6 +632,7 @@ export default function PublicReservedSeatSelector({
 
   function removeSeat(seatId: string) {
     setCartItems((current) => current.filter((item) => item.seatId !== seatId));
+    setCheckoutError("");
   }
 
   async function startCheckout() {
@@ -736,6 +759,18 @@ export default function PublicReservedSeatSelector({
 
       <div className="public-reserved-selector-shell" style={styles.shell}>
         <div className="public-reserved-selector-map-panel" style={styles.mapPanel}>
+          <div style={styles.workflowGuide}>
+            <span style={styles.workflowBadge}>Step 1</span>
+            <div>
+              <h3 style={styles.workflowTitle}>Choose your seat first</h3>
+              <p style={styles.workflowText}>
+                Select at least one available seat. Add-ons become available
+                after your seat choice because they are linked to your event
+                booking.
+              </p>
+            </div>
+          </div>
+
           <div style={styles.mapHeader}>
             <div>
               <h3 className="public-reserved-selector-map-title" style={styles.mapTitle}>
@@ -897,7 +932,10 @@ export default function PublicReservedSeatSelector({
                 <span style={styles.accessCodeLabel}>VIP / complimentary code</span>
                 <input
                   value={accessCode}
-                  onChange={(event) => setAccessCode(event.target.value)}
+                  onChange={(event) => {
+                    setAccessCode(event.target.value);
+                    setCheckoutError("");
+                  }}
                   placeholder="Enter access code"
                   style={styles.accessCodeInput}
                 />
@@ -911,6 +949,17 @@ export default function PublicReservedSeatSelector({
                 <>
                   <div style={styles.summarySpacer} />
 
+                  <div style={styles.addOnWorkflowBox}>
+                    <span style={styles.addOnWorkflowBadge}>Step 2</span>
+                    <strong style={styles.addOnWorkflowTitle}>
+                      Add event extras after your seat
+                    </strong>
+                    <span style={styles.addOnWorkflowText}>
+                      Heads or Tails and Higher or Lower entries can be added
+                      once your seat selection is started.
+                    </span>
+                  </div>
+
                   <div style={styles.addOnStack}>
                     {checkoutAddOns.map((addOn) => (
                       <PublicEventCheckoutAddOnSelector
@@ -922,7 +971,9 @@ export default function PublicReservedSeatSelector({
                         buyerName={buyerName}
                         buyerEmail={buyerEmail}
                         players={addOnPlayers[addOn.type] || []}
-                        disabled={hasAccessCode}
+                        disabled={addOnsLocked}
+                        disabledTitle={addOnLockedTitle}
+                        disabledReason={addOnLockedReason}
                         onQuantityChange={(nextQuantity) =>
                           updateAddOnQuantity(addOn, nextQuantity)
                         }
@@ -962,6 +1013,7 @@ export default function PublicReservedSeatSelector({
                   <p style={styles.emptyTitle}>Select seats to begin</p>
                   <p style={styles.emptyText}>
                     Your selected seats and guest details will appear here.
+                    Event add-ons unlock after you choose at least one seat.
                   </p>
                 </div>
               ) : (
@@ -1217,6 +1269,50 @@ const styles: Record<string, CSSProperties> = {
     overflow: "hidden",
   },
 
+  workflowGuide: {
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0, 1fr)",
+    gap: 12,
+    alignItems: "start",
+    marginBottom: 16,
+    padding: 14,
+    borderRadius: 18,
+    background: "linear-gradient(135deg, #ffffff 0%, #eff6ff 100%)",
+    border: "1px solid #bfdbfe",
+  },
+
+  workflowBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 34,
+    padding: "0 12px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    whiteSpace: "nowrap",
+  },
+
+  workflowTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 18,
+    lineHeight: 1.15,
+    fontWeight: 950,
+  },
+
+  workflowText: {
+    margin: "5px 0 0",
+    color: "#475569",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 750,
+  },
+
   mapHeader: {
     display: "flex",
     justifyContent: "space-between",
@@ -1464,6 +1560,44 @@ const styles: Record<string, CSSProperties> = {
     height: 16,
   },
 
+  addOnWorkflowBox: {
+    display: "grid",
+    gap: 6,
+    marginBottom: 12,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(250,204,21,0.12)",
+    border: "1px solid rgba(250,204,21,0.22)",
+  },
+
+  addOnWorkflowBadge: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "5px 8px",
+    borderRadius: 999,
+    background: "rgba(250,204,21,0.18)",
+    color: "#fde68a",
+    border: "1px solid rgba(250,204,21,0.24)",
+    fontSize: 10,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  addOnWorkflowTitle: {
+    color: "#ffffff",
+    fontSize: 15,
+    lineHeight: 1.25,
+    fontWeight: 950,
+  },
+
+  addOnWorkflowText: {
+    color: "#dbeafe",
+    fontSize: 12,
+    lineHeight: 1.45,
+    fontWeight: 800,
+  },
+
   addOnStack: {
     display: "grid",
     gap: 12,
@@ -1507,20 +1641,18 @@ const styles: Record<string, CSSProperties> = {
 
   cartItem: {
     display: "grid",
-    gap: 10,
+    gap: 11,
     padding: 14,
     borderRadius: 18,
     background: "rgba(255,255,255,0.06)",
-    border: "1px solid rgba(255,255,255,0.14)",
-    minWidth: 0,
+    border: "1px solid rgba(255,255,255,0.12)",
   },
 
   cartItemHeader: {
     display: "flex",
     justifyContent: "space-between",
-    gap: 10,
+    gap: 12,
     alignItems: "flex-start",
-    flexWrap: "wrap",
   },
 
   cartSeatLabel: {
@@ -1528,23 +1660,19 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     fontSize: 15,
     fontWeight: 950,
-    lineHeight: 1.25,
   },
 
   cartPrice: {
-    margin: "4px 0 0",
+    margin: "5px 0 0",
     color: "#fde68a",
     fontSize: 13,
-    fontWeight: 950,
+    fontWeight: 900,
   },
 
   removeButton: {
-    border: "1px solid rgba(254,202,202,0.28)",
-    background: "rgba(254,202,202,0.1)",
+    border: "none",
+    background: "transparent",
     color: "#fecaca",
-    borderRadius: 999,
-    padding: "7px 10px",
-    fontSize: 12,
     fontWeight: 950,
     cursor: "pointer",
   },
@@ -1552,7 +1680,6 @@ const styles: Record<string, CSSProperties> = {
   field: {
     display: "grid",
     gap: 6,
-    minWidth: 0,
   },
 
   label: {
@@ -1571,20 +1698,19 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     fontSize: 15,
     boxSizing: "border-box",
-    minWidth: 0,
   },
 
   textarea: {
     width: "100%",
+    minHeight: 72,
     padding: "10px 11px",
     borderRadius: 13,
     border: "1px solid #cbd5e1",
     background: "#ffffff",
     color: "#0f172a",
     fontSize: 15,
-    resize: "vertical",
     boxSizing: "border-box",
-    minWidth: 0,
+    resize: "vertical",
   },
 
   totalBox: {
@@ -1608,42 +1734,10 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
     marginTop: 8,
     padding: 12,
-    borderRadius: 16,
+    borderRadius: 14,
     background: "rgba(255,255,255,0.06)",
     color: "#e2e8f0",
-    border: "1px solid rgba(255,255,255,0.1)",
-    fontSize: 13,
     fontWeight: 850,
-  },
-
-  totalBoxStrong: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    flexWrap: "wrap",
-    marginTop: 10,
-    padding: 15,
-    borderRadius: 18,
-    background: "rgba(34,197,94,0.16)",
-    color: "#bbf7d0",
-    fontWeight: 950,
-    fontSize: 18,
-    border: "1px solid rgba(187,247,208,0.18)",
-  },
-
-  totalBoxComplimentary: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    flexWrap: "wrap",
-    marginTop: 10,
-    padding: 15,
-    borderRadius: 18,
-    background: "rgba(96,165,250,0.18)",
-    color: "#bfdbfe",
-    fontWeight: 950,
-    fontSize: 18,
-    border: "1px solid rgba(147,197,253,0.22)",
   },
 
   feeBox: {
@@ -1717,6 +1811,36 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.4,
     fontWeight: 800,
+  },
+
+  totalBoxStrong: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    marginTop: 10,
+    padding: 15,
+    borderRadius: 18,
+    background: "rgba(34,197,94,0.16)",
+    color: "#bbf7d0",
+    fontWeight: 950,
+    fontSize: 18,
+    border: "1px solid rgba(187,247,208,0.18)",
+  },
+
+  totalBoxComplimentary: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    marginTop: 10,
+    padding: 15,
+    borderRadius: 18,
+    background: "rgba(96,165,250,0.18)",
+    color: "#bfdbfe",
+    fontWeight: 950,
+    fontSize: 18,
+    border: "1px solid rgba(147,197,253,0.22)",
   },
 
   errorBox: {
