@@ -62,6 +62,15 @@ type TenantBrandingSettings = {
   public_footer_text: string | null;
 };
 
+type CampaignChooserItem = {
+  type: FilterType;
+  label: string;
+  shortLabel: string;
+  value: number;
+  icon: string;
+  helper: string;
+};
+
 function cleanText(value: unknown) {
   return String(value || "").trim();
 }
@@ -299,7 +308,7 @@ function getFilterHref({
 
   const query = params.toString();
 
-  return query ? `/c/${tenantSlug}?${query}` : `/c/${tenantSlug}`;
+  return query ? `/c/${tenantSlug}?${query}#live-campaigns` : `/c/${tenantSlug}#live-campaigns`;
 }
 
 function pluralise(value: number, singular: string, plural: string) {
@@ -373,6 +382,15 @@ function getHighlightedCampaign(params: {
   }
 
   return params.campaigns[0] || null;
+}
+
+function getActiveChooserText(activeType: FilterType) {
+  if (activeType === "raffle") return "Showing raffles";
+  if (activeType === "squares") return "Showing squares";
+  if (activeType === "event") return "Showing events";
+  if (activeType === "auction") return "Showing auctions";
+
+  return "Showing all campaigns";
 }
 
 export default async function TenantCampaignsPage({
@@ -458,7 +476,8 @@ export default async function TenantCampaignsPage({
     campaigns: publicCampaigns,
     highlightedSettings,
   });
-    const campaignTypeNames = auctionCapability.allowed
+
+  const campaignTypeNames = auctionCapability.allowed
     ? "raffles, squares, events and auctions"
     : "raffles, squares and events";
 
@@ -493,6 +512,53 @@ export default async function TenantCampaignsPage({
   const brandLogoSrc = publicLogoMarkUrl || publicLogoUrl;
   const primaryTextColour = getReadableTextColour(primaryColour);
   const accentTextColour = getReadableTextColour(accentColour);
+
+  const chooserItems: CampaignChooserItem[] = [
+    {
+      type: "all",
+      label: "All campaigns",
+      shortLabel: "All",
+      value: publicCampaigns.length,
+      icon: "↗",
+      helper: "Browse everything live",
+    },
+    {
+      type: "raffle",
+      label: "Raffles",
+      shortLabel: "Raffles",
+      value: raffles.length,
+      icon: getTypeIcon("raffle"),
+      helper: "Prize draws and tickets",
+    },
+    {
+      type: "squares",
+      label: "Squares",
+      shortLabel: "Squares",
+      value: squares.length,
+      icon: getTypeIcon("squares"),
+      helper: "Pick your square",
+    },
+    {
+      type: "event",
+      label: "Events",
+      shortLabel: "Events",
+      value: events.length,
+      icon: getTypeIcon("event"),
+      helper: "Tickets and bookings",
+    },
+    ...(auctionCapability.allowed
+      ? [
+          {
+            type: "auction" as const,
+            label: "Auctions",
+            shortLabel: "Auctions",
+            value: auctions.length,
+            icon: getTypeIcon("auction"),
+            helper: "Bid and support",
+          },
+        ]
+      : []),
+  ];
 
   const brandedPageStyle: CSSProperties = canUseAdvancedBranding
     ? {
@@ -557,24 +623,7 @@ export default async function TenantCampaignsPage({
         color: "#ffffff",
         boxShadow: "0 18px 34px rgba(22,131,248,0.20)",
       };
-
-  const activeFilterStyle: CSSProperties = canUseAdvancedBranding
-    ? {
-        ...styles.filterButtonActive,
-        background: `linear-gradient(135deg, ${primaryColour} 0%, ${accentColour} 135%)`,
-        borderColor: primaryColour,
-        color: primaryTextColour,
-        boxShadow: `0 14px 28px ${primaryColour}2E`,
-      }
-    : {
-        ...styles.filterButtonActive,
-        background: "#0f172a",
-        borderColor: "#0f172a",
-        color: "#ffffff",
-        boxShadow: "0 12px 24px rgba(15,23,42,0.16)",
-      };
-
-  return (
+    return (
     <main className="tenant-campaigns-page" style={brandedPageStyle}>
       <style>{responsiveStyles}</style>
 
@@ -709,46 +758,154 @@ export default async function TenantCampaignsPage({
             <h2 style={styles.heroTitle}>Support a live campaign</h2>
 
             <p style={styles.subtitle}>
-              Browse live {campaignTypeNames}. Open a campaign to take part, or
-              make a simple donation through the support flow.
+              Browse live {campaignTypeNames}. Tap a campaign type below to
+              choose what you would like to support.
             </p>
 
-            <div className="heroStats" style={styles.heroStats}>
-              <HeroStat
-                label="Live campaigns"
-                value={publicCampaigns.length}
-                icon="↗"
-                accentColour={canUseAdvancedBranding ? accentColour : "#facc15"}
-              />
-              <HeroStat
-                label="Raffles"
-                value={raffles.length}
-                icon={getTypeIcon("raffle")}
-                accentColour={canUseAdvancedBranding ? accentColour : "#facc15"}
-              />
-              <HeroStat
-                label="Squares"
-                value={squares.length}
-                icon={getTypeIcon("squares")}
-                accentColour={canUseAdvancedBranding ? accentColour : "#facc15"}
-              />
-              <HeroStat
-                label="Events"
-                value={events.length}
-                icon={getTypeIcon("event")}
-                accentColour={canUseAdvancedBranding ? accentColour : "#facc15"}
-              />
-              {auctionCapability.allowed ? (
-                <HeroStat
-                  label="Auctions"
-                  value={auctions.length}
-                  icon={getTypeIcon("auction")}
-                  accentColour={
-                    canUseAdvancedBranding ? accentColour : "#facc15"
-                  }
-                />
-              ) : null}
-            </div>
+            <section
+              className="campaignChooser"
+              style={styles.campaignChooser}
+              aria-label="Browse campaigns by type"
+            >
+              <div style={styles.campaignChooserHeader}>
+                <div>
+                  <p
+                    style={{
+                      ...styles.campaignChooserKicker,
+                      color: canUseAdvancedBranding ? accentColour : "#facc15",
+                    }}
+                  >
+                    Start here
+                  </p>
+
+                  <h3 style={styles.campaignChooserTitle}>
+                    Browse by campaign type
+                  </h3>
+                </div>
+
+                <span
+                  style={{
+                    ...styles.campaignChooserStatus,
+                    borderColor: canUseAdvancedBranding
+                      ? `${accentColour}55`
+                      : "rgba(250,204,21,0.34)",
+                    color: canUseAdvancedBranding ? accentColour : "#fde68a",
+                  }}
+                >
+                  {getActiveChooserText(activeType)}
+                </span>
+              </div>
+
+              <div className="campaignChooserGrid" style={styles.campaignChooserGrid}>
+                {chooserItems.map((item) => {
+                  const isActive = activeType === item.type;
+                  const isUnavailable = item.value === 0 && item.type !== "all";
+
+                  const activeStyle: CSSProperties = isActive
+                    ? {
+                        background: canUseAdvancedBranding
+                          ? `linear-gradient(135deg, ${primaryColour} 0%, ${accentColour} 138%)`
+                          : "linear-gradient(135deg, #1683F8 0%, #2563eb 100%)",
+                        borderColor: canUseAdvancedBranding
+                          ? `${accentColour}AA`
+                          : "rgba(147,197,253,0.70)",
+                        boxShadow: canUseAdvancedBranding
+                          ? `0 18px 34px ${primaryColour}36`
+                          : "0 18px 34px rgba(22,131,248,0.28)",
+                      }
+                    : {};
+
+                  const textColour = isActive
+                    ? canUseAdvancedBranding
+                      ? primaryTextColour
+                      : "#ffffff"
+                    : "#e5edf8";
+
+                  const mutedTextColour = isActive
+                    ? canUseAdvancedBranding
+                      ? primaryTextColour
+                      : "#dbeafe"
+                    : "#cbd5e1";
+
+                  return (
+                    <Link
+                      key={item.type}
+                      href={getFilterHref({
+                        tenantSlug,
+                        type: item.type,
+                        adminReturn,
+                      })}
+                      className="campaignChooserCard"
+                      style={{
+                        ...styles.campaignChooserCard,
+                        ...activeStyle,
+                        opacity: isUnavailable ? 0.72 : 1,
+                      }}
+                      aria-current={isActive ? "page" : undefined}
+                    >
+                      <span
+                        style={{
+                          ...styles.campaignChooserIcon,
+                          color: isActive
+                            ? textColour
+                            : canUseAdvancedBranding
+                              ? accentColour
+                              : "#fde68a",
+                          borderColor: isActive
+                            ? "rgba(255,255,255,0.36)"
+                            : "rgba(255,255,255,0.16)",
+                          background: isActive
+                            ? "rgba(255,255,255,0.18)"
+                            : "rgba(255,255,255,0.10)",
+                        }}
+                      >
+                        {item.icon}
+                      </span>
+
+                      <span style={styles.campaignChooserCopy}>
+                        <strong
+                          style={{
+                            ...styles.campaignChooserLabel,
+                            color: textColour,
+                          }}
+                        >
+                          {item.label}
+                        </strong>
+
+                        <span
+                          style={{
+                            ...styles.campaignChooserHelper,
+                            color: mutedTextColour,
+                          }}
+                        >
+                          {item.helper}
+                        </span>
+                      </span>
+
+                      <span style={styles.campaignChooserCountWrap}>
+                        <strong
+                          style={{
+                            ...styles.campaignChooserCount,
+                            color: textColour,
+                          }}
+                        >
+                          {item.value}
+                        </strong>
+
+                        <span
+                          style={{
+                            ...styles.campaignChooserCountLabel,
+                            color: mutedTextColour,
+                          }}
+                        >
+                          live
+                        </span>
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </section>
           </div>
 
           <div style={styles.supportPanel}>
@@ -863,7 +1020,8 @@ export default async function TenantCampaignsPage({
           </div>
         ) : null}
       </section>
-            <section className="contactStrip" style={styles.contactStrip}>
+
+      <section className="contactStrip" style={styles.contactStrip}>
         <div
           style={{
             ...styles.contactStripIcon,
@@ -904,8 +1062,7 @@ export default async function TenantCampaignsPage({
           Contact organiser →
         </Link>
       </section>
-
-      {featuredCampaign ? (
+            {featuredCampaign ? (
         <section className="featuredCard" style={styles.featuredCard}>
           <div style={styles.featuredImageWrap}>
             <img
@@ -998,95 +1155,36 @@ export default async function TenantCampaignsPage({
         </section>
       ) : null}
 
-      <section className="filtersCard" style={styles.filtersCard}>
-        <div style={styles.filtersHeader}>
-          <div>
-            <p
-              style={{
-                ...styles.kicker,
-                color: canUseAdvancedBranding ? primaryColour : "#2563eb",
-              }}
-            >
-              Filter campaigns
-            </p>
-            <h2 style={styles.sectionTitle}>Live campaigns</h2>
-          </div>
-
-          <span
+      <section id="live-campaigns" style={styles.liveCampaignsHeader}>
+        <div>
+          <p
             style={{
-              ...styles.countPill,
-              borderColor: canUseAdvancedBranding
-                ? `${accentColour}78`
-                : "#bfdbfe",
-              background: canUseAdvancedBranding
-                ? `${accentColour}1A`
-                : "#eff6ff",
+              ...styles.kicker,
+              color: canUseAdvancedBranding ? primaryColour : "#2563eb",
             }}
           >
-            {pluralise(visibleCampaigns.length, "campaign", "campaigns")}
-          </span>
+            {getActiveChooserText(activeType)}
+          </p>
+
+          <h2 style={styles.sectionTitle}>Live campaigns</h2>
         </div>
 
-        <nav className="filterNav" style={styles.filterNav}>
-          <Link
-            href={getFilterHref({ tenantSlug, type: "all", adminReturn })}
-            style={{
-              ...styles.filterButton,
-              ...(activeType === "all" ? activeFilterStyle : {}),
-            }}
-          >
-            All
-          </Link>
-
-          <Link
-            href={getFilterHref({ tenantSlug, type: "raffle", adminReturn })}
-            style={{
-              ...styles.filterButton,
-              ...(activeType === "raffle" ? activeFilterStyle : {}),
-            }}
-          >
-            Raffles
-          </Link>
-
-          <Link
-            href={getFilterHref({ tenantSlug, type: "squares", adminReturn })}
-            style={{
-              ...styles.filterButton,
-              ...(activeType === "squares" ? activeFilterStyle : {}),
-            }}
-          >
-            Squares
-          </Link>
-
-          <Link
-            href={getFilterHref({ tenantSlug, type: "event", adminReturn })}
-            style={{
-              ...styles.filterButton,
-              ...(activeType === "event" ? activeFilterStyle : {}),
-            }}
-          >
-            Events
-          </Link>
-
-          {auctionCapability.allowed ? (
-            <Link
-              href={getFilterHref({ tenantSlug, type: "auction", adminReturn })}
-              style={{
-                ...styles.filterButton,
-                ...(activeType === "auction" ? activeFilterStyle : {}),
-              }}
-            >
-              Auctions
-            </Link>
-          ) : null}
-        </nav>
+        <span
+          style={{
+            ...styles.countPill,
+            borderColor: canUseAdvancedBranding
+              ? `${accentColour}78`
+              : "#bfdbfe",
+            background: canUseAdvancedBranding
+              ? `${accentColour}1A`
+              : "#eff6ff",
+          }}
+        >
+          {pluralise(visibleCampaigns.length, "campaign", "campaigns")}
+        </span>
       </section>
 
-      <section
-        id="live-campaigns"
-        className="campaignGrid"
-        style={styles.campaignGrid}
-      >
+      <section className="campaignGrid" style={styles.campaignGrid}>
         {visibleCampaigns.length === 0 ? (
           <div style={styles.emptyCard}>
             <div
@@ -1206,26 +1304,6 @@ export default async function TenantCampaignsPage({
   );
 }
 
-function HeroStat({
-  label,
-  value,
-  icon,
-  accentColour,
-}: {
-  label: string;
-  value: number;
-  icon: string;
-  accentColour: string;
-}) {
-  return (
-    <div style={styles.heroStat}>
-      <span style={{ ...styles.heroStatIcon, color: accentColour }}>{icon}</span>
-      <span style={styles.heroStatLabel}>{label}</span>
-      <strong style={styles.heroStatValue}>{value}</strong>
-    </div>
-  );
-}
-
 function MiniMeta({ label, value }: { label: string; value: string }) {
   return (
     <div style={styles.miniMeta}>
@@ -1252,16 +1330,18 @@ const responsiveStyles = `
   min-width: 0;
 }
 
+@media (max-width: 1100px) {
+  .tenant-campaigns-page .campaignChooserGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
 @media (max-width: 980px) {
   .tenant-campaigns-page .brandHeader,
   .tenant-campaigns-page .heroMainGrid,
   .tenant-campaigns-page .featuredCard,
   .tenant-campaigns-page .contactStrip {
     grid-template-columns: 1fr !important;
-  }
-
-  .tenant-campaigns-page .heroStats {
-    grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)) !important;
   }
 
   .tenant-campaigns-page .campaignGrid {
@@ -1283,8 +1363,8 @@ const responsiveStyles = `
   .tenant-campaigns-page .brandHeader,
   .tenant-campaigns-page .campaigns-hero,
   .tenant-campaigns-page .featuredCard,
-  .tenant-campaigns-page .filtersCard,
-  .tenant-campaigns-page .contactStrip {
+  .tenant-campaigns-page .contactStrip,
+  .tenant-campaigns-page .liveCampaignsHeader {
     padding: 14px !important;
     border-radius: 22px !important;
   }
@@ -1311,10 +1391,36 @@ const responsiveStyles = `
     padding: 12px !important;
   }
 
-  .tenant-campaigns-page .heroStats,
+  .tenant-campaigns-page .campaignChooser {
+    margin-top: 16px !important;
+    padding: 12px !important;
+    border-radius: 22px !important;
+  }
+
+  .tenant-campaigns-page .campaignChooserHeader {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .tenant-campaigns-page .campaignChooserStatus {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  .tenant-campaigns-page .campaignChooserGrid,
   .tenant-campaigns-page .campaignGrid,
   .tenant-campaigns-page .featuredMetaGrid {
     grid-template-columns: 1fr !important;
+  }
+
+  .tenant-campaigns-page .campaignChooserCard {
+    grid-template-columns: 48px minmax(0, 1fr) auto !important;
+    min-height: 76px !important;
+    padding: 12px !important;
+  }
+
+  .tenant-campaigns-page .campaignChooserCount {
+    font-size: 26px !important;
   }
 
   .tenant-campaigns-page .supportPanel {
@@ -1340,7 +1446,6 @@ const responsiveStyles = `
     grid-template-columns: 1fr !important;
   }
 
-  .tenant-campaigns-page .filterNav,
   .tenant-campaigns-page .heroActions {
     display: grid !important;
     grid-template-columns: 1fr !important;
@@ -1352,7 +1457,6 @@ const responsiveStyles = `
   .tenant-campaigns-page .contactAction,
   .tenant-campaigns-page .contactStripButton,
   .tenant-campaigns-page .adminReturnButton,
-  .tenant-campaigns-page .filterButton,
   .tenant-campaigns-page .emptyGhost {
     width: 100% !important;
     justify-content: center !important;
@@ -1360,9 +1464,8 @@ const responsiveStyles = `
   }
 }
 `;
-
 const styles: Record<string, CSSProperties> = {
-    page: {
+  page: {
     width: "100%",
     maxWidth: 1220,
     margin: "0 auto",
@@ -1600,54 +1703,142 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
-  heroStats: {
+  campaignChooser: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))",
-    gap: 10,
-    marginTop: 18,
-  },
-
-  heroStat: {
-    display: "grid",
-    gridTemplateColumns: "26px minmax(0, 1fr)",
-    gridTemplateRows: "auto auto",
-    columnGap: 9,
-    rowGap: 3,
-    padding: 12,
-    borderRadius: 18,
-    background: "rgba(255,255,255,0.10)",
-    border: "1px solid rgba(255,255,255,0.16)",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
+    gap: 14,
+    marginTop: 20,
+    padding: 14,
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.055))",
+    border: "1px solid rgba(255,255,255,0.18)",
+    boxShadow:
+      "inset 0 1px 0 rgba(255,255,255,0.10), 0 20px 42px rgba(0,0,0,0.12)",
+    backdropFilter: "blur(14px)",
     minWidth: 0,
   },
 
-  heroStatIcon: {
-    gridRow: "1 / span 2",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 24,
-    height: 24,
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.10)",
-    fontSize: 13,
-    fontWeight: 950,
+  campaignChooserHeader: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 12,
+    alignItems: "start",
+    minWidth: 0,
   },
 
-  heroStatLabel: {
-    color: "#f8fafc",
+  campaignChooserKicker: {
+    margin: "0 0 5px",
     fontSize: 11,
-    lineHeight: 1.15,
-    fontWeight: 900,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.1em",
+  },
+
+  campaignChooserTitle: {
+    margin: 0,
+    color: "#ffffff",
+    fontSize: 24,
+    lineHeight: 1.05,
+    letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
+  },
+
+  campaignChooserStatus: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 34,
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "rgba(15,23,42,0.28)",
+    border: "1px solid",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
     whiteSpace: "nowrap",
   },
 
-  heroStatValue: {
-    color: "#ffffff",
-    fontSize: 23,
+  campaignChooserGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+    gap: 10,
+    minWidth: 0,
+  },
+
+  campaignChooserCard: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gridTemplateRows: "auto minmax(0, 1fr) auto",
+    gap: 10,
+    minHeight: 148,
+    padding: 13,
+    borderRadius: 20,
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.115), rgba(255,255,255,0.055))",
+    border: "1px solid rgba(255,255,255,0.16)",
+    color: "#e5edf8",
+    textDecoration: "none",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
+    minWidth: 0,
+  },
+
+  campaignChooserIcon: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 42,
+    height: 42,
+    borderRadius: 15,
+    border: "1px solid",
+    fontSize: 18,
+    fontWeight: 950,
+    boxShadow: "0 10px 22px rgba(0,0,0,0.13)",
+  },
+
+  campaignChooserCopy: {
+    display: "grid",
+    gap: 4,
+    alignContent: "start",
+    minWidth: 0,
+  },
+
+  campaignChooserLabel: {
+    fontSize: 15,
+    lineHeight: 1.15,
+    fontWeight: 950,
+    letterSpacing: "-0.02em",
+    overflowWrap: "anywhere",
+  },
+
+  campaignChooserHelper: {
+    fontSize: 11,
+    lineHeight: 1.35,
+    fontWeight: 760,
+    overflowWrap: "anywhere",
+  },
+
+  campaignChooserCountWrap: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 8,
+    alignItems: "end",
+    minWidth: 0,
+  },
+
+  campaignChooserCount: {
+    fontSize: 32,
+    lineHeight: 0.9,
+    fontWeight: 950,
+    letterSpacing: "-0.05em",
+  },
+
+  campaignChooserCountLabel: {
+    fontSize: 10,
     lineHeight: 1,
     fontWeight: 950,
-    letterSpacing: "-0.04em",
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
   },
 
   supportPanel: {
@@ -2029,9 +2220,12 @@ const styles: Record<string, CSSProperties> = {
     boxSizing: "border-box",
   },
 
-  filtersCard: {
-    display: "grid",
+  liveCampaignsHeader: {
+    display: "flex",
+    justifyContent: "space-between",
     gap: 14,
+    flexWrap: "wrap",
+    alignItems: "flex-start",
     padding: 18,
     borderRadius: 24,
     background:
@@ -2039,15 +2233,6 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(226,232,240,0.95)",
     boxShadow: "0 14px 34px rgba(15,23,42,0.06)",
     marginBottom: 16,
-    minWidth: 0,
-  },
-
-  filtersHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 14,
-    flexWrap: "wrap",
-    alignItems: "flex-start",
     minWidth: 0,
   },
 
@@ -2077,36 +2262,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 11,
     fontWeight: 950,
     whiteSpace: "nowrap",
-  },
-
-  filterNav: {
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-    alignItems: "center",
-  },
-
-  filterButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 42,
-    padding: "10px 18px",
-    borderRadius: 999,
-    background:
-      "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(248,250,252,0.96))",
-    color: "#334155",
-    border: "1px solid rgba(203,213,225,0.92)",
-    textDecoration: "none",
-    fontSize: 13,
-    fontWeight: 950,
-    letterSpacing: "-0.01em",
-    boxShadow:
-      "0 8px 18px rgba(15,23,42,0.055), inset 0 1px 0 rgba(255,255,255,0.86)",
-  },
-
-  filterButtonActive: {
-    color: "#ffffff",
   },
 
   campaignGrid: {
@@ -2247,4 +2402,4 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     lineHeight: 1.5,
   },
-};
+};o
