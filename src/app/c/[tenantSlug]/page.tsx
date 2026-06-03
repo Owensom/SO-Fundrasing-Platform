@@ -767,7 +767,7 @@ export default async function TenantCampaignsPage({
               style={styles.campaignChooser}
               aria-label="Browse campaigns by type"
             >
-              <div style={styles.campaignChooserHeader}>
+              <div className="campaignChooserHeader" style={styles.campaignChooserHeader}>
                 <div>
                   <p
                     style={{
