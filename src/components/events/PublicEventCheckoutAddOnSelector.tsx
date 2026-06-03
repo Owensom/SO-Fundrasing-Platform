@@ -185,7 +185,7 @@ export default function PublicEventCheckoutAddOnSelector({
 
   const lockedReason =
     disabledReason ||
-    "Add-ons are disabled when a VIP or complimentary access code is used.";
+    "Event add-ons are linked to your booking. Choose your ticket, seat or table first, then you can add extras.";
 
   function updateQuantity(nextQuantity: number) {
     const cleanNextQuantity = cleanQuantity(
@@ -248,7 +248,7 @@ export default function PublicEventCheckoutAddOnSelector({
             </p>
           )}
 
-          {maxEntriesPerBooking ? (
+          {maxEntriesPerBooking && !disabled ? (
             <p style={styles.limitText}>
               Maximum {maxEntriesPerBooking} per booking.
             </p>
@@ -265,187 +265,173 @@ export default function PublicEventCheckoutAddOnSelector({
 
       {disabled ? (
         <div style={styles.lockedNotice}>
-          <span style={styles.lockedBadge}>Step required first</span>
+          <span style={styles.lockedBadge}>Unlocks after step 1</span>
           <strong style={styles.lockedTitle}>{lockedTitle}</strong>
           <span style={styles.lockedText}>{lockedReason}</span>
         </div>
-      ) : null}
+      ) : (
+        <>
+          {showPrizeRange ? (
+            <div style={styles.rangeBox}>
+              <span style={styles.rangeLabel}>Prize value range</span>
+              <strong style={styles.rangeValue}>
+                {currency} {moneyFromCents(addOn.prizeValueRangeMinCents)} –{" "}
+                {currency} {moneyFromCents(addOn.prizeValueRangeMaxCents)}
+              </strong>
+              <span style={styles.rangeHelp}>
+                {cleanText(addOn.prizeValueRangeNote) ||
+                  "Prize values are shown to help supporters make a judgement before entering."}
+              </span>
+            </div>
+          ) : null}
 
-      {showPrizeRange ? (
-        <div style={styles.rangeBox}>
-          <span style={styles.rangeLabel}>Prize value range</span>
-          <strong style={styles.rangeValue}>
-            {currency} {moneyFromCents(addOn.prizeValueRangeMinCents)} –{" "}
-            {currency} {moneyFromCents(addOn.prizeValueRangeMaxCents)}
-          </strong>
-          <span style={styles.rangeHelp}>
-            {cleanText(addOn.prizeValueRangeNote) ||
-              "Prize values are shown to help supporters make a judgement before entering."}
-          </span>
-        </div>
-      ) : null}
+          <div style={styles.controls}>
+            <button
+              type="button"
+              onClick={() => updateQuantity(safeQuantity - 1)}
+              disabled={safeQuantity <= 0}
+              style={{
+                ...styles.quantityButton,
+                opacity: safeQuantity <= 0 ? 0.45 : 1,
+                cursor: safeQuantity <= 0 ? "not-allowed" : "pointer",
+              }}
+            >
+              −
+            </button>
 
-      <div style={styles.controls}>
-        <button
-          type="button"
-          onClick={() => updateQuantity(safeQuantity - 1)}
-          disabled={disabled || safeQuantity <= 0}
-          style={{
-            ...styles.quantityButton,
-            opacity: disabled || safeQuantity <= 0 ? 0.45 : 1,
-            cursor: disabled || safeQuantity <= 0 ? "not-allowed" : "pointer",
-          }}
-        >
-          −
-        </button>
+            <input
+              type="number"
+              min="0"
+              max={maxEntriesPerBooking || undefined}
+              value={safeQuantity}
+              onChange={(event) => updateQuantity(Number(event.target.value))}
+              style={styles.quantityInput}
+            />
 
-        <input
-          type="number"
-          min="0"
-          max={maxEntriesPerBooking || undefined}
-          value={safeQuantity}
-          disabled={disabled}
-          onChange={(event) => updateQuantity(Number(event.target.value))}
-          style={{
-            ...styles.quantityInput,
-            opacity: disabled ? 0.55 : 1,
-          }}
-        />
-
-        <button
-          type="button"
-          onClick={() => updateQuantity(safeQuantity + 1)}
-          disabled={
-            disabled ||
-            Boolean(maxEntriesPerBooking && safeQuantity >= maxEntriesPerBooking)
-          }
-          style={{
-            ...styles.quantityButton,
-            opacity:
-              disabled ||
-              Boolean(maxEntriesPerBooking && safeQuantity >= maxEntriesPerBooking)
-                ? 0.45
-                : 1,
-            cursor:
-              disabled ||
-              Boolean(maxEntriesPerBooking && safeQuantity >= maxEntriesPerBooking)
-                ? "not-allowed"
-                : "pointer",
-          }}
-        >
-          +
-        </button>
-      </div>
-
-      {showAnswerField ? (
-        <label style={styles.answerBox}>
-          <span style={styles.answerLabel}>Skill question</span>
-
-          <strong style={styles.answerQuestion}>
-            {cleanText(addOn.legalQuestionText)}
-          </strong>
-
-          {cleanText(addOn.legalQuestionHelperText) ? (
-            <span style={styles.answerHelp}>
-              {cleanText(addOn.legalQuestionHelperText)}
-            </span>
-          ) : (
-            <span style={styles.answerHelp}>
-              Your answer will be recorded with your Higher or Lower entry.
-            </span>
-          )}
-
-          <input
-            value={buyerAnswer}
-            disabled={disabled || safeQuantity <= 0}
-            onChange={(event) => onBuyerAnswerChange?.(event.target.value)}
-            placeholder={
-              safeQuantity > 0
-                ? "Enter your answer"
-                : "Choose entries before answering"
-            }
-            style={{
-              ...styles.answerInput,
-              opacity: disabled || safeQuantity <= 0 ? 0.6 : 1,
-            }}
-          />
-        </label>
-      ) : null}
-
-      {showPlayerRows ? (
-        <div style={styles.playersBox}>
-          <div style={styles.playersHeader}>
-            <span style={styles.playersLabel}>Player details</span>
-            <span style={styles.playersCount}>
-              {safeQuantity} player{safeQuantity === 1 ? "" : "s"}
-            </span>
+            <button
+              type="button"
+              onClick={() => updateQuantity(safeQuantity + 1)}
+              disabled={Boolean(
+                maxEntriesPerBooking && safeQuantity >= maxEntriesPerBooking,
+              )}
+              style={{
+                ...styles.quantityButton,
+                opacity: Boolean(
+                  maxEntriesPerBooking && safeQuantity >= maxEntriesPerBooking,
+                )
+                  ? 0.45
+                  : 1,
+                cursor: Boolean(
+                  maxEntriesPerBooking && safeQuantity >= maxEntriesPerBooking,
+                )
+                  ? "not-allowed"
+                  : "pointer",
+              }}
+            >
+              +
+            </button>
           </div>
 
-          <p style={styles.playersHelp}>
-            Add the name and email for each person playing Higher or Lower. If
-            you are buying for several people, each player can receive their own
-            game entry.
-          </p>
+          {showAnswerField && safeQuantity > 0 ? (
+            <label style={styles.answerBox}>
+              <span style={styles.answerLabel}>Skill question</span>
 
-          <div style={styles.playersList}>
-            {normalisedPlayers.map((player, index) => (
-              <div
-                key={`higher-or-lower-player-${index}`}
-                style={styles.playerRow}
-              >
-                <div style={styles.playerNumber}>Player {index + 1}</div>
+              <strong style={styles.answerQuestion}>
+                {cleanText(addOn.legalQuestionText)}
+              </strong>
 
-                <label style={styles.playerField}>
-                  <span style={styles.playerFieldLabel}>Name</span>
-                  <input
-                    value={player.name}
-                    disabled={disabled}
-                    onChange={(event) =>
-                      updatePlayer(index, {
-                        name: event.target.value,
-                      })
-                    }
-                    placeholder={
-                      index === 0 && cleanText(buyerName)
-                        ? cleanText(buyerName)
-                        : "Player name"
-                    }
-                    style={{
-                      ...styles.playerInput,
-                      opacity: disabled ? 0.6 : 1,
-                    }}
-                  />
-                </label>
+              {cleanText(addOn.legalQuestionHelperText) ? (
+                <span style={styles.answerHelp}>
+                  {cleanText(addOn.legalQuestionHelperText)}
+                </span>
+              ) : (
+                <span style={styles.answerHelp}>
+                  Your answer will be recorded with your Higher or Lower entry.
+                </span>
+              )}
 
-                <label style={styles.playerField}>
-                  <span style={styles.playerFieldLabel}>Email</span>
-                  <input
-                    value={player.email}
-                    disabled={disabled}
-                    type="email"
-                    onChange={(event) =>
-                      updatePlayer(index, {
-                        email: event.target.value,
-                      })
-                    }
-                    placeholder={
-                      index === 0 && cleanText(buyerEmail)
-                        ? cleanText(buyerEmail)
-                        : "player@example.com"
-                    }
-                    style={{
-                      ...styles.playerInput,
-                      opacity: disabled ? 0.6 : 1,
-                    }}
-                  />
-                </label>
+              <input
+                value={buyerAnswer}
+                onChange={(event) => onBuyerAnswerChange?.(event.target.value)}
+                placeholder="Enter your answer"
+                style={styles.answerInput}
+              />
+            </label>
+          ) : null}
+
+          {showAnswerField && safeQuantity <= 0 ? (
+            <div style={styles.softPrompt}>
+              Choose at least one Higher or Lower entry, then the skill question
+              answer box will appear.
+            </div>
+          ) : null}
+
+          {showPlayerRows ? (
+            <div style={styles.playersBox}>
+              <div style={styles.playersHeader}>
+                <span style={styles.playersLabel}>Player details</span>
+                <span style={styles.playersCount}>
+                  {safeQuantity} player{safeQuantity === 1 ? "" : "s"}
+                </span>
               </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
 
-      {disabled ? <p style={styles.disabledText}>{lockedReason}</p> : null}
+              <p style={styles.playersHelp}>
+                Add the name and email for each person playing Higher or Lower.
+                If you are buying for several people, each player can receive
+                their own game entry.
+              </p>
+
+              <div style={styles.playersList}>
+                {normalisedPlayers.map((player, index) => (
+                  <div
+                    key={`higher-or-lower-player-${index}`}
+                    style={styles.playerRow}
+                  >
+                    <div style={styles.playerNumber}>Player {index + 1}</div>
+
+                    <label style={styles.playerField}>
+                      <span style={styles.playerFieldLabel}>Name</span>
+                      <input
+                        value={player.name}
+                        onChange={(event) =>
+                          updatePlayer(index, {
+                            name: event.target.value,
+                          })
+                        }
+                        placeholder={
+                          index === 0 && cleanText(buyerName)
+                            ? cleanText(buyerName)
+                            : "Player name"
+                        }
+                        style={styles.playerInput}
+                      />
+                    </label>
+
+                    <label style={styles.playerField}>
+                      <span style={styles.playerFieldLabel}>Email</span>
+                      <input
+                        value={player.email}
+                        type="email"
+                        onChange={(event) =>
+                          updatePlayer(index, {
+                            email: event.target.value,
+                          })
+                        }
+                        placeholder={
+                          index === 0 && cleanText(buyerEmail)
+                            ? cleanText(buyerEmail)
+                            : "player@example.com"
+                        }
+                        style={styles.playerInput}
+                      />
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </>
+      )}
     </section>
   );
 }
@@ -590,7 +576,7 @@ const styles: Record<string, CSSProperties> = {
     padding: 13,
     borderRadius: 16,
     background:
-      "linear-gradient(135deg, rgba(250,204,21,0.16), rgba(255,255,255,0.055))",
+      "linear-gradient(135deg, rgba(250,204,21,0.14), rgba(255,255,255,0.055))",
     border: "1px solid rgba(250,204,21,0.28)",
     minWidth: 0,
   },
@@ -690,6 +676,17 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 16,
     fontWeight: 950,
     boxSizing: "border-box",
+  },
+
+  softPrompt: {
+    padding: 12,
+    borderRadius: 16,
+    background: "rgba(96,165,250,0.12)",
+    border: "1px solid rgba(147,197,253,0.20)",
+    color: "#dbeafe",
+    fontSize: 12,
+    lineHeight: 1.45,
+    fontWeight: 800,
   },
 
   answerBox: {
@@ -833,14 +830,5 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 15,
     boxSizing: "border-box",
     minWidth: 0,
-  },
-
-  disabledText: {
-    margin: 0,
-    color: "#cbd5e1",
-    fontSize: 12,
-    lineHeight: 1.4,
-    fontWeight: 750,
-    overflowWrap: "break-word",
   },
 };
