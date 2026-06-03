@@ -1,8 +1,8 @@
 // src/app/c/[tenantSlug]/contact/page.tsx
 // ===============================
 // Public customer/supporter → tenant contact page
-// Phase 5E.1B
 // Branded public route, tenant contact email only
+// Passes tenant branding into contact email helper
 // No platform-owner support dashboard changes
 // No database storage yet
 // No checkout/campaign changes
@@ -17,6 +17,9 @@ import { sendCustomerContactEmail } from "@/lib/customer-contact-email";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+const OWNER_PRIMARY_COLOUR = "#0F766E";
+const OWNER_ACCENT_COLOUR = "#C2412D";
 
 type PageProps = {
   params: Promise<{
@@ -289,7 +292,6 @@ async function lookupCampaign(params: {
 
   return null;
 }
-
 async function sendPublicContactMessage(formData: FormData) {
   "use server";
 
@@ -361,6 +363,25 @@ async function sendPublicContactMessage(formData: FormData) {
       campaignId,
       campaignTitle: campaign?.title || null,
       pageUrl,
+      branding: {
+        advancedBranding: true,
+        displayName: tenantDisplayName,
+        logoUrl: tenantSettings?.public_logo_url || null,
+        logoMarkUrl: tenantSettings?.public_logo_mark_url || null,
+        primaryColour:
+          tenantSettings?.public_primary_colour || OWNER_PRIMARY_COLOUR,
+        accentColour:
+          tenantSettings?.public_accent_colour || OWNER_ACCENT_COLOUR,
+        footerText: tenantSettings?.public_footer_text || null,
+        public_display_name: tenantSettings?.public_display_name || null,
+        public_logo_url: tenantSettings?.public_logo_url || null,
+        public_logo_mark_url: tenantSettings?.public_logo_mark_url || null,
+        public_primary_colour:
+          tenantSettings?.public_primary_colour || OWNER_PRIMARY_COLOUR,
+        public_accent_colour:
+          tenantSettings?.public_accent_colour || OWNER_ACCENT_COLOUR,
+        public_footer_text: tenantSettings?.public_footer_text || null,
+      },
     });
   } catch (error) {
     console.error("Customer contact email failed", error);
@@ -439,12 +460,12 @@ export default async function PublicTenantContactPage({
 
   const primaryColour = normaliseHexColour(
     tenantSettings.public_primary_colour,
-    "#1683F8",
+    OWNER_PRIMARY_COLOUR,
   );
 
   const accentColour = normaliseHexColour(
     tenantSettings.public_accent_colour,
-    "#FACC15",
+    OWNER_ACCENT_COLOUR,
   );
 
   const brandLogoSrc = publicLogoMarkUrl || publicLogoUrl;
@@ -464,7 +485,7 @@ export default async function PublicTenantContactPage({
 
   const brandedHeroStyle: CSSProperties = {
     ...styles.hero,
-    background: `radial-gradient(circle at bottom right, ${primaryColour}30, transparent 42%), radial-gradient(circle at top left, ${accentColour}14, transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #172554 100%)`,
+    background: `radial-gradient(circle at bottom right, ${primaryColour}30, transparent 42%), radial-gradient(circle at top left, ${accentColour}14, transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #111827 100%)`,
   };
 
   const brandedBrandFallbackStyle: CSSProperties = {
@@ -495,8 +516,7 @@ export default async function PublicTenantContactPage({
     ...styles.sectionEyebrow,
     color: primaryColour,
   };
-
-  return (
+    return (
     <main className="tenant-contact-page" style={brandedPageStyle}>
       <style>{responsiveStyles}</style>
 
@@ -532,7 +552,14 @@ export default async function PublicTenantContactPage({
             background: `linear-gradient(135deg, ${accentColour}12, #ffffff 78%)`,
           }}
         >
-          <span style={styles.brandFeatureKicker}>Public contact</span>
+          <span
+            style={{
+              ...styles.brandFeatureKicker,
+              color: primaryColour,
+            }}
+          >
+            Public contact
+          </span>
           <strong style={styles.brandFeatureTitle}>{publicContactName}</strong>
           <span style={styles.brandFeatureText}>
             {contactAvailable
@@ -836,466 +863,6 @@ const responsiveStyles = `
   }
 }
 `;
-
-const styles: Record<string, CSSProperties> = {
-  page: {
-    width: "100%",
-    maxWidth: 1180,
-    margin: "0 auto",
-    padding: "28px 16px 64px",
-    minHeight: "100vh",
-    color: "#0f172a",
-    boxSizing: "border-box",
-    overflowX: "hidden",
-  },
-
-  brandHeader: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(250px, 0.34fr)",
-    gap: 14,
-    alignItems: "stretch",
-    padding: 14,
-    borderRadius: 24,
-    background: "rgba(255,255,255,0.94)",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 14px 38px rgba(15,23,42,0.07)",
-    marginBottom: 12,
-    backdropFilter: "blur(14px)",
-  },
-
-  brandIdentity: {
-    display: "grid",
-    gridTemplateColumns: "72px minmax(0, 1fr)",
-    gap: 14,
-    alignItems: "center",
-    minWidth: 0,
-  },
-
-  brandLogoWrap: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 72,
-    height: 72,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    overflow: "hidden",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.08)",
-  },
-
-  brandLogo: {
-    display: "block",
-    width: "100%",
-    height: "100%",
-    objectFit: "contain",
-    padding: 7,
-  },
-
-  brandLogoFallback: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 72,
-    height: 72,
-    borderRadius: 18,
-    border: "2px solid",
-    color: "#0f172a",
-    fontSize: 22,
-    fontWeight: 950,
-    letterSpacing: "-0.05em",
-  },
-
-  brandCopy: {
-    display: "grid",
-    gap: 4,
-    minWidth: 0,
-  },
-
-  brandKicker: {
-    margin: 0,
-    fontSize: 11,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-
-  brandTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: "clamp(30px, 4.6vw, 50px)",
-    lineHeight: 0.94,
-    letterSpacing: "-0.075em",
-    overflowWrap: "anywhere",
-  },
-
-  brandTagline: {
-    margin: 0,
-    color: "#475569",
-    fontSize: 14,
-    lineHeight: 1.35,
-    fontWeight: 850,
-    overflowWrap: "anywhere",
-  },
-
-  brandFeature: {
-    display: "grid",
-    gap: 5,
-    alignContent: "center",
-    padding: 12,
-    borderRadius: 18,
-    border: "1px solid",
-    minWidth: 0,
-  },
-
-  brandFeatureKicker: {
-    color: "#92400e",
-    fontSize: 10,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-
-  brandFeatureTitle: {
-    color: "#0f172a",
-    fontSize: 18,
-    lineHeight: 1.1,
-    letterSpacing: "-0.04em",
-    overflowWrap: "anywhere",
-  },
-
-  brandFeatureText: {
-    color: "#475569",
-    fontSize: 12,
-    lineHeight: 1.35,
-    fontWeight: 750,
-  },
-
-  hero: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1.15fr) minmax(280px, 0.85fr)",
-    gap: 20,
-    padding: 26,
-    borderRadius: 30,
-    color: "#ffffff",
-    boxShadow: "0 24px 60px rgba(15,23,42,0.18)",
-    marginBottom: 18,
-    boxSizing: "border-box",
-    overflow: "hidden",
-  },
-
-  heroContent: {
-    minWidth: 0,
-  },
-
-  backLink: {
-    display: "inline-flex",
-    width: "fit-content",
-    maxWidth: "100%",
-    marginBottom: 14,
-    padding: "10px 14px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.10)",
-    color: "#ffffff",
-    border: "1px solid rgba(255,255,255,0.18)",
-    textDecoration: "none",
-    fontWeight: 900,
-    fontSize: 13,
-    boxSizing: "border-box",
-  },
-
-  badgeRow: {
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap",
-    alignItems: "center",
-    marginBottom: 14,
-    minWidth: 0,
-  },
-
-  badge: {
-    display: "inline-flex",
-    padding: "8px 12px",
-    borderRadius: 999,
-    color: "#fef3c7",
-    border: "1px solid",
-    fontSize: 13,
-    fontWeight: 950,
-  },
-
-  softBadge: {
-    display: "inline-flex",
-    padding: "8px 12px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.10)",
-    color: "#dbeafe",
-    border: "1px solid rgba(191,219,254,0.26)",
-    fontSize: 13,
-    fontWeight: 950,
-  },
-
-  title: {
-    margin: 0,
-    fontSize: "clamp(38px, 7vw, 70px)",
-    lineHeight: 0.96,
-    letterSpacing: "-0.065em",
-    overflowWrap: "anywhere",
-  },
-
-  subtitle: {
-    margin: "16px 0 0",
-    color: "#dbeafe",
-    fontSize: 17,
-    lineHeight: 1.6,
-    fontWeight: 750,
-    maxWidth: 760,
-    overflowWrap: "anywhere",
-  },
-
-  viewCampaignLink: {
-    display: "inline-flex",
-    width: "fit-content",
-    maxWidth: "100%",
-    marginTop: 18,
-    padding: "11px 15px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
-    textDecoration: "none",
-    fontWeight: 950,
-    boxSizing: "border-box",
-  },
-
-  heroPanel: {
-    display: "grid",
-    gap: 10,
-    alignContent: "center",
-    padding: 18,
-    borderRadius: 24,
-    background: "rgba(255,255,255,0.08)",
-    border: "1px solid rgba(148,163,184,0.26)",
-    minWidth: 0,
-  },
-
-  panelEyebrow: {
-    fontSize: 12,
-    fontWeight: 950,
-    letterSpacing: "0.08em",
-    textTransform: "uppercase",
-  },
-
-  panelTitle: {
-    margin: 0,
-    color: "#ffffff",
-    fontSize: 26,
-    lineHeight: 1.05,
-    letterSpacing: "-0.04em",
-    overflowWrap: "anywhere",
-  },
-
-  panelText: {
-    margin: 0,
-    color: "#dbeafe",
-    lineHeight: 1.55,
-    fontWeight: 750,
-    overflowWrap: "anywhere",
-  },
-
-  statusCard: {
-    padding: 18,
-    borderRadius: 22,
-    marginBottom: 18,
-    border: "1px solid transparent",
-    boxSizing: "border-box",
-  },
-
-  successCard: {
-    background: "#dcfce7",
-    color: "#166534",
-    borderColor: "#bbf7d0",
-  },
-
-  warningCard: {
-    background: "#fff7ed",
-    color: "#9a3412",
-    borderColor: "#fed7aa",
-    padding: 18,
-    borderRadius: 22,
-    marginBottom: 18,
-    border: "1px solid #fed7aa",
-    boxSizing: "border-box",
-  },
-
-  errorCard: {
-    background: "#fee2e2",
-    color: "#991b1b",
-    borderColor: "#fecaca",
-  },
-
-  statusTitle: {
-    margin: 0,
-    fontSize: 22,
-    letterSpacing: "-0.03em",
-    overflowWrap: "anywhere",
-  },
-
-  statusText: {
-    margin: "7px 0 0",
-    lineHeight: 1.55,
-    fontWeight: 750,
-    overflowWrap: "anywhere",
-  },
-
-  contentGrid: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1.1fr) minmax(280px, 0.9fr)",
-    gap: 18,
-    minWidth: 0,
-  },
-
-  formCard: {
-    display: "grid",
-    gap: 16,
-    padding: 22,
-    borderRadius: 26,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-    minWidth: 0,
-    boxSizing: "border-box",
-  },
-
-  sectionEyebrow: {
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-
-  sectionTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 30,
-    letterSpacing: "-0.045em",
-    overflowWrap: "anywhere",
-  },
-
-  form: {
-    display: "grid",
-    gap: 14,
-    minWidth: 0,
-  },
-
-  field: {
-    display: "grid",
-    gap: 7,
-    minWidth: 0,
-  },
-
-  label: {
-    color: "#334155",
-    fontSize: 13,
-    fontWeight: 950,
-  },
-
-  input: {
-    width: "100%",
-    minHeight: 48,
-    borderRadius: 14,
-    border: "1px solid #cbd5e1",
-    padding: "11px 13px",
-    fontSize: 16,
-    boxSizing: "border-box",
-    minWidth: 0,
-    background: "#ffffff",
-    color: "#0f172a",
-  },
-
-  helpText: {
-    color: "#64748b",
-    fontSize: 12,
-    lineHeight: 1.45,
-    fontWeight: 750,
-  },
-
-  textarea: {
-    width: "100%",
-    borderRadius: 14,
-    border: "1px solid #cbd5e1",
-    padding: "11px 13px",
-    fontSize: 16,
-    fontFamily: "inherit",
-    boxSizing: "border-box",
-    minWidth: 0,
-    background: "#ffffff",
-    color: "#0f172a",
-  },
-
-  primaryButton: {
-    minHeight: 50,
-    padding: "13px 18px",
-    borderRadius: 999,
-    color: "#ffffff",
-    border: "none",
-    fontSize: 16,
-    fontWeight: 950,
-  },
-
-  infoCard: {
-    display: "grid",
-    gap: 16,
-    alignContent: "start",
-    padding: 22,
-    borderRadius: 26,
-    background:
-      "linear-gradient(135deg, #ffffff 0%, #f8fafc 58%, #eff6ff 100%)",
-    border: "1px solid #dbeafe",
-    minWidth: 0,
-    boxSizing: "border-box",
-  },
-
-  infoTitle: {
-    margin: 0,
-    fontSize: 28,
-    letterSpacing: "-0.045em",
-    overflowWrap: "anywhere",
-  },
-
-  infoList: {
-    display: "grid",
-    gap: 12,
-    minWidth: 0,
-  },
-
-  infoItem: {
-    display: "grid",
-    gap: 4,
-    padding: 14,
-    borderRadius: 18,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    color: "#334155",
-    lineHeight: 1.5,
-    minWidth: 0,
-    overflowWrap: "anywhere",
-  },
-
-  footer: {
-    marginTop: 20,
-    padding: 16,
-    borderRadius: 22,
-    background: "#ffffff",
-    border: "1px solid",
-    textAlign: "center",
-  },
-
-  footerText: {
-    margin: 0,
-    color: "#64748b",
-    fontWeight: 800,
-    lineHeight: 1.5,
-  },
-};
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
