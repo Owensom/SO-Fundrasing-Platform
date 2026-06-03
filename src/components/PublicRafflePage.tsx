@@ -836,6 +836,7 @@ const responsiveStyles = `
     }
 
     .public-raffle-disclaimer,
+    .public-raffle-buying-guide,
     .public-raffle-prizes,
     .public-raffle-winners,
     .public-raffle-quick-select,
@@ -845,7 +846,8 @@ const responsiveStyles = `
       padding: 16px !important;
     }
 
-    .public-raffle-fifty-fifty-stats {
+    .public-raffle-fifty-fifty-stats,
+    .public-raffle-guide-grid {
       grid-template-columns: 1fr !important;
       gap: 10px !important;
     }
@@ -1111,6 +1113,43 @@ export default function PublicRafflePage({ slug }: Props) {
 
   const displayTotal = coverFees ? pricing.total + estimatedFee : pricing.total;
 
+  const hasSelectedTickets = basket.length > 0;
+  const hasBuyerName = buyerName.trim().length > 0;
+  const hasBuyerEmail = buyerEmail.trim().length > 0;
+  const requiresEntryAnswer = Boolean(raffle?.legalQuestion);
+  const hasEntryAnswer = !requiresEntryAnswer || entryAnswer.trim().length > 0;
+
+  const checkoutReady =
+    canReserve &&
+    hasSelectedTickets &&
+    hasBuyerName &&
+    hasBuyerEmail &&
+    hasEntryAnswer &&
+    termsAccepted;
+
+  const checkoutChecklist = [
+    { label: "Choose at least one ticket", complete: hasSelectedTickets },
+    { label: "Enter your name", complete: hasBuyerName },
+    { label: "Enter your email", complete: hasBuyerEmail },
+    ...(requiresEntryAnswer
+      ? [{ label: "Answer the required entry question", complete: hasEntryAnswer }]
+      : []),
+    { label: "Accept the terms and privacy policy", complete: termsAccepted },
+  ];
+    const nextCheckoutHelp = !canReserve
+    ? "This raffle is not currently open for checkout."
+    : !hasSelectedTickets
+      ? "Choose at least one ticket before checkout."
+      : !hasBuyerName
+        ? "Enter your name before checkout."
+        : !hasBuyerEmail
+          ? "Enter your email before checkout."
+          : requiresEntryAnswer && !hasEntryAnswer
+            ? "Answer the required entry question before checkout."
+            : !termsAccepted
+              ? "Accept the terms and privacy policy before checkout."
+              : "Ready for secure checkout.";
+
   const availableCount = useMemo(() => {
     if (!raffle) return 0;
 
@@ -1280,7 +1319,8 @@ export default function PublicRafflePage({ slug }: Props) {
 
     autoSelectTicketQuantity(autoQuantity);
   }
-    async function reserveTickets() {
+
+  async function reserveTickets() {
     if (!raffle || !canReserve) return;
 
     try {
@@ -1302,7 +1342,7 @@ export default function PublicRafflePage({ slug }: Props) {
 
       if (raffle.legalQuestion) {
         if (!entryAnswer.trim()) {
-          throw new Error("Please answer the entry question.");
+          throw new Error("Please answer the required entry question before checkout.");
         }
 
         if (
@@ -1632,7 +1672,132 @@ export default function PublicRafflePage({ slug }: Props) {
             laws.
           </div>
 
-          {isFiftyFifty ? (
+          {canReserve ? (
+            <section
+              className="public-raffle-buying-guide"
+              style={{
+                ...styles.buyingGuide,
+                borderColor: `${primaryColour}35`,
+              }}
+            >
+              <div style={styles.buyingGuideHeader}>
+                <div>
+                  <p style={{ ...styles.guideKicker, color: primaryColour }}>
+                    Start here
+                  </p>
+
+                  <h2 style={styles.guideTitle}>How to enter this raffle</h2>
+
+                  <p style={styles.guideLead}>
+                    Follow these steps in order. If this raffle has an entry
+                    question, you must answer it before checkout opens.
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    ...styles.guideBadge,
+                    background: `${primaryColour}12`,
+                    borderColor: `${primaryColour}35`,
+                    color: primaryColour,
+                  }}
+                >
+                  Secure checkout at the end
+                </div>
+              </div>
+
+              <div className="public-raffle-guide-grid" style={styles.guideGrid}>
+                <div style={styles.guideStepCard}>
+                  <span
+                    style={{
+                      ...styles.guideStepNumber,
+                      background: primaryColour,
+                    }}
+                  >
+                    1
+                  </span>
+
+                  <div>
+                    <strong style={styles.guideStepTitle}>
+                      Choose your tickets
+                    </strong>
+                    <p style={styles.guideStepText}>
+                      Use quick buy or pick your colour and numbers manually.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={styles.guideStepCard}>
+                  <span
+                    style={{
+                      ...styles.guideStepNumber,
+                      background: primaryColour,
+                    }}
+                  >
+                    2
+                  </span>
+
+                  <div>
+                    <strong style={styles.guideStepTitle}>
+                      Add your details
+                    </strong>
+                    <p style={styles.guideStepText}>
+                      Enter your name and email so the organiser can confirm
+                      your entry.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={styles.guideStepCard}>
+                  <span
+                    style={{
+                      ...styles.guideStepNumber,
+                      background: requiresEntryAnswer
+                        ? accentColour
+                        : primaryColour,
+                    }}
+                  >
+                    3
+                  </span>
+
+                  <div>
+                    <strong style={styles.guideStepTitle}>
+                      {requiresEntryAnswer
+                        ? "Answer the required question"
+                        : "Check the entry rules"}
+                    </strong>
+                    <p style={styles.guideStepText}>
+                      {requiresEntryAnswer
+                        ? "This raffle requires an answer before you can pay."
+                        : "This raffle does not need an entry question answer."}
+                    </p>
+                  </div>
+                </div>
+
+                <div style={styles.guideStepCard}>
+                  <span
+                    style={{
+                      ...styles.guideStepNumber,
+                      background: primaryColour,
+                    }}
+                  >
+                    4
+                  </span>
+
+                  <div>
+                    <strong style={styles.guideStepTitle}>
+                      Accept terms and pay
+                    </strong>
+                    <p style={styles.guideStepText}>
+                      Review your basket, accept the terms, then continue to
+                      secure checkout.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </section>
+          ) : null}
+                    {isFiftyFifty ? (
             <section
               className="public-raffle-fifty-fifty-panel"
               style={{
@@ -1825,13 +1990,24 @@ export default function PublicRafflePage({ slug }: Props) {
               className="public-raffle-quick-select"
               style={styles.quickSelect}
             >
-              <div>
-                <h2 style={{ margin: 0 }}>Quick buy</h2>
+              <div style={styles.sectionIntroRow}>
+                <span
+                  style={{
+                    ...styles.sectionStepBadge,
+                    background: primaryColour,
+                  }}
+                >
+                  Step 1
+                </span>
 
-                <p style={{ margin: "6px 0 0", color: "#64748b" }}>
-                  Choose how many tickets you would like and we’ll randomly
-                  auto-select available numbers across colours.
-                </p>
+                <div>
+                  <h2 style={{ margin: 0 }}>Choose your tickets</h2>
+
+                  <p style={{ margin: "6px 0 0", color: "#64748b" }}>
+                    Choose how many tickets you would like and we’ll randomly
+                    auto-select available numbers across colours.
+                  </p>
+                </div>
               </div>
 
               <div
@@ -2101,165 +2277,238 @@ export default function PublicRafflePage({ slug }: Props) {
             </div>
           </div>
 
-          <h2 className="public-raffle-heading" style={styles.heading}>
-            Your details
-          </h2>
-
-          <div style={styles.form}>
-            <input
-              className="public-raffle-input"
-              value={buyerName}
-              onChange={(event) => setBuyerName(event.target.value)}
-              placeholder="Your name"
-              style={styles.input}
-              disabled={!canReserve}
-            />
-
-            <input
-              className="public-raffle-input"
-              value={buyerEmail}
-              onChange={(event) => setBuyerEmail(event.target.value)}
-              placeholder="Your email"
-              type="email"
-              style={styles.input}
-              disabled={!canReserve}
-            />
-
-            {raffle.legalQuestion ? (
-              <div
-                className="public-raffle-legal-question"
+          <section style={styles.checkoutSection}>
+            <div style={styles.sectionIntroRow}>
+              <span
                 style={{
-                  ...styles.legalQuestionBox,
-                  borderColor: `${primaryColour}55`,
+                  ...styles.sectionStepBadge,
+                  background: primaryColour,
                 }}
               >
-                <div
-                  style={{
-                    ...styles.legalQuestionTitle,
-                    color: primaryColour,
-                  }}
-                >
-                  Entry question
-                </div>
+                Step 2
+              </span>
 
-                <div style={styles.legalQuestionText}>
-                  {raffle.legalQuestion}
-                </div>
+              <div>
+                <h2 className="public-raffle-heading" style={styles.heading}>
+                  Your details
+                </h2>
 
-                <input
-                  className="public-raffle-input"
-                  value={entryAnswer}
-                  onChange={(event) => setEntryAnswer(event.target.value)}
-                  placeholder="Your answer"
-                  style={styles.input}
-                  disabled={!canReserve}
-                />
+                <p style={styles.sectionHelpText}>
+                  Add your details, answer the required entry question if shown,
+                  then accept the terms before checkout.
+                </p>
               </div>
-            ) : null}
+            </div>
 
-            {raffle.freeEntry.address ? (
-              <details
-                className="public-raffle-free-entry"
-                style={{
-                  ...styles.freeEntryBox,
-                  borderColor: `${primaryColour}55`,
-                }}
-              >
-                <summary
-                  style={{
-                    ...styles.freeEntrySummary,
-                    color: primaryColour,
-                  }}
-                >
-                  No purchase necessary — free postal entry available
-                </summary>
-
-                <div style={styles.freeEntryContent}>
-                  <p style={styles.freeEntryText}>
-                    To enter for free by post, send your full name, email
-                    address, phone number, raffle/campaign name, answer to the
-                    entry question, and preferred ticket number and colour if
-                    applicable to:
-                  </p>
-
-                  <pre
-                    className="public-raffle-free-entry-address"
-                    style={styles.freeEntryAddress}
-                  >
-                    {raffle.freeEntry.address}
-                  </pre>
-
-                  {raffle.freeEntry.instructions ? (
-                    <p style={styles.freeEntryText}>
-                      {raffle.freeEntry.instructions}
-                    </p>
-                  ) : null}
-
-                  {raffle.freeEntry.closesAt ? (
-                    <p style={styles.freeEntryText}>
-                      Postal entries must be received before{" "}
-                      <strong>
-                        {formatDateTime(raffle.freeEntry.closesAt)}
-                      </strong>
-                      .
-                    </p>
-                  ) : null}
-
-                  <p style={styles.freeEntryText}>
-                    Your email address is required so the organiser can contact
-                    you if you win and include your entry in the automatic or
-                    live draw. One entry per postcard/envelope. Paid and postal
-                    entries have equal chance of winning.
-                  </p>
-                </div>
-              </details>
-            ) : null}
-
-            <label className="public-raffle-terms-box" style={styles.termsBox}>
+            <div style={styles.form}>
               <input
-                type="checkbox"
-                checked={termsAccepted}
-                onChange={(event) => setTermsAccepted(event.target.checked)}
+                className="public-raffle-input"
+                value={buyerName}
+                onChange={(event) => setBuyerName(event.target.value)}
+                placeholder="Your name"
+                style={styles.input}
                 disabled={!canReserve}
               />
 
-              <span>
-                I confirm I have read and accept the{" "}
-                <Link
-                  href="/terms"
-                  style={{ ...styles.inlineLink, color: primaryColour }}
-                >
-                  terms
-                </Link>{" "}
-                and{" "}
-                <Link
-                  href="/privacy"
-                  style={{ ...styles.inlineLink, color: primaryColour }}
-                >
-                  privacy policy
-                </Link>
-                .
-              </span>
-            </label>
+              <input
+                className="public-raffle-input"
+                value={buyerEmail}
+                onChange={(event) => setBuyerEmail(event.target.value)}
+                placeholder="Your email"
+                type="email"
+                style={styles.input}
+                disabled={!canReserve}
+              />
 
-            <button
-              className="public-raffle-primary-button"
-              type="button"
-              onClick={reserveTickets}
-              disabled={saving || basket.length === 0 || !canReserve}
-              style={{
-                ...brandedPrimaryButtonStyle,
-                opacity:
-                  saving || basket.length === 0 || !canReserve ? 0.6 : 1,
-                cursor:
-                  saving || basket.length === 0 || !canReserve
-                    ? "not-allowed"
-                    : "pointer",
-              }}
-            >
-              {saving ? "Redirecting to checkout..." : "Reserve and pay"}
-            </button>
-          </div>
+              {raffle.legalQuestion ? (
+                <div
+                  className="public-raffle-legal-question"
+                  style={{
+                    ...styles.legalQuestionBox,
+                    borderColor: `${accentColour}88`,
+                  }}
+                >
+                  <div style={styles.legalQuestionHeader}>
+                    <span
+                      style={{
+                        ...styles.sectionStepBadge,
+                        background: accentColour,
+                      }}
+                    >
+                      Required
+                    </span>
+
+                    <div>
+                      <div
+                        style={{
+                          ...styles.legalQuestionTitle,
+                          color: "#92400e",
+                        }}
+                      >
+                        Entry question needed before checkout
+                      </div>
+
+                      <p style={styles.legalQuestionHelp}>
+                        You must answer this question before you can reserve and
+                        pay for your tickets.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={styles.legalQuestionText}>
+                    {raffle.legalQuestion}
+                  </div>
+
+                  <input
+                    className="public-raffle-input"
+                    value={entryAnswer}
+                    onChange={(event) => setEntryAnswer(event.target.value)}
+                    placeholder="Type your answer here"
+                    style={styles.input}
+                    disabled={!canReserve}
+                    aria-label="Entry question answer"
+                  />
+                </div>
+              ) : null}
+                            {raffle.freeEntry.address ? (
+                <details
+                  className="public-raffle-free-entry"
+                  style={{
+                    ...styles.freeEntryBox,
+                    borderColor: `${primaryColour}55`,
+                  }}
+                >
+                  <summary
+                    style={{
+                      ...styles.freeEntrySummary,
+                      color: primaryColour,
+                    }}
+                  >
+                    No purchase necessary — free postal entry available
+                  </summary>
+
+                  <div style={styles.freeEntryContent}>
+                    <p style={styles.freeEntryText}>
+                      To enter for free by post, send your full name, email
+                      address, phone number, raffle/campaign name, answer to the
+                      entry question, and preferred ticket number and colour if
+                      applicable to:
+                    </p>
+
+                    <pre
+                      className="public-raffle-free-entry-address"
+                      style={styles.freeEntryAddress}
+                    >
+                      {raffle.freeEntry.address}
+                    </pre>
+
+                    {raffle.freeEntry.instructions ? (
+                      <p style={styles.freeEntryText}>
+                        {raffle.freeEntry.instructions}
+                      </p>
+                    ) : null}
+
+                    {raffle.freeEntry.closesAt ? (
+                      <p style={styles.freeEntryText}>
+                        Postal entries must be received before{" "}
+                        <strong>
+                          {formatDateTime(raffle.freeEntry.closesAt)}
+                        </strong>
+                        .
+                      </p>
+                    ) : null}
+
+                    <p style={styles.freeEntryText}>
+                      Your email address is required so the organiser can contact
+                      you if you win and include your entry in the automatic or
+                      live draw. One entry per postcard/envelope. Paid and postal
+                      entries have equal chance of winning.
+                    </p>
+                  </div>
+                </details>
+              ) : null}
+
+              <label
+                className="public-raffle-terms-box"
+                style={styles.termsBox}
+              >
+                <input
+                  type="checkbox"
+                  checked={termsAccepted}
+                  onChange={(event) => setTermsAccepted(event.target.checked)}
+                  disabled={!canReserve}
+                />
+
+                <span>
+                  I confirm I have read and accept the{" "}
+                  <Link
+                    href="/terms"
+                    style={{ ...styles.inlineLink, color: primaryColour }}
+                  >
+                    terms
+                  </Link>{" "}
+                  and{" "}
+                  <Link
+                    href="/privacy"
+                    style={{ ...styles.inlineLink, color: primaryColour }}
+                  >
+                    privacy policy
+                  </Link>
+                  .
+                </span>
+              </label>
+
+              <div style={styles.checkoutStatusBox}>
+                <div style={styles.checkoutStatusHeader}>
+                  <strong>Checkout checklist</strong>
+                  <span
+                    style={{
+                      ...styles.checkoutStatusPill,
+                      background: checkoutReady ? "#dcfce7" : "#fff7ed",
+                      borderColor: checkoutReady ? "#bbf7d0" : "#fed7aa",
+                      color: checkoutReady ? "#166534" : "#9a3412",
+                    }}
+                  >
+                    {checkoutReady ? "Ready" : "Not ready yet"}
+                  </span>
+                </div>
+
+                <div style={styles.checkoutChecklist}>
+                  {checkoutChecklist.map((item) => (
+                    <div key={item.label} style={styles.checkoutChecklistItem}>
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          ...styles.checkoutDot,
+                          background: item.complete ? "#16a34a" : "#f59e0b",
+                        }}
+                      >
+                        {item.complete ? "✓" : "!"}
+                      </span>
+
+                      <span>{item.label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <p style={styles.checkoutHelpText}>{nextCheckoutHelp}</p>
+              </div>
+
+              <button
+                className="public-raffle-primary-button"
+                type="button"
+                onClick={reserveTickets}
+                disabled={saving || !checkoutReady}
+                style={{
+                  ...brandedPrimaryButtonStyle,
+                  opacity: saving || !checkoutReady ? 0.6 : 1,
+                  cursor: saving || !checkoutReady ? "not-allowed" : "pointer",
+                }}
+              >
+                {saving ? "Redirecting to checkout..." : "Reserve and pay"}
+              </button>
+            </div>
+          </section>
 
           {reservationMessage ? (
             <div style={styles.success}>{reservationMessage}</div>
@@ -2282,6 +2531,7 @@ export default function PublicRafflePage({ slug }: Props) {
     </div>
   );
 }
+
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
@@ -2564,6 +2814,146 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     lineHeight: 1.65,
     boxShadow: "0 8px 24px rgba(15,23,42,0.05)",
+  },
+
+  buyingGuide: {
+    padding: 24,
+    borderRadius: 28,
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 48%, #eff6ff 100%)",
+    border: "1px solid #dbeafe",
+    boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
+    display: "grid",
+    gap: 18,
+  },
+
+  buyingGuideHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 16,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+
+  guideKicker: {
+    margin: 0,
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.1em",
+  },
+
+  guideTitle: {
+    margin: "4px 0 0",
+    color: "#0f172a",
+    fontSize: "clamp(26px, 5vw, 38px)",
+    lineHeight: 1,
+    letterSpacing: "-0.055em",
+    fontWeight: 950,
+  },
+
+  guideLead: {
+    margin: "10px 0 0",
+    maxWidth: 760,
+    color: "#475569",
+    fontSize: 15,
+    lineHeight: 1.65,
+    fontWeight: 700,
+  },
+
+  guideBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "10px 14px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  guideGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: 12,
+  },
+
+  guideStepCard: {
+    display: "grid",
+    gridTemplateColumns: "42px minmax(0, 1fr)",
+    gap: 12,
+    alignItems: "flex-start",
+    padding: 14,
+    borderRadius: 20,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+
+  guideStepNumber: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    color: "#ffffff",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 16,
+    fontWeight: 950,
+    boxShadow: "0 8px 18px rgba(15,23,42,0.12)",
+  },
+
+  guideStepTitle: {
+    display: "block",
+    color: "#0f172a",
+    fontSize: 15,
+    lineHeight: 1.25,
+    fontWeight: 950,
+  },
+
+  guideStepText: {
+    margin: "5px 0 0",
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.5,
+    fontWeight: 700,
+  },
+
+  sectionIntroRow: {
+    display: "flex",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+
+  sectionStepBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 34,
+    padding: "0 12px",
+    borderRadius: 999,
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    whiteSpace: "nowrap",
+    boxShadow: "0 8px 18px rgba(15,23,42,0.12)",
+  },
+
+  sectionHelpText: {
+    margin: "-6px 0 4px",
+    color: "#64748b",
+    fontSize: 15,
+    lineHeight: 1.65,
+    fontWeight: 700,
+  },
+
+  checkoutSection: {
+    display: "grid",
+    gap: 14,
   },
 
   fiftyFiftyPanel: {
@@ -2919,21 +3309,38 @@ const styles: Record<string, React.CSSProperties> = {
   legalQuestionBox: {
     padding: 20,
     borderRadius: 22,
-    background: "#eff6ff",
-    border: "1px solid #bfdbfe",
+    background: "#fffbeb",
+    border: "1px solid #fde68a",
     display: "grid",
     gap: 12,
+    boxShadow: "0 10px 24px rgba(245,158,11,0.08)",
+  },
+
+  legalQuestionHeader: {
+    display: "flex",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
   },
 
   legalQuestionTitle: {
-    color: "#1d4ed8",
+    color: "#92400e",
     fontWeight: 950,
   },
 
-  legalQuestionText: {
-    color: "#1e40af",
+  legalQuestionHelp: {
+    margin: "4px 0 0",
+    color: "#92400e",
+    fontSize: 14,
+    lineHeight: 1.55,
     fontWeight: 700,
+  },
+
+  legalQuestionText: {
+    color: "#78350f",
+    fontWeight: 850,
     lineHeight: 1.65,
+    fontSize: 17,
   },
 
   freeEntryBox: {
@@ -2978,6 +3385,72 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid #e2e8f0",
     background: "#ffffff",
     lineHeight: 1.6,
+  },
+
+  checkoutStatusBox: {
+    padding: 16,
+    borderRadius: 20,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    display: "grid",
+    gap: 12,
+    boxShadow: "0 8px 22px rgba(15,23,42,0.04)",
+  },
+
+  checkoutStatusHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    alignItems: "center",
+    color: "#0f172a",
+  },
+
+  checkoutStatusPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "7px 11px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  checkoutChecklist: {
+    display: "grid",
+    gap: 8,
+  },
+
+  checkoutChecklistItem: {
+    display: "flex",
+    gap: 10,
+    alignItems: "center",
+    color: "#334155",
+    fontWeight: 750,
+    lineHeight: 1.45,
+  },
+
+  checkoutDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 999,
+    color: "#ffffff",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 12,
+    fontWeight: 950,
+    flexShrink: 0,
+  },
+
+  checkoutHelpText: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.55,
+    fontWeight: 750,
   },
 
   inlineLink: {
