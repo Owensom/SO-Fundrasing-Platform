@@ -64,8 +64,8 @@ export default function RootLayout({
             }}
           >
             <Link
-              href="/"
-              aria-label="SO Fundraising Platform home"
+              href="/public-exit?continueTo=/admin"
+              aria-label="SO Fundraising Platform organiser/admin area"
               style={{
                 display: "inline-flex",
                 maxWidth: "100%",
