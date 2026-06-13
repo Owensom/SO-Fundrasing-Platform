@@ -146,7 +146,7 @@ function getStockLabel(product: MerchandiseProduct) {
   const remaining = getStockRemaining(product);
 
   if (remaining === null) {
-    return "Unlimited / not tracked";
+    return "Manual / not limited";
   }
 
   if (remaining === 1) {
@@ -169,6 +169,10 @@ function getPublicProductHref(product: MerchandiseProduct) {
   return `/m/${encodeURIComponent(product.tenant_slug)}/${encodeURIComponent(
     product.slug,
   )}`;
+}
+
+function getPublicShopHref(tenantSlug: string) {
+  return `/m/${encodeURIComponent(tenantSlug)}`;
 }
 
 async function requireTenantAccess() {
@@ -276,7 +280,7 @@ export default async function AdminMerchandisePage() {
             <div style={styles.badgeRow}>
               <span style={styles.statusBadge}>Merchandise / Shop</span>
               <span style={styles.planBadge}>{getTierLabel(tier)} plan</span>
-              <span style={styles.phaseBadge}>Phase 7A setup</span>
+              <span style={styles.phaseBadge}>Public display live</span>
             </div>
 
             <Link href="/admin" style={styles.secondaryButton}>
@@ -289,17 +293,18 @@ export default async function AdminMerchandisePage() {
           </h1>
 
           <p style={styles.heroDescription}>
-            Set up tenant-branded merchandise products before public shop,
-            checkout, stock handling and Stripe collection are connected in
-            later phases.
+            Create and manage merchandise products for the public shop. Published
+            products now appear on the public shop and product pages. Secure
+            checkout, order records, stock automation and fulfilment controls
+            will be added in later controlled phases.
           </p>
 
           <div className="merchandise-hero-stats" style={styles.heroStats}>
             <StatCard label="Products" value={products.length} />
             <StatCard label="Published" value={publishedProducts.length} />
-            <StatCard label="Sold quantity" value={soldQuantity} />
+            <StatCard label="Manual sold quantity" value={soldQuantity} />
             <StatCard
-              label="Tracked estimate"
+              label="Manual estimate"
               value={formatMoney(estimatedRevenueCents)}
             />
           </div>
@@ -310,6 +315,12 @@ export default async function AdminMerchandisePage() {
             </div>
             <div>
               <strong>Plan:</strong> {getTierLabel(tier)}
+            </div>
+            <div>
+              <strong>Public shop:</strong>{" "}
+              {merchandiseCapability.allowed
+                ? getPublicShopHref(tenantSlug)
+                : "Unavailable on this plan"}
             </div>
           </div>
         </div>
@@ -337,7 +348,10 @@ export default async function AdminMerchandisePage() {
         </section>
       ) : (
         <>
-          <section style={styles.readinessPanel}>
+          <section
+            className="merchandise-readiness-panel"
+            style={styles.readinessPanel}
+          >
             <div style={styles.readinessHeader}>
               <div>
                 <div style={styles.readinessEyebrow}>Product setup</div>
@@ -345,15 +359,24 @@ export default async function AdminMerchandisePage() {
                 <h2 style={styles.readinessTitle}>Merchandise workspace</h2>
 
                 <p style={styles.readinessIntro}>
-                  Add or edit product records here. Public shop display and
-                  checkout will only be connected after this admin model is
-                  stable.
+                  Published products are visible on the public shop. This is
+                  still a display-only merchandise phase: supporters can view
+                  items and contact the organiser, but they cannot buy online
+                  yet.
                 </p>
               </div>
 
               <div className="merchandise-actions" style={styles.panelActions}>
                 <Link href="/admin/merchandise/new" style={styles.primaryButton}>
                   New product →
+                </Link>
+
+                <Link
+                  href={getPublicShopHref(tenantSlug)}
+                  target="_blank"
+                  style={styles.secondaryPanelButton}
+                >
+                  View public shop →
                 </Link>
 
                 <Link
@@ -365,26 +388,50 @@ export default async function AdminMerchandisePage() {
               </div>
             </div>
 
-            <div className="merchandise-readiness-grid" style={styles.readinessGrid}>
+            <div
+              className="merchandise-readiness-grid"
+              style={styles.readinessGrid}
+            >
               <ReadinessItem
                 label="Admin setup"
                 value="Live"
-                detail="Product records, images, prices, stock and options can be managed."
+                detail="Product records, images, prices, stock notes and options can be managed."
                 tone="good"
               />
 
               <ReadinessItem
-                label="Public display"
-                value="Display only"
-                detail="Published product pages can be previewed, but purchasing is not connected yet."
-                tone="neutral"
+                label="Public shop"
+                value="Live display"
+                detail="Published products appear on the tenant shop and product pages."
+                tone="good"
               />
 
               <ReadinessItem
                 label="Checkout"
                 value="Not connected"
-                detail="Stripe checkout, receipts and stock decrementing will come in a later phase."
+                detail="Stripe checkout, receipts, order records, stock decrementing and fulfilment are not live yet."
                 tone="warning"
+              />
+
+              <ReadinessItem
+                label="Stock"
+                value="Manual for now"
+                detail="Sold quantity is not updated automatically until checkout and order handling are built."
+                tone="neutral"
+              />
+
+              <ReadinessItem
+                label="Branding"
+                value="Subscription-gated"
+                detail="Public shop branding follows the same advanced-branding rules as the campaign hub."
+                tone="good"
+              />
+
+              <ReadinessItem
+                label="Event fulfilment"
+                value="Later phase"
+                detail="Event-linked collection, table delivery and seat delivery are planned for a later phase."
+                tone="neutral"
               />
             </div>
           </section>
@@ -396,8 +443,9 @@ export default async function AdminMerchandisePage() {
               <h2 style={styles.emptyTitle}>No merchandise products yet</h2>
 
               <p style={styles.emptyText}>
-                Create your first merchandise product. It will remain admin-only
-                until public shop and checkout phases are added.
+                Create your first merchandise product. Draft products stay
+                admin-only. Published products appear on the public shop, but
+                online checkout is not connected yet.
               </p>
 
               <Link href="/admin/merchandise/new" style={styles.emptyButton}>
@@ -405,11 +453,19 @@ export default async function AdminMerchandisePage() {
               </Link>
             </section>
           ) : (
-            <section id="merchandise-products" style={styles.sectionCard}>
+            <section
+              id="merchandise-products"
+              className="merchandise-section-card"
+              style={styles.sectionCard}
+            >
               <div style={styles.sectionHeader}>
                 <div>
                   <div style={styles.sectionEyebrow}>Products</div>
                   <h2 style={styles.sectionTitle}>Product catalogue</h2>
+                  <p style={styles.sectionIntro}>
+                    Published products are public. Draft products are private.
+                    The public pages are display-only until checkout is added.
+                  </p>
                 </div>
               </div>
 
@@ -421,23 +477,26 @@ export default async function AdminMerchandisePage() {
             </section>
           )}
 
-          <section className="merchandise-summary-grid" style={styles.summaryGrid}>
+          <section
+            className="merchandise-summary-grid"
+            style={styles.summaryGrid}
+          >
             <SummaryCard
               label="Draft products"
               value={draftProducts.length}
-              text="Not visible publicly."
+              text="Admin-only until published."
             />
 
             <SummaryCard
               label="Published products"
               value={publishedProducts.length}
-              text="Ready for public shop display later."
+              text="Visible on the public shop."
             />
 
             <SummaryCard
               label="Closed products"
               value={closedProducts.length}
-              text="Retained for reporting/history."
+              text="Hidden from the active public shop but retained for history."
             />
           </section>
         </>
@@ -540,6 +599,8 @@ function ProductCard({ product }: { product: MerchandiseProduct }) {
                 <span style={styles.pricePill}>
                   {formatMoney(product.price_cents, product.currency)}
                 </span>
+
+                <span style={styles.displayOnlyPill}>Display-only</span>
               </div>
 
               <h3 style={styles.itemTitle}>{product.title}</h3>
@@ -550,17 +611,23 @@ function ProductCard({ product }: { product: MerchandiseProduct }) {
             </div>
           </div>
 
-          <div className="merchandise-item-meta-grid" style={styles.itemMetaGrid}>
+          <div
+            className="merchandise-item-meta-grid"
+            style={styles.itemMetaGrid}
+          >
             <InfoBlock label="Stock" value={getStockLabel(product)} />
 
-            <InfoBlock label="Sold" value={product.sold_quantity} />
+            <InfoBlock label="Manual sold" value={product.sold_quantity} />
 
-            <InfoBlock label="Sizes" value={sizes.length ? sizes.join(", ") : "Not set"} />
+            <InfoBlock
+              label="Sizes"
+              value={sizes.length ? sizes.join(", ") : "Not set"}
+            />
 
             <InfoBlock label="Created" value={formatDate(product.created_at)} />
           </div>
 
-          <div style={styles.itemActions}>
+          <div className="merchandise-item-actions" style={styles.itemActions}>
             <Link
               href={`/admin/merchandise/${encodeURIComponent(product.id)}`}
               style={styles.editButton}
@@ -570,11 +637,11 @@ function ProductCard({ product }: { product: MerchandiseProduct }) {
 
             {canPreviewPublic ? (
               <Link href={publicHref} target="_blank" style={styles.publicButton}>
-                View public page →
+                View public product →
               </Link>
             ) : (
               <span style={styles.disabledPublicButton}>
-                Public page available when published
+                Public product page available when published
               </span>
             )}
           </div>
@@ -673,7 +740,9 @@ const responsiveStyles = `
 
   .admin-merchandise-page .merchandise-actions,
   .admin-merchandise-page .merchandise-item-actions {
+    display: grid !important;
     grid-template-columns: 1fr !important;
+    width: 100% !important;
   }
 }
 `;
@@ -1107,6 +1176,14 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
+  sectionIntro: {
+    margin: "6px 0 0",
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.45,
+    fontWeight: 730,
+  },
+
   itemsList: {
     display: "grid",
     gap: 12,
@@ -1203,6 +1280,20 @@ const styles: Record<string, CSSProperties> = {
     background: "#eff6ff",
     color: "#1d4ed8",
     border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  displayOnlyPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    width: "fit-content",
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#f8fafc",
+    color: "#475569",
+    border: "1px solid #e2e8f0",
     fontSize: 12,
     fontWeight: 950,
     whiteSpace: "nowrap",
