@@ -1,7 +1,8 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import ImageFocusUploadField from "@/components/admin/ImageFocusUploadField";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { getTenantSettings } from "@/lib/tenant-settings";
 import {
@@ -20,6 +21,8 @@ type TenantSettingsLike = {
   subscription_status?: string | null;
   platform_owner_bypass?: boolean | null;
 };
+
+const STANDARD_SIZE_OPTIONS = ["XS", "S", "M", "L", "XL", "XXL"];
 
 function cleanText(value: unknown, fallback = "") {
   const clean = String(value ?? "").trim();
@@ -159,9 +162,9 @@ export default async function NewMerchandiseProductPage({
         </section>
 
         <section style={styles.card}>
-          <p style={styles.kicker}>Pricing and stock</p>
+          <p style={styles.kicker}>Pricing, currency and stock</p>
 
-          <div className="form-grid" style={styles.formGrid}>
+          <div className="pricing-grid" style={styles.pricingGrid}>
             <Field label="Price" helper="Enter pounds, for example 15 or 15.00.">
               <input
                 name="price"
@@ -200,45 +203,55 @@ export default async function NewMerchandiseProductPage({
         </section>
 
         <section style={styles.card}>
-          <p style={styles.kicker}>Image setup</p>
+          <p style={styles.kicker}>Size options</p>
+
+          <p style={styles.sectionHelp}>
+            Use sizes for clothing such as T-shirts, hoodies and tops. Leave
+            blank for products without sizes.
+          </p>
+
+          <div className="size-grid" style={styles.sizeGrid}>
+            {STANDARD_SIZE_OPTIONS.map((size) => (
+              <label key={size} style={styles.sizeOption}>
+                <input
+                  type="checkbox"
+                  name="size_options"
+                  value={size}
+                  style={styles.checkbox}
+                />
+                <span>{size}</span>
+              </label>
+            ))}
+          </div>
 
           <Field
-            label="Image URL"
-            helper="Use a Cloudinary/image URL for now. Platform image upload can be wired later."
+            label="Other sizes or options"
+            helper="Optional. Separate with commas, for example Age 11-12, Age 13-14, One size."
           >
             <input
-              name="image_url"
-              type="url"
-              placeholder="https://..."
+              name="custom_size_options"
+              type="text"
+              placeholder="Optional custom sizes"
               style={styles.input}
             />
           </Field>
+        </section>
 
-          <div className="form-grid" style={styles.formGrid}>
-            <Field label="Image focus X" helper="0 left, 50 centre, 100 right.">
-              <input
-                name="image_focus_x"
-                type="number"
-                min="0"
-                max="100"
-                step="1"
-                defaultValue="50"
-                style={styles.input}
-              />
-            </Field>
+        <section style={styles.card}>
+          <p style={styles.kicker}>Image setup</p>
 
-            <Field label="Image focus Y" helper="0 top, 50 centre, 100 bottom.">
-              <input
-                name="image_focus_y"
-                type="number"
-                min="0"
-                max="100"
-                step="1"
-                defaultValue="50"
-                style={styles.input}
-              />
-            </Field>
-          </div>
+          <ImageFocusUploadField
+            currentImageUrl=""
+            currentFocusX={50}
+            currentFocusY={50}
+            imageFieldName="image_url"
+            focusXFieldName="image_focus_x"
+            focusYFieldName="image_focus_y"
+            label="Product image"
+            previewAlt="Merchandise product image preview"
+            subscriptionTier={tier}
+            customImagesAllowed={merchandiseCapability.allowed}
+          />
         </section>
 
         <section style={styles.actions}>
@@ -264,7 +277,7 @@ function Field({
   label: string;
   helper?: string;
   required?: boolean;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <label style={styles.field}>
@@ -301,6 +314,12 @@ const responsiveStyles = `
   max-width: 100%;
 }
 
+@media (max-width: 860px) {
+  .admin-merchandise-form-page .pricing-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
 @media (max-width: 720px) {
   .admin-merchandise-form-page {
     padding: 18px 12px 44px !important;
@@ -316,7 +335,9 @@ const responsiveStyles = `
     line-height: 0.98 !important;
   }
 
-  .admin-merchandise-form-page .form-grid {
+  .admin-merchandise-form-page .form-grid,
+  .admin-merchandise-form-page .pricing-grid,
+  .admin-merchandise-form-page .size-grid {
     grid-template-columns: 1fr !important;
   }
 
@@ -428,10 +449,54 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.08em",
   },
 
+  sectionHelp: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 740,
+  },
+
   formGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 14,
+  },
+
+  pricingGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 150px 1fr",
+    gap: 14,
+    alignItems: "start",
+  },
+
+  sizeGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
+    gap: 8,
+  },
+
+  sizeOption: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    minHeight: 44,
+    padding: "9px 10px",
+    borderRadius: 14,
+    background: "#f8fafc",
+    border: "1px solid #dbeafe",
+    color: "#0f172a",
+    fontSize: 13,
+    fontWeight: 950,
+    cursor: "pointer",
+  },
+
+  checkbox: {
+    width: 16,
+    height: 16,
+    accentColor: "#1683f8",
+    flexShrink: 0,
   },
 
   field: {
