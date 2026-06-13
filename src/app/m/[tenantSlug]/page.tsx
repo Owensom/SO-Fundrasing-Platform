@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { query, queryOne } from "@/lib/db";
-import { getTenantSettings } from "@/lib/tenant-settings";
 import {
   checkSubscriptionCapability,
   normaliseSubscriptionTier,
@@ -113,24 +112,6 @@ function getDisplayName(settings: TenantPublicSettings | null) {
   return cleanText(settings?.public_display_name) || "SO Fundraising Platform";
 }
 
-function getBestLogo({
-  settings,
-  canUseAdvancedBranding,
-}: {
-  settings: TenantPublicSettings | null;
-  canUseAdvancedBranding: boolean;
-}) {
-  if (!canUseAdvancedBranding) {
-    return "/brand/so-logo-mark.png";
-  }
-
-  return (
-    cleanText(settings?.public_logo_mark_url) ||
-    cleanText(settings?.public_logo_url) ||
-    "/brand/so-logo-mark.png"
-  );
-}
-
 function getProductHref(product: MerchandiseProduct) {
   return `/m/${encodeURIComponent(product.tenant_slug)}/${encodeURIComponent(
     product.slug,
@@ -181,6 +162,20 @@ function getImageObjectPosition(product: MerchandiseProduct) {
   return `${normaliseFocus(product.image_focus_x)}% ${normaliseFocus(
     product.image_focus_y,
   )}%`;
+}
+
+function getProductImageSrc({
+  product,
+  canUseProductImages,
+}: {
+  product: MerchandiseProduct;
+  canUseProductImages: boolean;
+}) {
+  if (!canUseProductImages) {
+    return "";
+  }
+
+  return cleanText(product.image_url);
 }
 
 async function getTenantPublicSettings(tenantSlug: string) {
@@ -285,13 +280,22 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
   const canUseProductImages = subscriptionTier !== "community";
 
   const displayName = getDisplayName(tenantSettings);
-  const tagline =
+
+  const publicTagline =
     cleanText(tenantSettings?.public_tagline) ||
-    "Supporting causes through premium fundraising campaigns.";
-  const logoUrl = getBestLogo({
-    settings: tenantSettings,
-    canUseAdvancedBranding,
-  });
+    "Browse live fundraising campaigns and merchandise for this organisation.";
+
+  const publicFooterText = canUseAdvancedBranding
+    ? cleanText(tenantSettings?.public_footer_text)
+    : "";
+
+  const publicLogoUrl = canUseAdvancedBranding
+    ? cleanText(tenantSettings?.public_logo_url)
+    : "";
+
+  const publicLogoMarkUrl = canUseAdvancedBranding
+    ? cleanText(tenantSettings?.public_logo_mark_url)
+    : "";
 
   const primaryColour = canUseAdvancedBranding
     ? normaliseHexColour(tenantSettings?.public_primary_colour, "#1683F8")
@@ -301,127 +305,326 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
     ? normaliseHexColour(tenantSettings?.public_accent_colour, "#FACC15")
     : "#FACC15";
 
+  const brandLogoSrc = publicLogoMarkUrl || publicLogoUrl;
   const primaryTextColour = getReadableTextColour(primaryColour);
+  const accentTextColour = getReadableTextColour(accentColour);
+
   const contactEmail = cleanText(tenantSettings?.public_contact_email);
   const contactName = cleanText(tenantSettings?.public_contact_name);
-  const footerText = canUseAdvancedBranding
-    ? cleanText(tenantSettings?.public_footer_text)
-    : "";
 
-  const heroBackground = canUseAdvancedBranding
-    ? `radial-gradient(circle at bottom right, ${accentColour}26, transparent 38%), radial-gradient(circle at top left, ${primaryColour}26, transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #111827 100%)`
-    : "radial-gradient(circle at bottom right, rgba(250,204,21,0.14), transparent 38%), radial-gradient(circle at top left, rgba(22,131,248,0.18), transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #172554 100%)";
+  const brandedPageStyle: CSSProperties = canUseAdvancedBranding
+    ? {
+        ...styles.page,
+        background: `radial-gradient(circle at top left, ${primaryColour}12, transparent 32%), radial-gradient(circle at top right, ${accentColour}14, transparent 30%), linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%)`,
+      }
+    : {
+        ...styles.page,
+        background:
+          "radial-gradient(circle at top left, rgba(37,99,235,0.10), transparent 34%), radial-gradient(circle at top right, rgba(250,204,21,0.08), transparent 30%), #f8fafc",
+      };
+
+  const brandedHeroStyle: CSSProperties = canUseAdvancedBranding
+    ? {
+        ...styles.hero,
+        background: `
+          radial-gradient(circle at 98% 104%, ${primaryColour}58, transparent 28%),
+          radial-gradient(circle at 8% 12%, ${accentColour}28, transparent 25%),
+          linear-gradient(126deg, #060816 0%, #0f172a 52%, #111827 100%)
+        `,
+      }
+    : {
+        ...styles.hero,
+        background:
+          "radial-gradient(circle at bottom right, rgba(37,99,235,0.24), transparent 40%), radial-gradient(circle at top left, rgba(250,204,21,0.10), transparent 32%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #172554 100%)",
+      };
+
+  const brandedPrimaryActionStyle: CSSProperties = canUseAdvancedBranding
+    ? {
+        ...styles.primaryButton,
+        background: `linear-gradient(135deg, ${primaryColour} 0%, ${accentColour} 135%)`,
+        border: `1px solid ${primaryColour}`,
+        color: primaryTextColour,
+        boxShadow: `0 18px 34px ${primaryColour}36`,
+      }
+    : {
+        ...styles.primaryButton,
+        background: "linear-gradient(135deg, #1683F8 0%, #2563eb 100%)",
+        border: "1px solid #1683F8",
+        color: "#ffffff",
+        boxShadow: "0 18px 34px rgba(22,131,248,0.22)",
+      };
+
+  const brandedContactButtonStyle: CSSProperties = canUseAdvancedBranding
+    ? {
+        ...styles.contactButton,
+        background: `linear-gradient(135deg, ${primaryColour} 0%, ${accentColour} 130%)`,
+        border: `1px solid ${primaryColour}`,
+        color: primaryTextColour,
+        boxShadow: `0 18px 34px ${primaryColour}28`,
+      }
+    : {
+        ...styles.contactButton,
+        background: "linear-gradient(135deg, #1683F8 0%, #2563eb 100%)",
+        border: "1px solid #1683F8",
+        color: "#ffffff",
+        boxShadow: "0 18px 34px rgba(22,131,248,0.20)",
+      };
 
   return (
-    <main className="public-merchandise-shop-page" style={styles.page}>
+    <main className="public-merchandise-shop-page" style={brandedPageStyle}>
       <style>{responsiveStyles}</style>
 
-      <section
-        className="shopHero"
-        style={{
-          ...styles.hero,
-          background: heroBackground,
-        }}
-      >
-        <div style={styles.heroCopy}>
-          <Link href={`/c/${tenantSlug}`} style={styles.backLink}>
-            ← Back to all campaigns
-          </Link>
-
-          <div className="heroBrandRow" style={styles.heroBrandRow}>
-            <div
-              style={{
-                ...styles.logoPlate,
-                borderColor: canUseAdvancedBranding
-                  ? `${accentColour}66`
-                  : "rgba(255,255,255,0.55)",
-              }}
-            >
-              <img src={logoUrl} alt={displayName} style={styles.logoImage} />
-            </div>
-
-            <div style={styles.heroBrandCopy}>
-              <p
-                style={{
-                  ...styles.heroKicker,
-                  color: canUseAdvancedBranding ? accentColour : "#facc15",
-                  borderColor: canUseAdvancedBranding
-                    ? `${accentColour}88`
-                    : "rgba(250,204,21,0.72)",
-                }}
-              >
-                Merchandise / Shop
-              </p>
-
-              <h1 className="shopTitle" style={styles.heroTitle}>
-                {displayName} shop
-              </h1>
-            </div>
+      <section className="brandHeader" style={styles.brandHeader}>
+        <div className="brandIdentity" style={styles.brandIdentity}>
+          <div
+            className="brandLogoPlate"
+            style={{
+              ...styles.brandLogoPlate,
+              borderColor: canUseAdvancedBranding
+                ? `${accentColour}66`
+                : "rgba(226,232,240,0.96)",
+            }}
+          >
+            {brandLogoSrc ? (
+              <img
+                src={brandLogoSrc}
+                alt={displayName}
+                style={styles.brandLogo}
+              />
+            ) : (
+              <img
+                src="/brand/so-logo-mark.png"
+                alt="SO Fundraising Platform"
+                style={styles.brandLogo}
+              />
+            )}
           </div>
 
-          <p style={styles.heroText}>
-            Browse published merchandise items. Online checkout is not connected
-            yet, so supporters can view products and contact the organiser.
-          </p>
-
-          <div className="heroStats" style={styles.heroStats}>
-            <div style={styles.heroStat}>
-              <span style={styles.heroStatLabel}>Published items</span>
-              <strong style={styles.heroStatValue}>{products.length}</strong>
-            </div>
-
-            <div style={styles.heroStat}>
-              <span style={styles.heroStatLabel}>Checkout</span>
-              <strong style={styles.heroStatValue}>Coming soon</strong>
-            </div>
+          <div style={styles.brandCopy}>
+            <h1 className="brandTitle" style={styles.brandTitle}>
+              {displayName}
+            </h1>
+            <p style={styles.brandTagline}>{publicTagline}</p>
           </div>
         </div>
 
-        <aside style={styles.heroPanel}>
-          <span style={styles.panelIcon}>🛍</span>
+        <div
+          className="brandFeature"
+          style={{
+            ...styles.brandFeature,
+            borderColor: canUseAdvancedBranding
+              ? `${accentColour}78`
+              : "rgba(191,219,254,0.72)",
+            background: canUseAdvancedBranding
+              ? `linear-gradient(135deg, ${accentColour}12, #ffffff 78%)`
+              : "linear-gradient(135deg, rgba(239,246,255,0.92), #ffffff 78%)",
+          }}
+        >
+          <span
+            style={{
+              ...styles.brandFeatureIcon,
+              color: canUseAdvancedBranding ? primaryColour : "#2563eb",
+            }}
+          >
+            🛍
+          </span>
 
-          <p style={styles.panelKicker}>Display-only phase</p>
-
-          <h2 style={styles.panelTitle}>Shop browsing is live</h2>
-
-          <p style={styles.panelText}>
-            Products are visible publicly. Secure merchandise checkout, stock
-            handling, receipts and fulfilment will be added later.
-          </p>
-
-          {contactEmail ? (
-            <a
-              href={`mailto:${contactEmail}?subject=${encodeURIComponent(
-                `Merchandise enquiry for ${displayName}`,
-              )}`}
+          <div style={styles.brandFeatureCopy}>
+            <span
               style={{
-                ...styles.heroButton,
-                background: primaryColour,
-                borderColor: primaryColour,
-                color: primaryTextColour,
+                ...styles.brandFeatureKicker,
+                color: canUseAdvancedBranding ? primaryColour : "#2563eb",
               }}
             >
-              Contact {contactName || "organiser"} →
-            </a>
-          ) : (
-            <Link
-              href={`/c/${tenantSlug}/contact`}
-              style={{
-                ...styles.heroButton,
-                background: primaryColour,
-                borderColor: primaryColour,
-                color: primaryTextColour,
-              }}
-            >
-              Contact organiser →
-            </Link>
-          )}
-        </aside>
+              Merchandise shop
+            </span>
+
+            <strong style={styles.brandFeatureTitle}>
+              {products.length} {products.length === 1 ? "item" : "items"}
+            </strong>
+
+            <span style={styles.brandFeatureText}>
+              Public browsing is live. Checkout is coming soon.
+            </span>
+          </div>
+        </div>
       </section>
 
-      <section className="shopHeader" style={styles.shopHeader}>
+      <section className="shopHero" style={brandedHeroStyle}>
+        <div style={styles.heroGlow} />
+        <div
+          style={{
+            ...styles.heroLineOne,
+            borderColor: canUseAdvancedBranding
+              ? `${accentColour}24`
+              : "rgba(250,204,21,0.16)",
+          }}
+        />
+        <div
+          style={{
+            ...styles.heroLineTwo,
+            borderColor: canUseAdvancedBranding
+              ? `${primaryColour}1E`
+              : "rgba(37,99,235,0.16)",
+          }}
+        />
+
+        <div className="heroMainGrid" style={styles.heroMainGrid}>
+          <div style={styles.heroCopy}>
+            <Link href={`/c/${tenantSlug}`} style={styles.backLink}>
+              ← Back to all campaigns
+            </Link>
+
+            <div
+              style={{
+                ...styles.eyebrow,
+                color: canUseAdvancedBranding ? accentColour : "#facc15",
+                borderColor: canUseAdvancedBranding
+                  ? `${accentColour}A8`
+                  : "rgba(250,204,21,0.72)",
+                background: canUseAdvancedBranding
+                  ? `${primaryColour}1A`
+                  : "rgba(15,23,42,0.34)",
+              }}
+            >
+              Merchandise / Shop
+            </div>
+
+            <h2 style={styles.heroTitle}>{displayName} shop</h2>
+
+            <p style={styles.subtitle}>
+              Browse published merchandise items. Online checkout is not
+              connected yet, so supporters can view products and contact the
+              organiser.
+            </p>
+
+            <div className="heroStats" style={styles.heroStats}>
+              <div style={styles.heroStat}>
+                <span style={styles.heroStatLabel}>Published items</span>
+                <strong style={styles.heroStatValue}>{products.length}</strong>
+              </div>
+
+              <div style={styles.heroStat}>
+                <span style={styles.heroStatLabel}>Checkout</span>
+                <strong style={styles.heroStatValue}>Coming soon</strong>
+              </div>
+            </div>
+          </div>
+
+          <aside style={styles.supportPanel}>
+            <div style={styles.supportPanelHeader}>
+              <span style={styles.supportPanelKicker}>Shop status</span>
+              <h2 style={styles.supportPanelTitle}>Browsing is live</h2>
+            </div>
+
+            <p style={styles.supportPanelText}>
+              Products are visible publicly. Secure merchandise checkout, stock
+              handling, receipts and fulfilment will be added later.
+            </p>
+
+            <div style={styles.supportOptionList}>
+              <a
+                href="#shop-items"
+                style={styles.supportOptionLink}
+              >
+                <div
+                  style={{
+                    ...styles.supportIcon,
+                    background: canUseAdvancedBranding
+                      ? `linear-gradient(135deg, ${primaryColour}, ${accentColour})`
+                      : "linear-gradient(135deg, #1683F8, #2563eb)",
+                    borderColor: canUseAdvancedBranding
+                      ? `${primaryColour}55`
+                      : "rgba(147,197,253,0.45)",
+                    color: canUseAdvancedBranding ? primaryTextColour : "#ffffff",
+                  }}
+                >
+                  ↓
+                </div>
+
+                <div style={styles.supportOptionCopy}>
+                  <strong>View shop items</strong>
+                  <span>Browse the published merchandise below.</span>
+                </div>
+
+                <span style={styles.supportChevron}>›</span>
+              </a>
+
+              {contactEmail ? (
+                <a
+                  href={`mailto:${contactEmail}?subject=${encodeURIComponent(
+                    `Merchandise enquiry for ${displayName}`,
+                  )}`}
+                  style={styles.supportOptionLink}
+                >
+                  <div
+                    style={{
+                      ...styles.supportIcon,
+                      background: canUseAdvancedBranding
+                        ? `linear-gradient(135deg, ${accentColour}, ${primaryColour})`
+                        : "linear-gradient(135deg, #FACC15, #1683F8)",
+                      borderColor: canUseAdvancedBranding
+                        ? `${accentColour}66`
+                        : "rgba(250,204,21,0.50)",
+                      color: canUseAdvancedBranding
+                        ? accentTextColour
+                        : "#0f172a",
+                    }}
+                  >
+                    ✉
+                  </div>
+
+                  <div style={styles.supportOptionCopy}>
+                    <strong>Contact {contactName || "organiser"}</strong>
+                    <span>Ask a question before checkout is added.</span>
+                  </div>
+
+                  <span style={styles.supportChevron}>›</span>
+                </a>
+              ) : (
+                <Link href={`/c/${tenantSlug}/contact`} style={styles.supportOptionLink}>
+                  <div
+                    style={{
+                      ...styles.supportIcon,
+                      background: canUseAdvancedBranding
+                        ? `linear-gradient(135deg, ${accentColour}, ${primaryColour})`
+                        : "linear-gradient(135deg, #FACC15, #1683F8)",
+                      borderColor: canUseAdvancedBranding
+                        ? `${accentColour}66`
+                        : "rgba(250,204,21,0.50)",
+                      color: canUseAdvancedBranding
+                        ? accentTextColour
+                        : "#0f172a",
+                    }}
+                  >
+                    ✉
+                  </div>
+
+                  <div style={styles.supportOptionCopy}>
+                    <strong>Contact organiser</strong>
+                    <span>Ask a question before checkout is added.</span>
+                  </div>
+
+                  <span style={styles.supportChevron}>›</span>
+                </Link>
+              )}
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section
+        id="shop-items"
+        className="shopHeader"
+        style={styles.shopHeader}
+      >
         <div>
-          <p style={{ ...styles.kicker, color: primaryColour }}>
+          <p
+            style={{
+              ...styles.kicker,
+              color: canUseAdvancedBranding ? primaryColour : "#2563eb",
+            }}
+          >
             Published merchandise
           </p>
 
@@ -437,9 +640,11 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
           style={{
             ...styles.countPill,
             borderColor: canUseAdvancedBranding
-              ? `${accentColour}88`
+              ? `${accentColour}78`
               : "#bfdbfe",
-            background: canUseAdvancedBranding ? `${accentColour}18` : "#eff6ff",
+            background: canUseAdvancedBranding
+              ? `${accentColour}1A`
+              : "#eff6ff",
           }}
         >
           {products.length} {products.length === 1 ? "item" : "items"}
@@ -452,10 +657,10 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
             <div
               style={{
                 ...styles.emptyIcon,
-                color: primaryColour,
                 background: canUseAdvancedBranding
                   ? `${primaryColour}12`
                   : "rgba(37,99,235,0.10)",
+                color: canUseAdvancedBranding ? primaryColour : "#2563eb",
                 borderColor: canUseAdvancedBranding
                   ? `${primaryColour}24`
                   : "rgba(37,99,235,0.18)",
@@ -472,15 +677,7 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
             </p>
 
             <div className="emptyActions" style={styles.emptyActions}>
-              <Link
-                href={`/c/${tenantSlug}`}
-                style={{
-                  ...styles.primaryButton,
-                  background: primaryColour,
-                  borderColor: primaryColour,
-                  color: primaryTextColour,
-                }}
-              >
+              <Link href={`/c/${tenantSlug}`} style={brandedPrimaryActionStyle}>
                 View campaigns →
               </Link>
 
@@ -495,9 +692,10 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
         ) : (
           products.map((product) => {
             const sizes = getSizeOptions(product);
-            const productImageUrl = canUseProductImages
-              ? cleanText(product.image_url)
-              : "";
+            const productImageUrl = getProductImageSrc({
+              product,
+              canUseProductImages,
+            });
 
             return (
               <article key={product.id} style={styles.productCard}>
@@ -522,7 +720,21 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
 
                 <div style={styles.productBody}>
                   <div style={styles.productTopRow}>
-                    <span style={styles.typePill}>🛍 Merchandise</span>
+                    <span
+                      style={{
+                        ...styles.typePill,
+                        borderColor: canUseAdvancedBranding
+                          ? `${accentColour}70`
+                          : "#bfdbfe",
+                        background: canUseAdvancedBranding
+                          ? `${accentColour}16`
+                          : "#eff6ff",
+                        color: "#0f172a",
+                      }}
+                    >
+                      🛍 Merchandise
+                    </span>
+
                     <span style={styles.statusPill}>Display only</span>
                   </div>
 
@@ -569,12 +781,7 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
                   <div className="productActions" style={styles.productActions}>
                     <Link
                       href={getProductHref(product)}
-                      style={{
-                        ...styles.primaryButton,
-                        background: primaryColour,
-                        borderColor: primaryColour,
-                        color: primaryTextColour,
-                      }}
+                      style={brandedPrimaryActionStyle}
                     >
                       View product →
                     </Link>
@@ -622,17 +829,57 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
         </Link>
       </section>
 
-      {footerText ? (
-        <footer className="shopFooter" style={styles.footerPanel}>
-          <div>
-            <p style={styles.footerBrand}>{displayName}</p>
+      <section className="contactStrip" style={styles.contactStrip}>
+        <div
+          style={{
+            ...styles.contactStripIcon,
+            background: canUseAdvancedBranding
+              ? `${primaryColour}12`
+              : "rgba(37,99,235,0.10)",
+            color: canUseAdvancedBranding ? primaryColour : "#2563eb",
+            borderColor: canUseAdvancedBranding
+              ? `${primaryColour}24`
+              : "rgba(37,99,235,0.18)",
+          }}
+        >
+          ✉
+        </div>
 
-            <p style={styles.footerText}>{footerText}</p>
-          </div>
+        <div style={styles.contactStripCopy}>
+          <p
+            style={{
+              ...styles.contactStripKicker,
+              color: canUseAdvancedBranding ? primaryColour : "#2563eb",
+            }}
+          >
+            Need help from the organiser?
+          </p>
 
-          <Link href={`/c/${tenantSlug}`} style={styles.footerLink}>
-            Back to campaigns →
-          </Link>
+          <h2 style={styles.contactStripTitle}>Contact the organiser</h2>
+
+          <p style={styles.contactStripText}>
+            Questions about merchandise, campaigns, donations, raffles, events
+            or auctions can be sent directly to the organiser.
+          </p>
+        </div>
+
+        <Link
+          href={`/c/${tenantSlug}/contact`}
+          style={brandedContactButtonStyle}
+        >
+          Contact organiser →
+        </Link>
+      </section>
+
+      {publicFooterText ? (
+        <footer
+          className="shopFooter"
+          style={{
+            ...styles.footer,
+            borderColor: `${accentColour}60`,
+          }}
+        >
+          <p style={styles.footerText}>{publicFooterText}</p>
         </footer>
       ) : null}
     </main>
@@ -642,8 +889,8 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
 function MiniMeta({ label, value }: { label: string; value: string }) {
   return (
     <div style={styles.miniMeta}>
-      <span style={styles.miniMetaLabel}>{label}</span>
-      <strong style={styles.miniMetaValue}>{value}</strong>
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
 }
@@ -672,8 +919,10 @@ const responsiveStyles = `
   max-width: 100%;
 }
 
-@media (max-width: 1020px) {
-  .public-merchandise-shop-page .shopHero {
+@media (max-width: 980px) {
+  .public-merchandise-shop-page .brandHeader,
+  .public-merchandise-shop-page .heroMainGrid,
+  .public-merchandise-shop-page .contactStrip {
     grid-template-columns: 1fr !important;
   }
 
@@ -682,27 +931,47 @@ const responsiveStyles = `
   }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 680px) {
   .public-merchandise-shop-page {
-    padding: 14px 10px 40px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 14px 10px 44px !important;
   }
 
+  .public-merchandise-shop-page .brandHeader,
   .public-merchandise-shop-page .shopHero,
   .public-merchandise-shop-page .shopHeader,
   .public-merchandise-shop-page .shopNotice,
-  .public-merchandise-shop-page .shopFooter {
-    padding: 16px !important;
-    border-radius: 24px !important;
+  .public-merchandise-shop-page .contactStrip {
+    padding: 14px !important;
+    border-radius: 22px !important;
   }
 
-  .public-merchandise-shop-page .heroBrandRow {
-    grid-template-columns: 58px minmax(0, 1fr) !important;
-    gap: 11px !important;
+  .public-merchandise-shop-page .brandIdentity {
+    grid-template-columns: 56px minmax(0, 1fr) !important;
+    text-align: left !important;
+    justify-items: stretch !important;
   }
 
-  .public-merchandise-shop-page .shopTitle {
-    font-size: clamp(38px, 13vw, 58px) !important;
-    line-height: 0.96 !important;
+  .public-merchandise-shop-page .brandLogoPlate {
+    width: 56px !important;
+    height: 56px !important;
+    border-radius: 16px !important;
+    padding: 6px !important;
+  }
+
+  .public-merchandise-shop-page .brandTitle {
+    font-size: clamp(26px, 8vw, 38px) !important;
+    letter-spacing: -0.06em !important;
+  }
+
+  .public-merchandise-shop-page .brandFeature {
+    padding: 12px !important;
+  }
+
+  .public-merchandise-shop-page .heroTitle {
+    font-size: clamp(42px, 12vw, 58px) !important;
+    line-height: 0.94 !important;
   }
 
   .public-merchandise-shop-page .heroStats,
@@ -712,57 +981,236 @@ const responsiveStyles = `
     grid-template-columns: 1fr !important;
   }
 
+  .public-merchandise-shop-page .supportPanel {
+    padding: 14px !important;
+  }
+
+  .public-merchandise-shop-page .supportOptionLink {
+    grid-template-columns: 44px minmax(0, 1fr) 18px !important;
+  }
+
   .public-merchandise-shop-page .productImageWrap {
     height: 210px !important;
   }
 
-  .public-merchandise-shop-page .shopHeader,
-  .public-merchandise-shop-page .shopNotice,
-  .public-merchandise-shop-page .shopFooter {
-    display: grid !important;
-    justify-items: stretch !important;
-  }
-
-  .public-merchandise-shop-page a {
+  .public-merchandise-shop-page .primaryButton,
+  .public-merchandise-shop-page .secondaryButton,
+  .public-merchandise-shop-page .contactButton,
+  .public-merchandise-shop-page .noticeLink {
     width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
   }
 
-  .public-merchandise-shop-page .backLink {
-    width: fit-content !important;
+  .public-merchandise-shop-page .contactStrip {
+    grid-template-columns: 1fr !important;
+  }
+
+  .public-merchandise-shop-page .contactStripIcon {
+    margin: 0 auto !important;
+  }
+
+  .public-merchandise-shop-page .contactStripCopy {
+    text-align: center !important;
   }
 }
 `;
 
 const styles: Record<string, CSSProperties> = {
   page: {
-    minHeight: "100vh",
     width: "100%",
-    padding: "24px 14px 52px",
-    background:
-      "radial-gradient(circle at top left, rgba(22,131,248,0.08), transparent 34%), radial-gradient(circle at top right, rgba(250,204,21,0.12), transparent 32%), #f8fafc",
+    maxWidth: 1220,
+    margin: "0 auto",
+    padding: "28px 16px 64px",
+    minHeight: "100vh",
     color: "#0f172a",
+    boxSizing: "border-box",
     overflowX: "hidden",
   },
 
-  hero: {
+  brandHeader: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.08fr) minmax(300px, 0.52fr)",
-    gap: 22,
-    width: "100%",
-    maxWidth: 1180,
-    margin: "0 auto 16px",
-    padding: 28,
-    borderRadius: 34,
-    color: "#ffffff",
-    boxShadow: "0 28px 70px rgba(15,23,42,0.24)",
-    border: "1px solid rgba(148,163,184,0.26)",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(270px, 0.35fr)",
+    gap: 14,
+    alignItems: "stretch",
+    padding: 14,
+    borderRadius: 28,
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(248,250,252,0.94))",
+    border: "1px solid rgba(226,232,240,0.92)",
+    boxShadow: "0 18px 44px rgba(15,23,42,0.075)",
+    marginBottom: 14,
+    backdropFilter: "blur(14px)",
+  },
+
+  brandIdentity: {
+    display: "grid",
+    gridTemplateColumns: "78px minmax(0, 1fr)",
+    gap: 16,
+    alignItems: "center",
+    minWidth: 0,
+  },
+
+  brandLogoPlate: {
+    position: "relative",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 78,
+    height: 78,
+    borderRadius: 22,
+    padding: 8,
     overflow: "hidden",
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(248,250,252,0.94))",
+    border: "1px solid rgba(226,232,240,0.96)",
+    boxShadow:
+      "0 14px 30px rgba(15,23,42,0.12), inset 0 1px 0 rgba(255,255,255,0.92)",
+    isolation: "isolate",
+  },
+
+  brandLogo: {
+    display: "block",
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+  },
+
+  brandCopy: {
+    display: "grid",
+    gap: 5,
+    minWidth: 0,
+  },
+
+  brandTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: "clamp(34px, 5vw, 56px)",
+    lineHeight: 0.94,
+    letterSpacing: "-0.075em",
+    overflowWrap: "anywhere",
+  },
+
+  brandTagline: {
+    margin: 0,
+    color: "#475569",
+    fontSize: 14,
+    lineHeight: 1.35,
+    fontWeight: 850,
+    overflowWrap: "anywhere",
+  },
+
+  brandFeature: {
+    display: "grid",
+    gridTemplateColumns: "46px minmax(0, 1fr)",
+    gap: 11,
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 22,
+    border: "1px solid",
+    minWidth: 0,
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.72)",
+  },
+
+  brandFeatureIcon: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.72)",
+    border: "1px solid rgba(226,232,240,0.82)",
+    fontSize: 18,
+    fontWeight: 950,
+  },
+
+  brandFeatureCopy: {
+    display: "grid",
+    gap: 4,
+    minWidth: 0,
+  },
+
+  brandFeatureKicker: {
+    fontSize: 10,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  brandFeatureTitle: {
+    color: "#0f172a",
+    fontSize: 19,
+    lineHeight: 1.08,
+    letterSpacing: "-0.045em",
+    overflowWrap: "anywhere",
+  },
+
+  brandFeatureText: {
+    color: "#475569",
+    fontSize: 12,
+    lineHeight: 1.35,
+    fontWeight: 760,
+  },
+
+  hero: {
+    position: "relative",
+    display: "grid",
+    gap: 16,
+    padding: 24,
+    borderRadius: 30,
+    color: "#ffffff",
+    marginBottom: 16,
+    boxShadow: "0 28px 66px rgba(15,23,42,0.24)",
+    overflow: "hidden",
+    border: "1px solid rgba(255,255,255,0.16)",
+  },
+
+  heroGlow: {
+    position: "absolute",
+    inset: 0,
+    pointerEvents: "none",
+    background:
+      "radial-gradient(circle at 20% 18%, rgba(255,255,255,0.08), transparent 30%)",
+  },
+
+  heroLineOne: {
+    position: "absolute",
+    left: -90,
+    bottom: -130,
+    width: 330,
+    height: 330,
+    border: "1px solid",
+    borderRadius: "999px",
+    pointerEvents: "none",
+  },
+
+  heroLineTwo: {
+    position: "absolute",
+    left: -140,
+    bottom: -180,
+    width: 440,
+    height: 440,
+    border: "1px solid",
+    borderRadius: "999px",
+    pointerEvents: "none",
+  },
+
+  heroMainGrid: {
+    position: "relative",
+    zIndex: 1,
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.08fr) minmax(280px, 0.82fr)",
+    gap: 20,
+    alignItems: "stretch",
+    minWidth: 0,
   },
 
   heroCopy: {
     display: "grid",
-    gap: 16,
-    alignContent: "start",
+    alignContent: "center",
+    gap: 14,
+    minWidth: 0,
   },
 
   backLink: {
@@ -781,71 +1229,36 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
   },
 
-  heroBrandRow: {
-    display: "grid",
-    gridTemplateColumns: "76px minmax(0, 1fr)",
-    gap: 14,
-    alignItems: "center",
-  },
-
-  logoPlate: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 76,
-    height: 76,
-    borderRadius: 24,
-    background: "#ffffff",
-    border: "1px solid rgba(255,255,255,0.55)",
-    boxShadow: "0 14px 34px rgba(0,0,0,0.18)",
-    overflow: "hidden",
-  },
-
-  logoImage: {
-    display: "block",
-    width: "100%",
-    height: "100%",
-    objectFit: "contain",
-    padding: 9,
-    boxSizing: "border-box",
-  },
-
-  heroBrandCopy: {
-    display: "grid",
-    gap: 7,
-  },
-
-  heroKicker: {
+  eyebrow: {
     display: "inline-flex",
     width: "fit-content",
-    margin: 0,
-    padding: "7px 11px",
+    padding: "8px 13px",
     borderRadius: 999,
-    background: "rgba(15,23,42,0.34)",
     border: "1px solid",
     fontSize: 11,
     fontWeight: 950,
     textTransform: "uppercase",
-    letterSpacing: "0.08em",
+    letterSpacing: "0.1em",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
   },
 
   heroTitle: {
     margin: 0,
-    color: "#ffffff",
-    fontSize: "clamp(50px, 7vw, 84px)",
-    lineHeight: 0.9,
-    letterSpacing: "-0.085em",
+    maxWidth: 760,
+    fontSize: "clamp(42px, 6vw, 66px)",
+    lineHeight: 0.92,
+    letterSpacing: "-0.078em",
     overflowWrap: "anywhere",
-    textShadow: "0 18px 45px rgba(0,0,0,0.24)",
+    textShadow: "0 18px 45px rgba(0,0,0,0.28)",
   },
 
-  heroText: {
+  subtitle: {
     margin: 0,
-    maxWidth: 820,
-    color: "#dbeafe",
-    fontSize: 18,
-    lineHeight: 1.6,
-    fontWeight: 720,
+    maxWidth: 760,
+    color: "#e5edf8",
+    fontSize: 17,
+    lineHeight: 1.5,
+    fontWeight: 760,
     overflowWrap: "anywhere",
   },
 
@@ -853,6 +1266,7 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 190px))",
     gap: 10,
+    marginTop: 4,
   },
 
   heroStat: {
@@ -879,66 +1293,96 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
   },
 
-  heroPanel: {
+  supportPanel: {
     display: "grid",
     gap: 12,
     alignContent: "center",
-    padding: 20,
+    padding: 19,
     borderRadius: 26,
-    background: "rgba(255,255,255,0.10)",
+    background: "rgba(15,23,42,0.30)",
     border: "1px solid rgba(255,255,255,0.18)",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)",
+    boxShadow:
+      "inset 0 1px 0 rgba(255,255,255,0.12), 0 20px 48px rgba(0,0,0,0.16)",
+    backdropFilter: "blur(14px)",
+    minWidth: 0,
   },
 
-  panelIcon: {
+  supportPanelHeader: {
     display: "grid",
-    placeItems: "center",
-    width: 54,
-    height: 54,
-    borderRadius: 18,
-    background: "rgba(255,255,255,0.14)",
-    border: "1px solid rgba(255,255,255,0.18)",
-    fontSize: 25,
+    gap: 3,
   },
 
-  panelKicker: {
-    margin: 0,
-    color: "#fef3c7",
-    fontSize: 12,
+  supportPanelKicker: {
+    color: "#cbd5e1",
+    fontSize: 11,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
 
-  panelTitle: {
+  supportPanelTitle: {
     margin: 0,
     color: "#ffffff",
-    fontSize: 30,
-    lineHeight: 1.04,
-    letterSpacing: "-0.05em",
-    overflowWrap: "anywhere",
+    fontSize: 24,
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
   },
 
-  panelText: {
+  supportPanelText: {
     margin: 0,
     color: "#dbeafe",
-    lineHeight: 1.55,
-    fontWeight: 730,
+    lineHeight: 1.5,
+    fontSize: 14,
+    fontWeight: 760,
     overflowWrap: "anywhere",
   },
 
-  heroButton: {
-    display: "inline-flex",
+  supportOptionList: {
+    display: "grid",
+    gap: 10,
+  },
+
+  supportOptionLink: {
+    display: "grid",
+    gridTemplateColumns: "48px minmax(0, 1fr) 18px",
+    gap: 12,
+    alignItems: "center",
+    padding: 13,
+    borderRadius: 18,
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.13), rgba(255,255,255,0.06))",
+    border: "1px solid rgba(255,255,255,0.20)",
+    color: "#e5edf8",
+    textDecoration: "none",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
+  },
+
+  supportIcon: {
+    display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    width: "fit-content",
-    minHeight: 46,
-    padding: "11px 15px",
-    borderRadius: 999,
+    width: 44,
+    height: 44,
+    borderRadius: 16,
     border: "1px solid",
-    textDecoration: "none",
+    fontSize: 18,
     fontWeight: 950,
-    textAlign: "center",
+    boxShadow: "0 10px 22px rgba(0,0,0,0.16)",
+  },
+
+  supportOptionCopy: {
+    display: "grid",
+    gap: 2,
+    minWidth: 0,
+    lineHeight: 1.35,
+    fontSize: 13,
+  },
+
+  supportChevron: {
+    color: "rgba(255,255,255,0.72)",
+    fontSize: 25,
+    lineHeight: 1,
+    fontWeight: 700,
   },
 
   shopHeader: {
@@ -947,14 +1391,14 @@ const styles: Record<string, CSSProperties> = {
     gap: 14,
     flexWrap: "wrap",
     alignItems: "flex-start",
-    width: "100%",
-    maxWidth: 1180,
-    margin: "0 auto 16px",
     padding: 18,
     borderRadius: 24,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 12px 30px rgba(15,23,42,0.05)",
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.99), rgba(248,250,252,0.96))",
+    border: "1px solid rgba(226,232,240,0.95)",
+    boxShadow: "0 14px 34px rgba(15,23,42,0.06)",
+    marginBottom: 16,
+    minWidth: 0,
   },
 
   kicker: {
@@ -968,9 +1412,8 @@ const styles: Record<string, CSSProperties> = {
   sectionTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 30,
-    lineHeight: 1.06,
-    letterSpacing: "-0.055em",
+    fontSize: 27,
+    letterSpacing: "-0.05em",
     overflowWrap: "anywhere",
   },
 
@@ -985,12 +1428,11 @@ const styles: Record<string, CSSProperties> = {
   countPill: {
     display: "inline-flex",
     alignItems: "center",
-    minHeight: 36,
-    padding: "8px 12px",
+    padding: "7px 11px",
     borderRadius: 999,
     color: "#0f172a",
     border: "1px solid",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 950,
     whiteSpace: "nowrap",
   },
@@ -999,20 +1441,20 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: 14,
-    width: "100%",
-    maxWidth: 1180,
-    margin: "0 auto 16px",
+    minWidth: 0,
+    marginBottom: 16,
   },
 
   productCard: {
     display: "flex",
     flexDirection: "column",
-    minWidth: 0,
-    overflow: "hidden",
+    height: "100%",
     borderRadius: 26,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
+    overflow: "hidden",
     boxShadow: "0 14px 34px rgba(15,23,42,0.07)",
+    minWidth: 0,
   },
 
   imageLink: {
@@ -1023,7 +1465,7 @@ const styles: Record<string, CSSProperties> = {
 
   productImageWrap: {
     width: "100%",
-    height: 220,
+    height: 200,
     overflow: "hidden",
     background:
       "linear-gradient(135deg, #ffffff 0%, #f8fafc 58%, #eff6ff 100%)",
@@ -1054,6 +1496,7 @@ const styles: Record<string, CSSProperties> = {
     flex: 1,
     gap: 11,
     padding: 15,
+    minWidth: 0,
   },
 
   productTopRow: {
@@ -1070,11 +1513,10 @@ const styles: Record<string, CSSProperties> = {
     gap: 5,
     padding: "8px 12px",
     borderRadius: 999,
-    background: "#fdf2f8",
-    color: "#9d174d",
-    border: "1px solid #fbcfe8",
+    border: "1px solid",
     fontSize: 12,
     fontWeight: 950,
+    whiteSpace: "nowrap",
   },
 
   statusPill: {
@@ -1087,14 +1529,15 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     fontSize: 11,
     fontWeight: 950,
+    whiteSpace: "nowrap",
   },
 
   productTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 24,
+    fontSize: 23,
     lineHeight: 1.05,
-    letterSpacing: "-0.05em",
+    letterSpacing: "-0.045em",
     overflowWrap: "anywhere",
   },
 
@@ -1102,7 +1545,7 @@ const styles: Record<string, CSSProperties> = {
     margin: 0,
     color: "#64748b",
     lineHeight: 1.5,
-    fontWeight: 720,
+    fontWeight: 710,
     overflowWrap: "anywhere",
   },
 
@@ -1135,27 +1578,14 @@ const styles: Record<string, CSSProperties> = {
 
   miniMeta: {
     display: "grid",
-    gap: 3,
+    gap: 2,
     padding: 10,
     borderRadius: 15,
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
-  },
-
-  miniMetaLabel: {
     color: "#64748b",
-    fontSize: 10,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-  },
-
-  miniMetaValue: {
-    color: "#0f172a",
-    fontSize: 13,
-    lineHeight: 1.35,
-    fontWeight: 900,
-    overflowWrap: "anywhere",
+    fontSize: 11,
+    fontWeight: 800,
   },
 
   productActions: {
@@ -1169,20 +1599,24 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    width: "100%",
+    minWidth: 0,
     minHeight: 44,
     padding: "11px 13px",
     borderRadius: 999,
-    border: "1px solid",
     textDecoration: "none",
     fontWeight: 950,
     textAlign: "center",
     lineHeight: 1.15,
+    boxSizing: "border-box",
   },
 
   secondaryButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    width: "100%",
+    minWidth: 0,
     minHeight: 44,
     padding: "11px 13px",
     borderRadius: 999,
@@ -1193,6 +1627,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textAlign: "center",
     lineHeight: 1.15,
+    boxSizing: "border-box",
   },
 
   emptyCard: {
@@ -1202,19 +1637,23 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
     padding: 34,
     borderRadius: 28,
-    background: "#ffffff",
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(248,250,252,0.95))",
     border: "1px dashed #cbd5e1",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.84)",
     textAlign: "center",
+    minWidth: 0,
   },
 
   emptyIcon: {
-    display: "grid",
-    placeItems: "center",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
     width: 58,
     height: 58,
     borderRadius: 20,
     border: "1px solid",
-    fontSize: 25,
+    fontSize: 24,
     fontWeight: 950,
   },
 
@@ -1227,11 +1666,11 @@ const styles: Record<string, CSSProperties> = {
   },
 
   emptyText: {
-    maxWidth: 620,
+    maxWidth: 610,
     margin: 0,
     color: "#64748b",
     lineHeight: 1.55,
-    fontWeight: 750,
+    fontWeight: 760,
   },
 
   emptyActions: {
@@ -1239,6 +1678,7 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 9,
     width: "min(100%, 440px)",
+    marginTop: 2,
   },
 
   shopNotice: {
@@ -1246,15 +1686,14 @@ const styles: Record<string, CSSProperties> = {
     gap: 14,
     justifyContent: "space-between",
     alignItems: "center",
-    width: "100%",
-    maxWidth: 1180,
-    margin: "0 auto 16px",
     padding: 18,
     borderRadius: 24,
     background:
       "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(239,246,255,0.92))",
     border: "1px solid #bfdbfe",
     boxShadow: "0 10px 30px rgba(22,131,248,0.06)",
+    marginBottom: 16,
+    minWidth: 0,
   },
 
   noticeKicker: {
@@ -1299,51 +1738,91 @@ const styles: Record<string, CSSProperties> = {
     whiteSpace: "nowrap",
   },
 
-  footerPanel: {
-    display: "flex",
+  contactStrip: {
+    display: "grid",
+    gridTemplateColumns: "52px minmax(0, 1fr) auto",
     gap: 14,
     alignItems: "center",
-    justifyContent: "space-between",
-    width: "100%",
-    maxWidth: 1180,
-    margin: "0 auto",
-    padding: 18,
+    padding: 16,
     borderRadius: 24,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 4px 18px rgba(15,23,42,0.04)",
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.98) 62%, rgba(241,245,249,0.98) 100%)",
+    border: "1px solid rgba(226,232,240,0.92)",
+    boxShadow: "0 16px 36px rgba(15,23,42,0.07)",
+    margin: "0 0 16px",
+    minWidth: 0,
   },
 
-  footerBrand: {
+  contactStripIcon: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 50,
+    height: 50,
+    borderRadius: 18,
+    border: "1px solid",
+    fontSize: 21,
+    fontWeight: 950,
+  },
+
+  contactStripCopy: {
+    display: "grid",
+    gap: 4,
+    minWidth: 0,
+  },
+
+  contactStripKicker: {
+    margin: 0,
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  contactStripTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 16,
-    fontWeight: 950,
+    fontSize: 27,
+    lineHeight: 1.05,
+    letterSpacing: "-0.05em",
     overflowWrap: "anywhere",
   },
 
-  footerText: {
-    margin: "4px 0 0",
+  contactStripText: {
+    margin: 0,
     color: "#64748b",
-    fontSize: 13,
-    lineHeight: 1.45,
-    fontWeight: 720,
+    lineHeight: 1.5,
+    fontSize: 14,
+    fontWeight: 760,
     overflowWrap: "anywhere",
   },
 
-  footerLink: {
+  contactButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    width: "fit-content",
-    minHeight: 42,
-    padding: "9px 13px",
+    minHeight: 46,
+    padding: "11px 17px",
     borderRadius: 999,
-    background: "#0f172a",
-    color: "#ffffff",
     textDecoration: "none",
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: 950,
     whiteSpace: "nowrap",
+  },
+
+  footer: {
+    marginTop: 20,
+    padding: 16,
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid",
+    textAlign: "center",
+  },
+
+  footerText: {
+    margin: 0,
+    color: "#64748b",
+    fontWeight: 800,
+    lineHeight: 1.5,
   },
 };
