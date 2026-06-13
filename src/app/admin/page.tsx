@@ -376,6 +376,39 @@ export default async function AdminDashboardPage() {
         </div>
       </section>
 
+      <section className="admin-install-panel" style={styles.adminInstallPanel}>
+        <div style={styles.adminInstallIcon}>▣</div>
+
+        <div style={styles.adminInstallCopy}>
+          <p style={styles.adminInstallKicker}>Admin phone shortcut</p>
+
+          <h2
+            className="so-brand-card-title admin-section-title"
+            style={styles.adminInstallTitle}
+          >
+            Save this admin dashboard to your phone
+          </h2>
+
+          <p style={styles.adminInstallText}>
+            During live events, raffles, auctions or campaign launches, you can
+            add the admin dashboard to your phone or iPad home screen for quick
+            access.
+          </p>
+
+          <div className="admin-install-steps" style={styles.adminInstallSteps}>
+            <span>
+              <strong>iPhone / iPad:</strong> open this admin page in Safari,
+              tap Share, then Add to Home Screen.
+            </span>
+
+            <span>
+              <strong>Android:</strong> open this admin page in Chrome, tap the
+              browser menu, then Install app or Add to Home screen.
+            </span>
+          </div>
+        </div>
+      </section>
+
       <section className="admin-focus-grid" style={styles.focusGrid}>
         <FocusCard
           label="Raffle tickets sold"
@@ -995,6 +1028,14 @@ const responsiveStyles = `
   .admin-dashboard-page .admin-plan-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
+
+  .admin-dashboard-page .admin-install-panel {
+    grid-template-columns: 54px minmax(0, 1fr) !important;
+  }
+
+  .admin-dashboard-page .admin-install-steps {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 @media (max-width: 620px) {
@@ -1013,9 +1054,20 @@ const responsiveStyles = `
   .admin-dashboard-page .admin-dashboard-card,
   .admin-dashboard-page .admin-finance-panel,
   .admin-dashboard-page .admin-data-panel,
-  .admin-dashboard-page .admin-plan-panel {
+  .admin-dashboard-page .admin-plan-panel,
+  .admin-dashboard-page .admin-install-panel {
     padding: 16px !important;
     border-radius: 22px !important;
+  }
+
+  .admin-dashboard-page .admin-install-panel {
+    grid-template-columns: 1fr !important;
+    text-align: center !important;
+    justify-items: center !important;
+  }
+
+  .admin-dashboard-page .admin-install-copy {
+    justify-items: center !important;
   }
 
   .admin-dashboard-page .admin-command-centre {
@@ -1329,6 +1381,78 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.45,
     fontWeight: 750,
+  },
+
+  adminInstallPanel: {
+    display: "grid",
+    gridTemplateColumns: "58px minmax(0, 1fr)",
+    gap: 15,
+    alignItems: "start",
+    padding: 18,
+    borderRadius: 26,
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(239,246,255,0.96) 58%, rgba(255,251,235,0.88) 100%)",
+    border: "1px solid #bfdbfe",
+    boxShadow: "0 12px 32px rgba(15,23,42,0.06)",
+    marginBottom: 18,
+    minWidth: 0,
+  },
+
+  adminInstallIcon: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    background: "#eff6ff",
+    color: "#2563eb",
+    border: "1px solid #bfdbfe",
+    fontSize: 24,
+    fontWeight: 950,
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.72)",
+  },
+
+  adminInstallCopy: {
+    display: "grid",
+    gap: 7,
+    minWidth: 0,
+  },
+
+  adminInstallKicker: {
+    margin: 0,
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  adminInstallTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 28,
+    lineHeight: 1.06,
+    letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
+  },
+
+  adminInstallText: {
+    margin: 0,
+    color: "#475569",
+    fontSize: 14,
+    lineHeight: 1.55,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+    maxWidth: 900,
+  },
+
+  adminInstallSteps: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
+    marginTop: 3,
+    minWidth: 0,
   },
 
   focusGrid: {
