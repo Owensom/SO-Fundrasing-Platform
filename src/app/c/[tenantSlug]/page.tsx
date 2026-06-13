@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import type { CSSProperties } from "react";
 import Link from "next/link";
 import { auth } from "@/auth";
@@ -28,6 +29,16 @@ type PageProps = {
     campaignId?: string;
   }>;
 };
+
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
+  const { tenantSlug } = await params;
+
+  return {
+    manifest: `/api/pwa/tenant-manifest/${encodeURIComponent(tenantSlug)}`,
+  };
+}
 
 type Campaign = {
   id: string;
@@ -389,7 +400,6 @@ function getHighlightedCampaign(params: {
 
   return params.campaigns[0] || null;
 }
-
 function getActiveChooserText(activeType: FilterType) {
   if (activeType === "raffle") return "Showing raffles";
   if (activeType === "squares") return "Showing squares";
@@ -518,7 +528,8 @@ export default async function TenantCampaignsPage({
         })
         .slice(0, 3)
     : [];
-    const campaignTypeNames = auctionCapability.allowed
+
+  const campaignTypeNames = auctionCapability.allowed
     ? "raffles, squares, events and auctions"
     : "raffles, squares and events";
 
