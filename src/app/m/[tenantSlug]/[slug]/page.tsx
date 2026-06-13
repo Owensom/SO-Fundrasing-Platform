@@ -8,6 +8,12 @@ import { getTenantSettings } from "@/lib/tenant-settings";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+type MerchandiseOption = {
+  type?: string | null;
+  label?: string | null;
+  value?: string | null;
+};
+
 type MerchandiseProduct = {
   id: string;
   tenant_slug: string;
@@ -21,6 +27,7 @@ type MerchandiseProduct = {
   currency: string;
   stock_quantity: number | null;
   sold_quantity: number;
+  options_json: MerchandiseOption[] | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -99,6 +106,25 @@ function getStockTone(product: MerchandiseProduct) {
   return "good";
 }
 
+function getSizeOptions(product: MerchandiseProduct) {
+  if (!Array.isArray(product.options_json)) return [];
+
+  return product.options_json
+    .filter((option) => cleanText(option?.type).toLowerCase() === "size")
+    .map((option) => cleanText(option?.label || option?.value))
+    .filter(Boolean);
+}
+
+function getSizeSummary(product: MerchandiseProduct) {
+  const sizes = getSizeOptions(product);
+
+  if (sizes.length === 0) {
+    return "No size options";
+  }
+
+  return sizes.join(", ");
+}
+
 function getBestLogo(settings: TenantPublicSettings | null) {
   return (
     cleanText(settings?.public_logo_mark_url) ||
@@ -108,9 +134,7 @@ function getBestLogo(settings: TenantPublicSettings | null) {
 }
 
 function getDisplayName(settings: TenantPublicSettings | null) {
-  return (
-    cleanText(settings?.public_display_name) || "SO Fundraising Platform"
-  );
+  return cleanText(settings?.public_display_name) || "SO Fundraising Platform";
 }
 
 async function getPublishedProduct({
@@ -135,6 +159,7 @@ async function getPublishedProduct({
         currency,
         stock_quantity,
         sold_quantity,
+        options_json,
         status,
         created_at::text,
         updated_at::text
@@ -216,6 +241,7 @@ export default async function PublicMerchandiseProductPage({
   const contactEmail = cleanText(tenantSettings?.public_contact_email);
   const contactName = cleanText(tenantSettings?.public_contact_name);
   const stockTone = getStockTone(product);
+  const sizeOptions = getSizeOptions(product);
 
   return (
     <main className="public-merchandise-page" style={styles.page}>
@@ -274,6 +300,12 @@ export default async function PublicMerchandiseProductPage({
             >
               {getStockLabel(product)}
             </span>
+
+            {sizeOptions.length ? (
+              <span style={styles.sizeHeroPill}>
+                Sizes: {sizeOptions.join(", ")}
+              </span>
+            ) : null}
           </div>
         </div>
 
@@ -314,8 +346,24 @@ export default async function PublicMerchandiseProductPage({
 
             <DetailItem label="Availability" value={getStockLabel(product)} />
 
+            <DetailItem label="Sizes / options" value={getSizeSummary(product)} />
+
             <DetailItem label="Organisation" value={displayName} />
           </div>
+
+          {sizeOptions.length ? (
+            <div style={styles.sizePanel}>
+              <p style={styles.sizePanelTitle}>Available sizes/options</p>
+
+              <div style={styles.sizePillGrid}>
+                {sizeOptions.map((size) => (
+                  <span key={size} style={styles.sizePill}>
+                    {size}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </article>
 
         <aside style={styles.actionPanel}>
@@ -356,7 +404,7 @@ export default async function PublicMerchandiseProductPage({
         </aside>
       </section>
 
-      <section style={styles.footerPanel}>
+      <section className="merchandise-footer-panel" style={styles.footerPanel}>
         <div>
           <p style={styles.footerBrand}>{displayName}</p>
 
@@ -430,6 +478,11 @@ const responsiveStyles = `
 
   .public-merchandise-page .merchandise-info-grid {
     gap: 12px !important;
+  }
+
+  .public-merchandise-page .merchandise-footer-panel {
+    display: grid !important;
+    justify-items: stretch !important;
   }
 
   .public-merchandise-page a {
@@ -599,6 +652,21 @@ const styles: Record<string, CSSProperties> = {
     borderColor: "#fecaca",
   },
 
+  sizeHeroPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+    padding: "11px 16px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.10)",
+    color: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.22)",
+    fontSize: 14,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
   heroCard: {
     display: "grid",
     alignContent: "stretch",
@@ -727,6 +795,43 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.35,
     fontWeight: 950,
     overflowWrap: "anywhere",
+  },
+
+  sizePanel: {
+    display: "grid",
+    gap: 10,
+    padding: 14,
+    borderRadius: 20,
+    background:
+      "linear-gradient(135deg, #f8fafc 0%, #ffffff 56%, #eff6ff 100%)",
+    border: "1px solid #dbeafe",
+  },
+
+  sizePanelTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 14,
+    fontWeight: 950,
+  },
+
+  sizePillGrid: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+
+  sizePill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 38,
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid #cbd5e1",
+    fontSize: 13,
+    fontWeight: 950,
   },
 
   actionTitle: {
