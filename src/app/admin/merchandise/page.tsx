@@ -15,6 +15,8 @@ import {
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+const DEFAULT_MERCHANDISE_IMAGE_SRC = "/brand/so-default-merchandise.png";
+
 type MerchandiseProductStatus = "draft" | "published" | "closed";
 
 type MerchandiseOption = {
@@ -272,7 +274,11 @@ export default async function AdminMerchandisePage() {
 
       <section className="merchandise-hero" style={styles.hero}>
         <div style={styles.heroImageWrap}>
-          <div style={styles.heroImageFallback}>SHOP</div>
+          <img
+            src={DEFAULT_MERCHANDISE_IMAGE_SRC}
+            alt="Merchandise"
+            style={styles.heroImage}
+          />
         </div>
 
         <div style={styles.heroContent}>
@@ -438,7 +444,14 @@ export default async function AdminMerchandisePage() {
 
           {products.length === 0 ? (
             <section style={styles.emptyState}>
-              <div style={styles.emptyIcon}>🛍️</div>
+              <div style={styles.emptyIcon}>
+                <img
+                  src={DEFAULT_MERCHANDISE_IMAGE_SRC}
+                  alt=""
+                  aria-hidden="true"
+                  style={styles.emptyIconImage}
+                />
+              </div>
 
               <h2 style={styles.emptyTitle}>No merchandise products yet</h2>
 
@@ -579,7 +592,13 @@ function ProductCard({ product }: { product: MerchandiseProduct }) {
               style={productImageStyle(product)}
             />
           ) : (
-            <div style={styles.itemImageFallback}>SHOP</div>
+            <div style={styles.itemImageFallback}>
+              <img
+                src={DEFAULT_MERCHANDISE_IMAGE_SRC}
+                alt="Merchandise"
+                style={styles.defaultItemImage}
+              />
+            </div>
           )}
         </div>
 
@@ -780,24 +799,20 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 260,
     borderRadius: 22,
     overflow: "hidden",
-    background: "#ffffff",
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 58%, #eff6ff 100%)",
     minWidth: 0,
     display: "grid",
     placeItems: "center",
+    padding: 24,
+    boxSizing: "border-box",
   },
 
-  heroImageFallback: {
-    display: "grid",
-    placeItems: "center",
-    width: 128,
-    height: 128,
-    borderRadius: 34,
-    background: "#0f172a",
-    color: "#facc15",
-    fontSize: 22,
-    fontWeight: 950,
-    letterSpacing: "0.08em",
-    boxShadow: "0 16px 36px rgba(15,23,42,0.18)",
+  heroImage: {
+    display: "block",
+    width: "min(88%, 240px)",
+    height: "min(88%, 210px)",
+    objectFit: "contain",
   },
 
   heroContent: {
@@ -1222,14 +1237,20 @@ const styles: Record<string, CSSProperties> = {
   itemImageFallback: {
     display: "grid",
     placeItems: "center",
-    width: 92,
-    height: 92,
-    borderRadius: 28,
-    background: "#0f172a",
-    color: "#facc15",
-    fontSize: 16,
-    fontWeight: 950,
-    letterSpacing: "0.08em",
+    width: "100%",
+    height: "100%",
+    minHeight: 240,
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 58%, #eff6ff 100%)",
+    padding: 18,
+    boxSizing: "border-box",
+  },
+
+  defaultItemImage: {
+    display: "block",
+    width: "min(88%, 210px)",
+    height: "min(88%, 180px)",
+    objectFit: "contain",
   },
 
   itemContent: {
@@ -1414,7 +1435,24 @@ const styles: Record<string, CSSProperties> = {
   },
 
   emptyIcon: {
-    fontSize: 34,
+    display: "grid",
+    placeItems: "center",
+    width: 74,
+    height: 74,
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 10px 24px rgba(15,23,42,0.07)",
+    overflow: "hidden",
+  },
+
+  emptyIconImage: {
+    display: "block",
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+    padding: 6,
+    boxSizing: "border-box",
   },
 
   emptyTitle: {
