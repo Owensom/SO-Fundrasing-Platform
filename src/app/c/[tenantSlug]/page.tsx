@@ -30,16 +30,6 @@ type PageProps = {
   }>;
 };
 
-export async function generateMetadata({
-  params,
-}: PageProps): Promise<Metadata> {
-  const { tenantSlug } = await params;
-
-  return {
-    manifest: `/api/pwa/tenant-manifest/${encodeURIComponent(tenantSlug)}`,
-  };
-}
-
 type Campaign = {
   id: string;
   type: CampaignType;
@@ -60,6 +50,15 @@ type TenantCampaignSettings = {
   subscription_tier?: string | null;
   subscription_status?: string | null;
   platform_owner_bypass?: boolean | null;
+};
+
+type TenantPwaMetadataSettings = {
+  public_display_name: string | null;
+  public_logo_url: string | null;
+  public_logo_mark_url: string | null;
+  subscription_tier: string | null;
+  subscription_status: string | null;
+  platform_owner_bypass: boolean | null;
 };
 
 type HighlightedCampaignSettings = {
@@ -88,6 +87,13 @@ type CampaignChooserItem = {
 
 function cleanText(value: unknown) {
   return String(value || "").trim();
+}
+
+function cleanTenantSlug(value: unknown) {
+  return cleanText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "")
+    .slice(0, 80);
 }
 
 function normaliseHexColour(value: unknown, fallback: string) {
@@ -123,6 +129,82 @@ function normaliseFocus(value: number | null | undefined) {
   if (!Number.isFinite(number)) return 50;
 
   return Math.max(0, Math.min(100, Math.round(number)));
+}
+
+async function getTenantPwaMetadataSettings(tenantSlug: string) {
+  return queryOne<TenantPwaMetadataSettings>(
+    `
+      select
+        public_display_name,
+        public_logo_url,
+        public_logo_mark_url,
+        subscription_tier,
+        subscription_status,
+        platform_owner_bypass
+      from tenant_settings
+      where tenant_slug = $1
+      limit 1
+    `,
+    [tenantSlug],
+  );
+}
+
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
+  const { tenantSlug: rawTenantSlug } = await params;
+  const tenantSlug = cleanTenantSlug(rawTenantSlug);
+
+  const fallbackIcon = "/brand/icon.png";
+  const fallbackTitle = "SO Fundraising Platform";
+
+  if (!tenantSlug) {
+    return {
+      title: fallbackTitle,
+      manifest: "/manifest.webmanifest",
+      icons: {
+        icon: [{ url: fallbackIcon }],
+        shortcut: [{ url: fallbackIcon }],
+        apple: [{ url: fallbackIcon }],
+      },
+    };
+  }
+
+  const tenantSettings = await getTenantPwaMetadataSettings(tenantSlug);
+
+  const advancedBrandingCapability = checkSubscriptionCapability(
+    tenantSettings,
+    "advanced_branding",
+  );
+
+  const canUseTenantIcon = advancedBrandingCapability.allowed;
+
+  const tenantIcon = canUseTenantIcon
+    ? cleanText(tenantSettings?.public_logo_mark_url) ||
+      cleanText(tenantSettings?.public_logo_url)
+    : "";
+
+  const iconUrl = tenantIcon || fallbackIcon;
+
+  const displayName =
+    cleanText(canUseTenantIcon ? tenantSettings?.public_display_name : "") ||
+    fallbackTitle;
+
+  return {
+    title: displayName,
+    applicationName: displayName,
+    appleWebApp: {
+      capable: true,
+      title: displayName,
+      statusBarStyle: "default",
+    },
+    manifest: `/api/pwa/tenant-manifest/${encodeURIComponent(tenantSlug)}`,
+    icons: {
+      icon: [{ url: iconUrl }],
+      shortcut: [{ url: iconUrl }],
+      apple: [{ url: iconUrl }],
+    },
+  };
 }
 
 function getDefaultImage(type: Campaign["type"]) {
@@ -244,7 +326,6 @@ function getTypeMeta(type: Campaign["type"]) {
 
   return "Fundraising campaign";
 }
-
 function getTypeStyle(type: Campaign["type"]): CSSProperties {
   if (type === "raffle") {
     return {
@@ -400,6 +481,7 @@ function getHighlightedCampaign(params: {
 
   return params.campaigns[0] || null;
 }
+
 function getActiveChooserText(activeType: FilterType) {
   if (activeType === "raffle") return "Showing raffles";
   if (activeType === "squares") return "Showing squares";
@@ -622,8 +704,7 @@ export default async function TenantCampaignsPage({
         background:
           "radial-gradient(circle at top left, rgba(37,99,235,0.10), transparent 34%), radial-gradient(circle at top right, rgba(250,204,21,0.08), transparent 30%), #f8fafc",
       };
-
-  const brandedHeroStyle: CSSProperties = canUseAdvancedBranding
+    const brandedHeroStyle: CSSProperties = canUseAdvancedBranding
     ? {
         ...styles.hero,
         background: `
@@ -966,7 +1047,8 @@ export default async function TenantCampaignsPage({
               </div>
             </section>
           </div>
-                    <div style={styles.supportPanel}>
+
+          <div style={styles.supportPanel}>
             <div style={styles.supportPanelHeader}>
               <span style={styles.supportPanelKicker}>Ways to help</span>
               <h2 style={styles.supportPanelTitle}>Support options</h2>
@@ -1174,8 +1256,7 @@ export default async function TenantCampaignsPage({
               </p>
             </div>
           </div>
-
-          {followOnCampaigns.length > 0 ? (
+                    {followOnCampaigns.length > 0 ? (
             <div className="followOnGrid" style={styles.followOnGrid}>
               {followOnCampaigns.map((campaign) => (
                 <article
@@ -1542,6 +1623,7 @@ function MiniMeta({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
 const responsiveStyles = `
 .tenant-campaigns-page,
 .tenant-campaigns-page * {
