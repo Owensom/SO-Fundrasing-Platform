@@ -3,7 +3,7 @@ import type { CSSProperties } from "react";
 import Link from "next/link";
 import { auth } from "@/auth";
 import { getAllCampaignsForTenant } from "@/lib/campaigns";
-import { query, queryOne } from "@/lib/db";
+import { queryOne } from "@/lib/db";
 import {
   checkSubscriptionCapability,
   getMaximumActiveCampaignsForTier,
@@ -13,7 +13,7 @@ import { getTenantSettings } from "@/lib/tenant-settings";
 
 export const dynamic = "force-dynamic";
 
-type CampaignType = "raffle" | "squares" | "event" | "auction" | "merchandise";
+type CampaignType = "raffle" | "squares" | "event" | "auction";
 type FilterType = "all" | CampaignType;
 
 type PageProps = {
@@ -42,20 +42,8 @@ type Campaign = {
   status: "draft" | "published" | "closed" | "drawn";
 };
 
-type MerchandiseProductRow = {
-  id: string;
-  tenant_slug: string;
-  slug: string;
-  title: string;
-  description: string | null;
-  image_url: string | null;
-  image_focus_x: number | null;
-  image_focus_y: number | null;
-  price_cents: number | null;
-  currency: string | null;
-  stock_quantity: number | null;
-  sold_quantity: number | null;
-  status: "published";
+type MerchandiseSummary = {
+  product_count: number | string | null;
 };
 
 type SessionUserWithTenants = {
@@ -228,7 +216,6 @@ function getDefaultImage(type: Campaign["type"]) {
   if (type === "squares") return "/brand/so-default-squares.png";
   if (type === "event") return "/brand/so-default-events.png";
   if (type === "auction") return "/brand/so-default-auctions.png";
-  if (type === "merchandise") return "/brand/so-logo-mark.png";
 
   return "/brand/so-logo-full.png";
 }
@@ -286,7 +273,6 @@ function getCampaignUrl(campaign: Campaign) {
   if (campaign.type === "squares") return `/s/${campaign.slug}`;
   if (campaign.type === "event") return `/e/${campaign.slug}`;
   if (campaign.type === "auction") return `/a/${campaign.slug}`;
-  if (campaign.type === "merchandise") return `/m/${campaign.slug}`;
 
   return "#";
 }
@@ -298,10 +284,6 @@ function getSupportUrl({
   tenantSlug: string;
   campaign: Campaign;
 }) {
-  if (campaign.type === "merchandise") {
-    return `/c/${tenantSlug}/support`;
-  }
-
   const params = new URLSearchParams();
 
   params.set("campaignType", campaign.type);
@@ -319,7 +301,7 @@ function getContactUrl({
 }) {
   const params = new URLSearchParams();
 
-  if (campaign && campaign.type !== "merchandise") {
+  if (campaign) {
     params.set("campaignType", campaign.type);
     params.set("campaignId", campaign.id);
   }
@@ -336,7 +318,6 @@ function getTypeLabel(type: Campaign["type"]) {
   if (type === "squares") return "Squares";
   if (type === "event") return "Event";
   if (type === "auction") return "Auction";
-  if (type === "merchandise") return "Merchandise";
 
   return "Campaign";
 }
@@ -346,7 +327,6 @@ function getTypeMeta(type: Campaign["type"]) {
   if (type === "squares") return "Pick a square to support";
   if (type === "event") return "Ticketed fundraising event";
   if (type === "auction") return "Bid, support, make an impact";
-  if (type === "merchandise") return "Display-only shop item";
 
   return "Fundraising campaign";
 }
@@ -376,14 +356,6 @@ function getTypeStyle(type: Campaign["type"]): CSSProperties {
     };
   }
 
-  if (type === "merchandise") {
-    return {
-      background: "#fdf2f8",
-      color: "#9d174d",
-      borderColor: "#fbcfe8",
-    };
-  }
-
   return {
     background: "#fffbeb",
     color: "#92400e",
@@ -396,7 +368,6 @@ function getTypeIcon(type: Campaign["type"]) {
   if (type === "squares") return "▦";
   if (type === "event") return "◷";
   if (type === "auction") return "⌁";
-  if (type === "merchandise") return "🛍";
 
   return "•";
 }
@@ -414,8 +385,7 @@ function getActiveType(value?: string): FilterType {
     value === "raffle" ||
     value === "squares" ||
     value === "event" ||
-    value === "auction" ||
-    value === "merchandise"
+    value === "auction"
   ) {
     return value;
   }
@@ -453,8 +423,7 @@ function isCampaignType(value: unknown): value is CampaignType {
     value === "raffle" ||
     value === "squares" ||
     value === "event" ||
-    value === "auction" ||
-    value === "merchandise"
+    value === "auction"
   );
 }
 
@@ -491,6 +460,23 @@ async function getTenantBrandingSettings(tenantSlug: string) {
   );
 }
 
+async function getPublishedMerchandiseSummary(tenantSlug: string) {
+  const result = await queryOne<MerchandiseSummary>(
+    `
+      select count(*)::int as product_count
+      from merchandise_products
+      where tenant_slug = $1
+        and status = 'published'
+      limit 1
+    `,
+    [tenantSlug],
+  );
+
+  return {
+    productCount: Number(result?.product_count || 0),
+  };
+}
+
 function getHighlightedCampaign(params: {
   campaigns: Campaign[];
   highlightedSettings: HighlightedCampaignSettings | null;
@@ -523,7 +509,6 @@ function getActiveChooserText(activeType: FilterType) {
   if (activeType === "squares") return "Showing squares";
   if (activeType === "event") return "Showing events";
   if (activeType === "auction") return "Showing auctions";
-  if (activeType === "merchandise") return "Showing merchandise";
 
   return "Showing all campaigns";
 }
@@ -533,97 +518,8 @@ function getCompletedPurchaseTitle(type: CampaignType | null) {
   if (type === "squares") return "Thank you — your squares purchase is complete";
   if (type === "event") return "Thank you — your event booking is complete";
   if (type === "auction") return "Thank you — your auction payment is complete";
-  if (type === "merchandise") return "Thank you — your support is complete";
 
   return "Thank you — your support is complete";
-}
-
-function getPrimaryActionLabel(campaign: Campaign) {
-  if (campaign.type === "merchandise") return "View product";
-
-  return "See campaign";
-}
-
-function getSecondaryActionLabel(campaign: Campaign) {
-  if (campaign.type === "merchandise") return "Contact organiser";
-
-  return "Support campaign";
-}
-
-function getSecondaryActionUrl({
-  tenantSlug,
-  campaign,
-}: {
-  tenantSlug: string;
-  campaign: Campaign;
-}) {
-  if (campaign.type === "merchandise") {
-    return getContactUrl({ tenantSlug, campaign });
-  }
-
-  return getSupportUrl({ tenantSlug, campaign });
-}
-
-function getSupportMetaValue(campaign: Campaign) {
-  if (campaign.type === "merchandise") return "Display only";
-
-  return "Campaign donations";
-}
-
-function formatMoney(cents: number | null | undefined, currency = "GBP") {
-  try {
-    return new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency: cleanText(currency) || "GBP",
-    }).format(Number(cents || 0) / 100);
-  } catch {
-    return `£${(Number(cents || 0) / 100).toFixed(2)}`;
-  }
-}
-
-function getMerchandiseDescription(product: MerchandiseProductRow) {
-  const description = cleanText(product.description);
-  const price = formatMoney(product.price_cents, product.currency || "GBP");
-
-  return description || `${price} · Display-only merchandise item.`;
-}
-
-async function getPublishedMerchandiseProducts(tenantSlug: string) {
-  const products = await query<MerchandiseProductRow>(
-    `
-      select
-        id,
-        tenant_slug,
-        slug,
-        title,
-        description,
-        image_url,
-        image_focus_x,
-        image_focus_y,
-        price_cents,
-        currency,
-        stock_quantity,
-        sold_quantity,
-        status
-      from merchandise_products
-      where tenant_slug = $1
-        and status = 'published'
-      order by created_at desc
-    `,
-    [tenantSlug],
-  );
-
-  return products.map((product): Campaign => ({
-    id: product.id,
-    type: "merchandise",
-    title: product.title,
-    slug: `${product.tenant_slug}/${product.slug}`,
-    description: getMerchandiseDescription(product),
-    imageUrl: product.image_url,
-    image_focus_x: product.image_focus_x,
-    image_focus_y: product.image_focus_y,
-    status: "published",
-  }));
 }
 
 export default async function TenantCampaignsPage({
@@ -664,13 +560,13 @@ export default async function TenantCampaignsPage({
 
   const [
     campaigns,
-    merchandiseProducts,
+    merchandiseSummary,
     tenantSettingsRaw,
     highlightedSettings,
     brandingSettings,
   ] = await Promise.all([
     getAllCampaignsForTenant(tenantSlug),
-    getPublishedMerchandiseProducts(tenantSlug),
+    getPublishedMerchandiseSummary(tenantSlug),
     getTenantSettings(tenantSlug),
     getHighlightedCampaignSettings(tenantSlug),
     getTenantBrandingSettings(tenantSlug),
@@ -702,19 +598,15 @@ export default async function TenantCampaignsPage({
     "merchandise",
   );
 
-  const capabilityFilteredPublishedCampaigns = [
-    ...campaigns,
-    ...(merchandiseCapability.allowed ? merchandiseProducts : []),
-  ].filter((campaign) => {
+  const showMerchandiseShop =
+    merchandiseCapability.allowed && merchandiseSummary.productCount > 0;
+
+  const capabilityFilteredPublishedCampaigns = campaigns.filter((campaign) => {
     if (campaign.status !== "published") {
       return false;
     }
 
     if (campaign.type === "auction" && !auctionCapability.allowed) {
-      return false;
-    }
-
-    if (campaign.type === "merchandise" && !merchandiseCapability.allowed) {
       return false;
     }
 
@@ -729,9 +621,6 @@ export default async function TenantCampaignsPage({
   const squares = publicCampaigns.filter((item) => item.type === "squares");
   const events = publicCampaigns.filter((item) => item.type === "event");
   const auctions = publicCampaigns.filter((item) => item.type === "auction");
-  const merchandise = publicCampaigns.filter(
-    (item) => item.type === "merchandise",
-  );
 
   const visibleCampaigns =
     activeType === "all"
@@ -758,22 +647,9 @@ export default async function TenantCampaignsPage({
         .slice(0, 3)
     : [];
 
-  const campaignTypeParts = ["raffles", "squares", "events"];
-
-  if (auctionCapability.allowed) {
-    campaignTypeParts.push("auctions");
-  }
-
-  if (merchandiseCapability.allowed) {
-    campaignTypeParts.push("merchandise");
-  }
-
-  const campaignTypeNames =
-    campaignTypeParts.length > 1
-      ? `${campaignTypeParts.slice(0, -1).join(", ")} and ${
-          campaignTypeParts[campaignTypeParts.length - 1]
-        }`
-      : campaignTypeParts[0] || "campaigns";
+  const campaignTypeNames = auctionCapability.allowed
+    ? "raffles, squares, events and auctions"
+    : "raffles, squares and events";
 
   const publicDisplayName =
     cleanText(brandingSettings?.public_display_name) ||
@@ -849,18 +725,6 @@ export default async function TenantCampaignsPage({
             value: auctions.length,
             icon: getTypeIcon("auction"),
             helper: "Bid and support",
-          },
-        ]
-      : []),
-    ...(merchandiseCapability.allowed
-      ? [
-          {
-            type: "merchandise" as const,
-            label: "Merchandise",
-            shortLabel: "Shop",
-            value: merchandise.length,
-            icon: getTypeIcon("merchandise"),
-            helper: "Display-only shop items",
           },
         ]
       : []),
@@ -1218,6 +1082,32 @@ export default async function TenantCampaignsPage({
                   );
                 })}
               </div>
+
+              {showMerchandiseShop ? (
+                <Link
+                  href={`/m/${tenantSlug}`}
+                  className="merchandiseShopStrip"
+                  style={styles.merchandiseShopStrip}
+                >
+                  <span style={styles.merchandiseShopIcon}>🛍</span>
+
+                  <span style={styles.merchandiseShopCopy}>
+                    <strong>Merchandise / Shop</strong>
+                    <span>
+                      Browse {merchandiseSummary.productCount} published{" "}
+                      {merchandiseSummary.productCount === 1 ? "item" : "items"}.
+                      Checkout coming soon.
+                    </span>
+                  </span>
+
+                  <span
+                    className="merchandiseShopArrow"
+                    style={styles.merchandiseShopArrow}
+                  >
+                    View shop →
+                  </span>
+                </Link>
+              ) : null}
             </section>
           </div>
 
@@ -1253,11 +1143,7 @@ export default async function TenantCampaignsPage({
 
                 <div style={styles.supportOptionCopy}>
                   <strong>See campaign</strong>
-                  <span>
-                    {featuredCampaign?.type === "merchandise"
-                      ? "Open the merchandise display page."
-                      : "Open the campaign page to enter, buy, bid or book."}
-                  </span>
+                  <span>Open the campaign page to enter, buy, bid or book.</span>
                 </div>
 
                 <span style={styles.supportChevron}>›</span>
@@ -1266,15 +1152,10 @@ export default async function TenantCampaignsPage({
               <Link
                 href={
                   featuredCampaign
-                    ? featuredCampaign.type === "merchandise"
-                      ? getContactUrl({
-                          tenantSlug,
-                          campaign: featuredCampaign,
-                        })
-                      : getSupportUrl({
-                          tenantSlug,
-                          campaign: featuredCampaign,
-                        })
+                    ? getSupportUrl({
+                        tenantSlug,
+                        campaign: featuredCampaign,
+                      })
                     : `/c/${tenantSlug}/support`
                 }
                 style={styles.supportOptionLink}
@@ -1295,16 +1176,8 @@ export default async function TenantCampaignsPage({
                 </div>
 
                 <div style={styles.supportOptionCopy}>
-                  <strong>
-                    {featuredCampaign?.type === "merchandise"
-                      ? "Ask organiser"
-                      : "Support campaign"}
-                  </strong>
-                  <span>
-                    {featuredCampaign?.type === "merchandise"
-                      ? "Ask about this display-only merchandise item."
-                      : "Make a simple donation without receiving an entry."}
-                  </span>
+                  <strong>Support campaign</strong>
+                  <span>Make a simple donation without receiving an entry.</span>
                 </div>
 
                 <span style={styles.supportChevron}>›</span>
@@ -1380,8 +1253,8 @@ export default async function TenantCampaignsPage({
           <h2 style={styles.contactStripTitle}>Contact the organiser</h2>
 
           <p style={styles.contactStripText}>
-            Questions about a campaign, booking, donation, raffle, event,
-            auction or merchandise item can be sent directly to the organiser.
+            Questions about a campaign, booking, donation, raffle, event or
+            auction can be sent directly to the organiser.
           </p>
         </div>
 
@@ -1484,18 +1357,18 @@ export default async function TenantCampaignsPage({
                         padding: "10px 12px",
                       }}
                     >
-                      {getPrimaryActionLabel(campaign)}
+                      See campaign
                     </Link>
 
                     <Link
-                      href={getSecondaryActionUrl({ tenantSlug, campaign })}
+                      href={getSupportUrl({ tenantSlug, campaign })}
                       style={{
                         ...brandedGhostActionStyle,
                         minHeight: 42,
                         padding: "10px 12px",
                       }}
                     >
-                      {getSecondaryActionLabel(campaign)}
+                      Donate
                     </Link>
                   </div>
                 </article>
@@ -1566,10 +1439,7 @@ export default async function TenantCampaignsPage({
                 value={getTypeLabel(featuredCampaign.type)}
               />
               <MiniMeta label="Status" value="Live" />
-              <MiniMeta
-                label="Support"
-                value={getSupportMetaValue(featuredCampaign)}
-              />
+              <MiniMeta label="Support" value="Campaign donations" />
             </div>
 
             <div style={styles.actionStack}>
@@ -1578,17 +1448,17 @@ export default async function TenantCampaignsPage({
                   href={getCampaignUrl(featuredCampaign)}
                   style={brandedPrimaryActionStyle}
                 >
-                  {getPrimaryActionLabel(featuredCampaign)} →
+                  See campaign →
                 </Link>
 
                 <Link
-                  href={getSecondaryActionUrl({
+                  href={getSupportUrl({
                     tenantSlug,
                     campaign: featuredCampaign,
                   })}
                   style={brandedGhostActionStyle}
                 >
-                  {getSecondaryActionLabel(featuredCampaign)}
+                  Support campaign
                 </Link>
               </div>
 
@@ -1724,14 +1594,14 @@ export default async function TenantCampaignsPage({
                       href={getCampaignUrl(campaign)}
                       style={brandedPrimaryActionStyle}
                     >
-                      {getPrimaryActionLabel(campaign)}
+                      See campaign
                     </Link>
 
                     <Link
-                      href={getSecondaryActionUrl({ tenantSlug, campaign })}
+                      href={getSupportUrl({ tenantSlug, campaign })}
                       style={brandedGhostActionStyle}
                     >
-                      {getSecondaryActionLabel(campaign)}
+                      Support campaign
                     </Link>
                   </div>
 
@@ -1938,6 +1808,15 @@ const responsiveStyles = `
 
   .tenant-campaigns-page .campaignChooserCount {
     font-size: 26px !important;
+  }
+
+  .tenant-campaigns-page .merchandiseShopStrip {
+    grid-template-columns: 44px minmax(0, 1fr) !important;
+  }
+
+  .tenant-campaigns-page .merchandiseShopArrow {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
   }
 
   .tenant-campaigns-page .supportPanel {
@@ -2369,6 +2248,60 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
+  },
+
+  merchandiseShopStrip: {
+    display: "grid",
+    gridTemplateColumns: "46px minmax(0, 1fr) auto",
+    gap: 12,
+    alignItems: "center",
+    minHeight: 74,
+    padding: 12,
+    borderRadius: 20,
+    background:
+      "linear-gradient(135deg, rgba(250,204,21,0.16), rgba(22,131,248,0.10))",
+    border: "1px solid rgba(250,204,21,0.26)",
+    color: "#ffffff",
+    textDecoration: "none",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
+  },
+
+  merchandiseShopIcon: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.14)",
+    border: "1px solid rgba(255,255,255,0.18)",
+    fontSize: 20,
+    boxShadow: "0 10px 22px rgba(0,0,0,0.13)",
+  },
+
+  merchandiseShopCopy: {
+    display: "grid",
+    gap: 3,
+    color: "#e5edf8",
+    fontSize: 13,
+    lineHeight: 1.35,
+    fontWeight: 780,
+    minWidth: 0,
+    overflowWrap: "anywhere",
+  },
+
+  merchandiseShopArrow: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "9px 12px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.12)",
+    border: "1px solid rgba(255,255,255,0.18)",
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
   },
 
   supportPanel: {
