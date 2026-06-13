@@ -54,6 +54,14 @@ function cleanText(value: unknown, fallback = "") {
   return clean || fallback;
 }
 
+function normaliseFocus(value: unknown) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) return 50;
+
+  return Math.max(0, Math.min(100, Math.round(number)));
+}
+
 function formatMoneyValue(cents: number) {
   return (Number(cents || 0) / 100).toFixed(2);
 }
@@ -83,7 +91,9 @@ function getSizeOptions(product: MerchandiseProduct) {
 }
 
 function getStandardSelectedSizes(product: MerchandiseProduct) {
-  const sizeOptions = getSizeOptions(product).map((value) => value.toUpperCase());
+  const sizeOptions = getSizeOptions(product).map((value) =>
+    value.toUpperCase(),
+  );
 
   return new Set(
     sizeOptions.filter((value) => STANDARD_SIZE_OPTIONS.includes(value)),
@@ -210,6 +220,8 @@ export default async function EditMerchandiseProductPage({
   const selectedStandardSizes = getStandardSelectedSizes(product);
   const customSizeOptions = getCustomSizeOptions(product);
   const allSizes = getSizeOptions(product);
+  const imageFocusX = normaliseFocus(product.image_focus_x);
+  const imageFocusY = normaliseFocus(product.image_focus_y);
 
   return (
     <main className="admin-merchandise-form-page" style={styles.page}>
@@ -412,7 +424,7 @@ export default async function EditMerchandiseProductPage({
                 alt={product.title}
                 style={{
                   ...styles.previewImage,
-                  objectPosition: `${product.image_focus_x}% ${product.image_focus_y}%`,
+                  objectPosition: `${imageFocusX}% ${imageFocusY}%`,
                 }}
               />
             </div>
@@ -431,30 +443,20 @@ export default async function EditMerchandiseProductPage({
             />
           </Field>
 
-          <div className="form-grid" style={styles.formGrid}>
-            <Field label="Image focus X" helper="0 left, 50 centre, 100 right.">
-              <input
-                name="image_focus_x"
-                type="number"
-                min="0"
-                max="100"
-                step="1"
-                defaultValue={product.image_focus_x}
-                style={styles.input}
-              />
-            </Field>
+          <div style={styles.sliderPanel}>
+            <ImageFocusSlider
+              label="Image focus left / right"
+              helper="Move the focal point horizontally. 0 is left, 50 is centre, 100 is right."
+              name="image_focus_x"
+              defaultValue={imageFocusX}
+            />
 
-            <Field label="Image focus Y" helper="0 top, 50 centre, 100 bottom.">
-              <input
-                name="image_focus_y"
-                type="number"
-                min="0"
-                max="100"
-                step="1"
-                defaultValue={product.image_focus_y}
-                style={styles.input}
-              />
-            </Field>
+            <ImageFocusSlider
+              label="Image focus up / down"
+              helper="Move the focal point vertically. 0 is top, 50 is centre, 100 is bottom."
+              name="image_focus_y"
+              defaultValue={imageFocusY}
+            />
           </div>
         </section>
 
@@ -495,6 +497,45 @@ function Field({
   );
 }
 
+function ImageFocusSlider({
+  label,
+  helper,
+  name,
+  defaultValue,
+}: {
+  label: string;
+  helper: string;
+  name: string;
+  defaultValue: number;
+}) {
+  return (
+    <label style={styles.sliderField}>
+      <span style={styles.label}>{label}</span>
+
+      <div style={styles.sliderRow}>
+        <span style={styles.sliderEndpoint}>0</span>
+
+        <input
+          name={name}
+          type="range"
+          min="0"
+          max="100"
+          step="1"
+          defaultValue={defaultValue}
+          style={styles.slider}
+        />
+
+        <span style={styles.sliderEndpoint}>100</span>
+      </div>
+
+      <div style={styles.sliderMeta}>
+        <span>{helper}</span>
+        <strong>{defaultValue}%</strong>
+      </div>
+    </label>
+  );
+}
+
 const responsiveStyles = `
 .admin-merchandise-form-page,
 .admin-merchandise-form-page * {
@@ -516,6 +557,47 @@ const responsiveStyles = `
 .admin-merchandise-form-page button {
   min-width: 0;
   max-width: 100%;
+}
+
+.admin-merchandise-form-page input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+
+.admin-merchandise-form-page input[type="range"]::-webkit-slider-runnable-track {
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #dbeafe 0%, #1683f8 50%, #facc15 100%);
+  border: 1px solid #bfdbfe;
+}
+
+.admin-merchandise-form-page input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 26px;
+  height: 26px;
+  margin-top: -9px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 3px solid #1683f8;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.2);
+}
+
+.admin-merchandise-form-page input[type="range"]::-moz-range-track {
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #dbeafe 0%, #1683f8 50%, #facc15 100%);
+  border: 1px solid #bfdbfe;
+}
+
+.admin-merchandise-form-page input[type="range"]::-moz-range-thumb {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 3px solid #1683f8;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.2);
 }
 
 @media (max-width: 860px) {
@@ -769,6 +851,56 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     lineHeight: 1.4,
     fontWeight: 700,
+  },
+
+  sliderPanel: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    borderRadius: 20,
+    background:
+      "linear-gradient(135deg, #f8fafc 0%, #ffffff 58%, #eff6ff 100%)",
+    border: "1px solid #dbeafe",
+  },
+
+  sliderField: {
+    display: "grid",
+    gap: 8,
+    padding: 12,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+
+  sliderRow: {
+    display: "grid",
+    gridTemplateColumns: "32px minmax(0, 1fr) 42px",
+    gap: 10,
+    alignItems: "center",
+  },
+
+  slider: {
+    width: "100%",
+    height: 34,
+    cursor: "pointer",
+  },
+
+  sliderEndpoint: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 950,
+    textAlign: "center",
+  },
+
+  sliderMeta: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    flexWrap: "wrap",
+    color: "#64748b",
+    fontSize: 12,
+    lineHeight: 1.4,
+    fontWeight: 720,
   },
 
   actions: {
