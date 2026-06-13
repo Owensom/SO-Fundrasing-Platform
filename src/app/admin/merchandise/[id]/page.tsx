@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
@@ -16,6 +16,12 @@ import { updateMerchandiseProduct } from "../actions";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+type MerchandiseOption = {
+  type?: string | null;
+  label?: string | null;
+  value?: string | null;
+};
+
 type MerchandiseProduct = {
   id: string;
   tenant_slug: string;
@@ -29,6 +35,7 @@ type MerchandiseProduct = {
   currency: string;
   stock_quantity: number | null;
   sold_quantity: number;
+  options_json: MerchandiseOption[] | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -39,6 +46,8 @@ type TenantSettingsLike = {
   subscription_status?: string | null;
   platform_owner_bypass?: boolean | null;
 };
+
+const STANDARD_SIZE_OPTIONS = ["XS", "S", "M", "L", "XL", "XXL"];
 
 function cleanText(value: unknown, fallback = "") {
   const clean = String(value ?? "").trim();
@@ -62,6 +71,31 @@ function formatDate(value: string | null | undefined) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
+}
+
+function getSizeOptions(product: MerchandiseProduct) {
+  if (!Array.isArray(product.options_json)) return [];
+
+  return product.options_json
+    .filter((option) => cleanText(option?.type).toLowerCase() === "size")
+    .map((option) => cleanText(option?.label || option?.value))
+    .filter(Boolean);
+}
+
+function getStandardSelectedSizes(product: MerchandiseProduct) {
+  const sizeOptions = getSizeOptions(product).map((value) => value.toUpperCase());
+
+  return new Set(
+    sizeOptions.filter((value) => STANDARD_SIZE_OPTIONS.includes(value)),
+  );
+}
+
+function getCustomSizeOptions(product: MerchandiseProduct) {
+  const standardSelected = getStandardSelectedSizes(product);
+
+  return getSizeOptions(product)
+    .filter((value) => !standardSelected.has(value.toUpperCase()))
+    .join(", ");
 }
 
 async function requireTenantAccess() {
@@ -106,6 +140,7 @@ async function getProduct({
         currency,
         stock_quantity,
         sold_quantity,
+        options_json,
         status,
         created_at::text,
         updated_at::text
@@ -172,6 +207,10 @@ export default async function EditMerchandiseProductPage({
     );
   }
 
+  const selectedStandardSizes = getStandardSelectedSizes(product);
+  const customSizeOptions = getCustomSizeOptions(product);
+  const allSizes = getSizeOptions(product);
+
   return (
     <main className="admin-merchandise-form-page" style={styles.page}>
       <style>{responsiveStyles}</style>
@@ -212,7 +251,7 @@ export default async function EditMerchandiseProductPage({
         </section>
       ) : null}
 
-      <section style={styles.metaPanel}>
+      <section className="product-meta-grid" style={styles.metaPanel}>
         <div>
           <span style={styles.metaLabel}>Product slug</span>
           <strong style={styles.metaValue}>{product.slug}</strong>
@@ -320,6 +359,50 @@ export default async function EditMerchandiseProductPage({
         </section>
 
         <section style={styles.card}>
+          <p style={styles.kicker}>Size options</p>
+
+          <p style={styles.sectionHelp}>
+            Use sizes for clothing such as T-shirts, hoodies and tops. Leave
+            blank for products without sizes.
+          </p>
+
+          <div className="size-grid" style={styles.sizeGrid}>
+            {STANDARD_SIZE_OPTIONS.map((size) => (
+              <label key={size} style={styles.sizeOption}>
+                <input
+                  type="checkbox"
+                  name="size_options"
+                  value={size}
+                  defaultChecked={selectedStandardSizes.has(size)}
+                  style={styles.checkbox}
+                />
+                <span>{size}</span>
+              </label>
+            ))}
+          </div>
+
+          <Field
+            label="Other sizes or options"
+            helper="Optional. Separate with commas, for example Age 11-12, Age 13-14, One size."
+          >
+            <input
+              name="custom_size_options"
+              type="text"
+              defaultValue={customSizeOptions}
+              placeholder="Optional custom sizes"
+              style={styles.input}
+            />
+          </Field>
+
+          <div style={styles.currentOptionsPanel}>
+            <span style={styles.currentOptionsLabel}>Current options</span>
+            <strong style={styles.currentOptionsValue}>
+              {allSizes.length ? allSizes.join(", ") : "No size options set"}
+            </strong>
+          </div>
+        </section>
+
+        <section style={styles.card}>
           <p style={styles.kicker}>Image setup</p>
 
           {product.image_url ? (
@@ -337,7 +420,7 @@ export default async function EditMerchandiseProductPage({
 
           <Field
             label="Image URL"
-            helper="Use a Cloudinary/image URL for now. Platform image upload can be wired later."
+            helper="Use the existing working product image URL field."
           >
             <input
               name="image_url"
@@ -398,7 +481,7 @@ function Field({
   label: string;
   helper?: string;
   required?: boolean;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <label style={styles.field}>
@@ -435,6 +518,12 @@ const responsiveStyles = `
   max-width: 100%;
 }
 
+@media (max-width: 860px) {
+  .admin-merchandise-form-page .size-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
 @media (max-width: 720px) {
   .admin-merchandise-form-page {
     padding: 18px 12px 44px !important;
@@ -451,7 +540,8 @@ const responsiveStyles = `
   }
 
   .admin-merchandise-form-page .form-grid,
-  .admin-merchandise-form-page .product-meta-grid {
+  .admin-merchandise-form-page .product-meta-grid,
+  .admin-merchandise-form-page .size-grid {
     grid-template-columns: 1fr !important;
   }
 
@@ -563,10 +653,72 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.08em",
   },
 
+  sectionHelp: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 740,
+  },
+
   formGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 14,
+  },
+
+  sizeGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
+    gap: 8,
+  },
+
+  sizeOption: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    minHeight: 44,
+    padding: "9px 10px",
+    borderRadius: 14,
+    background: "#f8fafc",
+    border: "1px solid #dbeafe",
+    color: "#0f172a",
+    fontSize: 13,
+    fontWeight: 950,
+    cursor: "pointer",
+  },
+
+  checkbox: {
+    width: 16,
+    height: 16,
+    accentColor: "#1683f8",
+    flexShrink: 0,
+  },
+
+  currentOptionsPanel: {
+    display: "grid",
+    gap: 5,
+    padding: 13,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+
+  currentOptionsLabel: {
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  currentOptionsValue: {
+    color: "#0f172a",
+    fontSize: 14,
+    lineHeight: 1.35,
+    fontWeight: 900,
+    overflowWrap: "anywhere",
   },
 
   field: {
