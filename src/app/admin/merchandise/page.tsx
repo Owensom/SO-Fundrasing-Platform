@@ -293,16 +293,16 @@ export default async function AdminMerchandisePage() {
               <h2 style={styles.panelTitle}>Merchandise products</h2>
 
               <p style={styles.panelText}>
-                Add product creation in the next step, then build public shop
-                display and checkout only after the admin product model is
+                Add or edit product records here. Public shop display and
+                checkout will only be connected after this admin model is
                 stable.
               </p>
             </div>
 
             <div style={styles.panelActions}>
-              <span style={styles.disabledButton}>
-                New product coming next
-              </span>
+              <Link href="/admin/merchandise/new" style={styles.primaryLink}>
+                New product →
+              </Link>
 
               <Link href="/admin/launch-readiness" style={styles.secondaryLink}>
                 Launch Readiness →
@@ -317,9 +317,13 @@ export default async function AdminMerchandisePage() {
               <h2 style={styles.emptyTitle}>No merchandise products yet</h2>
 
               <p style={styles.emptyText}>
-                The merchandise foundation is ready. The next step will add the
-                product creation form and edit page.
+                Create your first merchandise product. It will remain admin-only
+                until public shop and checkout phases are added.
               </p>
+
+              <Link href="/admin/merchandise/new" style={styles.emptyButton}>
+                Create first product →
+              </Link>
             </section>
           ) : (
             <section className="merchandise-product-grid" style={styles.grid}>
@@ -403,65 +407,72 @@ function SummaryCard({
 
 function ProductCard({ product }: { product: MerchandiseProduct }) {
   return (
-    <article style={styles.productCard}>
-      <div style={styles.productImageWrap}>
-        {product.image_url ? (
-          <img
-            src={product.image_url}
-            alt={product.title}
-            style={styles.productImage}
-          />
-        ) : (
-          <div style={styles.productImageFallback}>SHOP</div>
-        )}
-      </div>
-
-      <div style={styles.productBody}>
-        <div style={styles.productTop}>
-          <span
-            style={{
-              ...styles.statusPill,
-              ...statusStyle(product.status),
-            }}
-          >
-            {statusLabel(product.status)}
-          </span>
-
-          <span style={styles.pricePill}>
-            {formatMoney(product.price_cents, product.currency)}
-          </span>
+    <Link
+      href={`/admin/merchandise/${encodeURIComponent(product.id)}`}
+      style={styles.productLink}
+    >
+      <article style={styles.productCard}>
+        <div style={styles.productImageWrap}>
+          {product.image_url ? (
+            <img
+              src={product.image_url}
+              alt={product.title}
+              style={styles.productImage}
+            />
+          ) : (
+            <div style={styles.productImageFallback}>SHOP</div>
+          )}
         </div>
 
-        <h2 style={styles.productTitle}>{product.title}</h2>
+        <div style={styles.productBody}>
+          <div style={styles.productTop}>
+            <span
+              style={{
+                ...styles.statusPill,
+                ...statusStyle(product.status),
+              }}
+            >
+              {statusLabel(product.status)}
+            </span>
 
-        <p style={styles.productDescription}>
-          {product.description || "No product description added yet."}
-        </p>
-
-        <div style={styles.productMetaGrid}>
-          <div style={styles.productMeta}>
-            <span style={styles.productMetaLabel}>Stock</span>
-            <strong style={styles.productMetaValue}>
-              {getStockLabel(product)}
-            </strong>
+            <span style={styles.pricePill}>
+              {formatMoney(product.price_cents, product.currency)}
+            </span>
           </div>
 
-          <div style={styles.productMeta}>
-            <span style={styles.productMetaLabel}>Sold</span>
-            <strong style={styles.productMetaValue}>
-              {product.sold_quantity}
-            </strong>
+          <h2 style={styles.productTitle}>{product.title}</h2>
+
+          <p style={styles.productDescription}>
+            {product.description || "No product description added yet."}
+          </p>
+
+          <div style={styles.productMetaGrid}>
+            <div style={styles.productMeta}>
+              <span style={styles.productMetaLabel}>Stock</span>
+              <strong style={styles.productMetaValue}>
+                {getStockLabel(product)}
+              </strong>
+            </div>
+
+            <div style={styles.productMeta}>
+              <span style={styles.productMetaLabel}>Sold</span>
+              <strong style={styles.productMetaValue}>
+                {product.sold_quantity}
+              </strong>
+            </div>
+
+            <div style={styles.productMeta}>
+              <span style={styles.productMetaLabel}>Created</span>
+              <strong style={styles.productMetaValue}>
+                {formatDate(product.created_at)}
+              </strong>
+            </div>
           </div>
 
-          <div style={styles.productMeta}>
-            <span style={styles.productMetaLabel}>Created</span>
-            <strong style={styles.productMetaValue}>
-              {formatDate(product.created_at)}
-            </strong>
-          </div>
+          <span style={styles.editLink}>Edit product →</span>
         </div>
-      </div>
-    </article>
+      </article>
+    </Link>
   );
 }
 
@@ -838,16 +849,17 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 210,
   },
 
-  disabledButton: {
+  primaryLink: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
     minHeight: 44,
     padding: "10px 15px",
     borderRadius: 999,
-    background: "#e2e8f0",
-    color: "#475569",
-    border: "1px solid #cbd5e1",
+    background: "#1683f8",
+    color: "#ffffff",
+    border: "1px solid #1683f8",
+    textDecoration: "none",
     fontWeight: 950,
     textAlign: "center",
   },
@@ -869,7 +881,7 @@ const styles: Record<string, CSSProperties> = {
 
   emptyState: {
     display: "grid",
-    gap: 8,
+    gap: 10,
     justifyItems: "center",
     padding: 26,
     borderRadius: 28,
@@ -898,11 +910,33 @@ const styles: Record<string, CSSProperties> = {
     maxWidth: 640,
   },
 
+  emptyButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    minHeight: 44,
+    padding: "10px 15px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    border: "1px solid #1683f8",
+    textDecoration: "none",
+    fontWeight: 950,
+  },
+
   grid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))",
     gap: 16,
     marginBottom: 18,
+  },
+
+  productLink: {
+    display: "block",
+    color: "inherit",
+    textDecoration: "none",
+    height: "100%",
   },
 
   productCard: {
@@ -913,6 +947,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
     overflow: "hidden",
+    height: "100%",
   },
 
   productImageWrap: {
@@ -1028,6 +1063,12 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.35,
     fontWeight: 900,
     overflowWrap: "anywhere",
+  },
+
+  editLink: {
+    color: "#2563eb",
+    fontSize: 13,
+    fontWeight: 950,
   },
 
   summaryGrid: {
