@@ -5,6 +5,7 @@ export type SubscriptionCapability =
   | "squares"
   | "events"
   | "auctions"
+  | "merchandise"
   | "custom_campaign_images"
   | "advanced_branding"
   | "custom_commission"
@@ -104,6 +105,7 @@ export function getTierCapabilities(
       "squares",
       "events",
       "auctions",
+      "merchandise",
       "custom_campaign_images",
       "advanced_branding",
       "custom_commission",
@@ -124,6 +126,7 @@ export function getTierCapabilities(
       "squares",
       "events",
       "auctions",
+      "merchandise",
       "custom_campaign_images",
       "custom_commission",
       "event_guest_catering_edit",
@@ -166,6 +169,7 @@ export function checkSubscriptionCapability(
 
   if (
     capability === "auctions" ||
+    capability === "merchandise" ||
     capability === "custom_campaign_images" ||
     capability === "custom_commission" ||
     capability === "event_guest_catering_edit" ||
@@ -324,4 +328,8 @@ export function getEventFundraisingAddOnsUpgradeMessage() {
 
 export function getMultipleEventFundraisingAddOnsUpgradeMessage() {
   return "Multiple event fundraising add-ons per event require the Foundation plan.";
+}
+
+export function getMerchandiseUpgradeMessage() {
+  return "Merchandise and shop fundraising require the Professional plan or higher.";
 }
