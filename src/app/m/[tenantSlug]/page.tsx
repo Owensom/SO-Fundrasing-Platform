@@ -11,6 +11,8 @@ import {
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+const DEFAULT_MERCHANDISE_IMAGE_SRC = "/brand/so-default-merchandise.png";
+
 type PageProps = {
   params: Promise<{
     tenantSlug: string;
@@ -426,7 +428,12 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
               color: canUseAdvancedBranding ? primaryColour : "#2563eb",
             }}
           >
-            🛍
+            <img
+              src={DEFAULT_MERCHANDISE_IMAGE_SRC}
+              alt=""
+              aria-hidden="true"
+              style={styles.brandFeatureImage}
+            />
           </span>
 
           <div style={styles.brandFeatureCopy}>
@@ -523,10 +530,7 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
             </p>
 
             <div style={styles.supportOptionList}>
-              <a
-                href="#shop-items"
-                style={styles.supportOptionLink}
-              >
+              <a href="#shop-items" style={styles.supportOptionLink}>
                 <div
                   style={{
                     ...styles.supportIcon,
@@ -582,7 +586,10 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
                   <span style={styles.supportChevron}>›</span>
                 </a>
               ) : (
-                <Link href={`/c/${tenantSlug}/contact`} style={styles.supportOptionLink}>
+                <Link
+                  href={`/c/${tenantSlug}/contact`}
+                  style={styles.supportOptionLink}
+                >
                   <div
                     style={{
                       ...styles.supportIcon,
@@ -666,7 +673,12 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
                   : "rgba(37,99,235,0.18)",
               }}
             >
-              🛍
+              <img
+                src={DEFAULT_MERCHANDISE_IMAGE_SRC}
+                alt=""
+                aria-hidden="true"
+                style={styles.emptyIconImage}
+              />
             </div>
 
             <h2 style={styles.emptyTitle}>Merchandise coming soon</h2>
@@ -712,7 +724,11 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
                       />
                     ) : (
                       <div style={styles.imageFallback}>
-                        <span>SHOP</span>
+                        <img
+                          src={DEFAULT_MERCHANDISE_IMAGE_SRC}
+                          alt="Merchandise"
+                          style={styles.defaultProductImage}
+                        />
                       </div>
                     )}
                   </div>
@@ -732,7 +748,7 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
                         color: "#0f172a",
                       }}
                     >
-                      🛍 Merchandise
+                      Merchandise
                     </span>
 
                     <span style={styles.statusPill}>Display only</span>
@@ -1123,6 +1139,16 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(226,232,240,0.82)",
     fontSize: 18,
     fontWeight: 950,
+    overflow: "hidden",
+  },
+
+  brandFeatureImage: {
+    display: "block",
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+    padding: 2,
+    boxSizing: "border-box",
   },
 
   brandFeatureCopy: {
@@ -1484,10 +1510,15 @@ const styles: Record<string, CSSProperties> = {
     placeItems: "center",
     width: "100%",
     height: "100%",
-    color: "#0f172a",
-    fontSize: 18,
-    fontWeight: 950,
-    letterSpacing: "0.08em",
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 58%, #eff6ff 100%)",
+  },
+
+  defaultProductImage: {
+    display: "block",
+    width: "min(76%, 245px)",
+    height: "min(76%, 170px)",
+    objectFit: "contain",
   },
 
   productBody: {
@@ -1655,6 +1686,16 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid",
     fontSize: 24,
     fontWeight: 950,
+    overflow: "hidden",
+  },
+
+  emptyIconImage: {
+    display: "block",
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+    padding: 3,
+    boxSizing: "border-box",
   },
 
   emptyTitle: {
