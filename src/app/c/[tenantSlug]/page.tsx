@@ -1558,8 +1558,7 @@ const responsiveStyles = `
   .tenant-campaigns-page .brandHeader,
   .tenant-campaigns-page .heroMainGrid,
   .tenant-campaigns-page .featuredCard,
-  .tenant-campaigns-page .contactStrip,
-  .tenant-campaigns-page .homeScreenHelper {
+  .tenant-campaigns-page .contactStrip {
     grid-template-columns: 1fr !important;
   }
 
@@ -1696,6 +1695,9 @@ const responsiveStyles = `
   }
 
   .tenant-campaigns-page .homeScreenHelper {
+    width: 100% !important;
+    margin: 16px 0 0 !important;
+    grid-template-columns: 44px minmax(0, 1fr) !important;
     text-align: left !important;
   }
 
@@ -2758,16 +2760,17 @@ const styles: Record<string, CSSProperties> = {
 
   homeScreenHelper: {
     display: "grid",
-    gridTemplateColumns: "46px minmax(0, 1fr)",
+    gridTemplateColumns: "40px minmax(0, 1fr)",
     gap: 12,
     alignItems: "start",
-    padding: 14,
-    borderRadius: 22,
+    width: "min(100%, 780px)",
+    padding: 13,
+    borderRadius: 20,
     background:
-      "linear-gradient(135deg, rgba(255,255,255,0.92), rgba(248,250,252,0.84))",
+      "linear-gradient(135deg, rgba(255,255,255,0.92), rgba(248,250,252,0.82))",
     border: "1px solid",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.045)",
-    marginTop: 16,
+    boxShadow: "0 8px 18px rgba(15,23,42,0.035)",
+    margin: "16px auto 0",
     minWidth: 0,
   },
 
@@ -2775,11 +2778,11 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    width: 44,
-    height: 44,
-    borderRadius: 16,
+    width: 38,
+    height: 38,
+    borderRadius: 14,
     border: "1px solid",
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: 950,
     flexShrink: 0,
   },
@@ -2793,7 +2796,7 @@ const styles: Record<string, CSSProperties> = {
   homeScreenTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 19,
+    fontSize: 18,
     lineHeight: 1.08,
     letterSpacing: "-0.04em",
     overflowWrap: "anywhere",
@@ -2810,8 +2813,8 @@ const styles: Record<string, CSSProperties> = {
 
   homeScreenSteps: {
     display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 8,
+    gridTemplateColumns: "1fr",
+    gap: 4,
     marginTop: 2,
     color: "#475569",
     fontSize: 12,
