@@ -144,6 +144,19 @@ function buildPublicHubCaption(params: {
   ].join("\n");
 }
 
+function buildBuyerShortcutCaption(params: {
+  branding: ShareKitBranding;
+  buyerAppUrl: string;
+}) {
+  return [
+    `${params.branding.displayName} has a live fundraising shortcut for supporters.`,
+    "",
+    "Save or share this link to open the latest raffles, squares, events, auctions and donation options in one place.",
+    "",
+    `Open live campaigns: ${params.buyerAppUrl}`,
+  ].join("\n");
+}
+
 function qrImageUrl(value: string, size = 700) {
   const cleanValue = cleanText(value);
 
@@ -281,6 +294,10 @@ export default function CampaignShareKitClient({
   }, [campaigns, selectedCampaignId]);
 
   const publicHubUrl = absoluteUrl(appBaseUrl, `/c/${branding.tenantSlug}`);
+  const buyerAppUrl = absoluteUrl(
+    appBaseUrl,
+    `/c/${branding.tenantSlug}#live-campaigns`,
+  );
   const logoSrc = getBestLogoSrc(branding);
 
   const campaignUrl = selectedCampaign
@@ -304,6 +321,11 @@ export default function CampaignShareKitClient({
     publicHubUrl,
   });
 
+  const buyerShortcutCaption = buildBuyerShortcutCaption({
+    branding,
+    buyerAppUrl,
+  });
+
   const hubQrDetails: QrCardDetails = {
     label: "Public campaign hub QR",
     title: branding.displayName,
@@ -311,6 +333,15 @@ export default function CampaignShareKitClient({
     action: "Scan to view all live campaigns",
     url: publicHubUrl,
     filenameSeed: `${branding.displayName}-public-hub`,
+  };
+
+  const buyerShortcutQrDetails: QrCardDetails = {
+    label: "Buyer app shortcut QR",
+    title: `${branding.displayName} supporter shortcut`,
+    eyebrow: "BUYER APP SHORTCUT",
+    action: "Scan to open live campaigns on your phone",
+    url: buyerAppUrl,
+    filenameSeed: `${branding.displayName}-buyer-app-shortcut`,
   };
 
   const campaignQrDetails: QrCardDetails | null = selectedCampaign
@@ -338,6 +369,7 @@ export default function CampaignShareKitClient({
     : null;
 
   const hubQrPreviewUrl = qrImageUrl(publicHubUrl, 700);
+  const buyerShortcutQrPreviewUrl = qrImageUrl(buyerAppUrl, 700);
 
   async function handleCopy(label: string, value: string) {
     try {
@@ -380,6 +412,23 @@ export default function CampaignShareKitClient({
         title: branding.displayName,
         text: publicHubCaption,
         url: publicHubUrl,
+      });
+    } catch {
+      // User cancelled native share.
+    }
+  }
+
+  async function handleBuyerShortcutShare() {
+    if (!navigator.share) {
+      await handleCopy("buyer-shortcut-caption", buyerShortcutCaption);
+      return;
+    }
+
+    try {
+      await navigator.share({
+        title: `${branding.displayName} live campaigns`,
+        text: buyerShortcutCaption,
+        url: buyerAppUrl,
       });
     } catch {
       // User cancelled native share.
@@ -1067,6 +1116,114 @@ export default function CampaignShareKitClient({
         </aside>
       </section>
 
+      <section
+        className="share-buyer-shortcut-panel"
+        style={styles.buyerShortcutPanel}
+      >
+        <div style={styles.buyerShortcutCopy}>
+          <div style={styles.logoRow}>
+            <div style={styles.buyerIcon}>↗</div>
+
+            <div style={styles.logoCopy}>
+              <p style={styles.buyerKicker}>Buyer app shortcut</p>
+              <h2 style={styles.title}>Give supporters a phone shortcut</h2>
+            </div>
+          </div>
+
+          <p style={styles.text}>
+            Share a tenant-linked shortcut that opens straight to your live
+            campaigns area. Supporters can save it to their phone, scan the QR
+            code, or reopen it whenever they want to support your latest
+            raffles, squares, events, auctions and donation options.
+          </p>
+
+          <div style={styles.buyerShortcutNote}>
+            This is buyer-facing only. It opens the public campaign hub, not the
+            admin dashboard.
+          </div>
+
+          <div style={styles.linkBlock}>
+            <span style={styles.linkLabel}>Buyer shortcut link</span>
+            <strong style={styles.linkValue}>{buyerAppUrl}</strong>
+          </div>
+
+          <div className="share-buyer-actions" style={styles.publicHubActions}>
+            <button
+              type="button"
+              onClick={() => handleCopy("buyer-shortcut", buyerAppUrl)}
+              style={{
+                ...styles.primaryButton,
+                background: branding.primaryColour,
+                borderColor: branding.primaryColour,
+              }}
+            >
+              Copy buyer shortcut
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                handleCopy("buyer-shortcut-caption", buyerShortcutCaption)
+              }
+              style={styles.secondaryButton}
+            >
+              Copy shortcut caption
+            </button>
+
+            <button
+              type="button"
+              onClick={handleBuyerShortcutShare}
+              style={styles.secondaryButton}
+            >
+              Share shortcut
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleDownloadQrCard(buyerShortcutQrDetails)}
+              style={styles.darkButton}
+            >
+              Download shortcut QR
+            </button>
+
+            <a
+              href={buyerAppUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={styles.linkButton}
+            >
+              Open buyer shortcut
+            </a>
+          </div>
+        </div>
+
+        <aside style={styles.buyerQrPanel}>
+          <div style={styles.qrHeader}>
+            <div>
+              <span style={styles.linkLabel}>Shortcut QR</span>
+              <h3 style={styles.qrTitle}>Live campaigns shortcut</h3>
+            </div>
+
+            <span style={styles.qrBadge}>Buyer facing</span>
+          </div>
+
+          <div style={styles.qrPreviewBox}>
+            <img
+              src={buyerShortcutQrPreviewUrl}
+              alt={`Buyer app shortcut QR for ${branding.displayName}`}
+              style={styles.qrImage}
+            />
+          </div>
+
+          <p style={styles.qrHelpText}>
+            Use this on posters, emails, tables, WhatsApp groups or social posts
+            when you want supporters to return to your live campaigns quickly.
+          </p>
+
+          <strong style={styles.qrUrlText}>{buyerAppUrl}</strong>
+        </aside>
+      </section>
+
       <section className="share-selector-panel" style={styles.selectorPanel}>
         <div>
           <p style={styles.kicker}>Campaign-specific assets</p>
@@ -1249,6 +1406,11 @@ export default function CampaignShareKitClient({
               <span style={styles.linkLabel}>Suggested public hub caption</span>
               <pre style={styles.captionText}>{publicHubCaption}</pre>
             </div>
+
+            <div style={styles.captionBox}>
+              <span style={styles.linkLabel}>Suggested buyer shortcut caption</span>
+              <pre style={styles.captionText}>{buyerShortcutCaption}</pre>
+            </div>
           </aside>
         </div>
       ) : null}
@@ -1280,7 +1442,28 @@ const styles: Record<string, CSSProperties> = {
     overflow: "hidden",
   },
 
+  buyerShortcutPanel: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(280px, 0.45fr)",
+    gap: 16,
+    alignItems: "start",
+    padding: 22,
+    borderRadius: 28,
+    background:
+      "radial-gradient(circle at top right, rgba(15,118,110,0.16), transparent 34%), linear-gradient(135deg, #ffffff 0%, #ecfeff 100%)",
+    border: "1px solid #99f6e4",
+    boxShadow: "0 14px 34px rgba(15,118,110,0.08)",
+    minWidth: 0,
+    overflow: "hidden",
+  },
+
   publicHubCopy: {
+    display: "grid",
+    gap: 12,
+    minWidth: 0,
+  },
+
+  buyerShortcutCopy: {
     display: "grid",
     gap: 12,
     minWidth: 0,
@@ -1301,6 +1484,19 @@ const styles: Record<string, CSSProperties> = {
     background:
       "radial-gradient(circle at top right, rgba(22,131,248,0.08), transparent 34%), #ffffff",
     border: "1px solid #dbeafe",
+    boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+    minWidth: 0,
+    overflow: "hidden",
+  },
+
+  buyerQrPanel: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    borderRadius: 22,
+    background:
+      "radial-gradient(circle at top right, rgba(15,118,110,0.08), transparent 34%), #ffffff",
+    border: "1px solid #ccfbf1",
     boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
     minWidth: 0,
     overflow: "hidden",
@@ -1329,6 +1525,18 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     lineHeight: 1.5,
     fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  buyerShortcutNote: {
+    padding: 13,
+    borderRadius: 18,
+    background: "#f0fdfa",
+    border: "1px solid #99f6e4",
+    color: "#115e59",
+    fontSize: 14,
+    lineHeight: 1.5,
+    fontWeight: 850,
     overflowWrap: "anywhere",
   },
 
@@ -1364,6 +1572,21 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
+    flexShrink: 0,
+  },
+
+  buyerIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 18,
+    background: "linear-gradient(135deg, #0f766e, #14b8a6)",
+    color: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.35)",
+    boxShadow: "0 12px 26px rgba(15,118,110,0.18)",
+    display: "grid",
+    placeItems: "center",
+    fontSize: 30,
+    fontWeight: 950,
     flexShrink: 0,
   },
 
@@ -1414,6 +1637,15 @@ const styles: Record<string, CSSProperties> = {
   kicker: {
     margin: "0 0 6px",
     color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  buyerKicker: {
+    margin: "0 0 6px",
+    color: "#0f766e",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
@@ -1646,6 +1878,26 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.2,
     whiteSpace: "normal",
     overflowWrap: "anywhere",
+  },
+
+  linkButton: {
+    minHeight: 46,
+    padding: "11px 13px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid #cbd5e1",
+    fontWeight: 950,
+    cursor: "pointer",
+    textAlign: "center",
+    lineHeight: 1.2,
+    whiteSpace: "normal",
+    overflowWrap: "anywhere",
+    textDecoration: "none",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxSizing: "border-box",
   },
 
   copyNotice: {
