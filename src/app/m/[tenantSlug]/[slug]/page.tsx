@@ -4,6 +4,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { queryOne } from "@/lib/db";
 import { getTenantSettings } from "@/lib/tenant-settings";
+import {
+  checkSubscriptionCapability,
+  normaliseSubscriptionTier,
+} from "@/lib/subscription-capabilities";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -19,10 +23,10 @@ type MerchandiseProduct = {
   tenant_slug: string;
   slug: string;
   title: string;
-  description: string;
+  description: string | null;
   image_url: string | null;
-  image_focus_x: number;
-  image_focus_y: number;
+  image_focus_x: number | null;
+  image_focus_y: number | null;
   price_cents: number;
   currency: string;
   stock_quantity: number | null;
@@ -43,6 +47,9 @@ type TenantPublicSettings = {
   public_footer_text?: string | null;
   public_contact_email?: string | null;
   public_contact_name?: string | null;
+  subscription_tier?: string | null;
+  subscription_status?: string | null;
+  platform_owner_bypass?: boolean | null;
 };
 
 function cleanText(value: unknown, fallback = "") {
@@ -60,11 +67,36 @@ function normaliseHexColour(value: unknown, fallback: string) {
   return fallback;
 }
 
+function hexToRgb(hex: string) {
+  const clean = normaliseHexColour(hex, "#0F172A").replace("#", "");
+
+  return {
+    r: Number.parseInt(clean.slice(0, 2), 16),
+    g: Number.parseInt(clean.slice(2, 4), 16),
+    b: Number.parseInt(clean.slice(4, 6), 16),
+  };
+}
+
+function getReadableTextColour(background: string) {
+  const { r, g, b } = hexToRgb(background);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+  return luminance > 0.62 ? "#0f172a" : "#ffffff";
+}
+
+function normaliseFocus(value: unknown) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) return 50;
+
+  return Math.max(0, Math.min(100, Math.round(number)));
+}
+
 function formatMoney(cents: number, currency = "GBP") {
   try {
     return new Intl.NumberFormat("en-GB", {
       style: "currency",
-      currency,
+      currency: cleanText(currency, "GBP"),
     }).format(Number(cents || 0) / 100);
   } catch {
     return `£${(Number(cents || 0) / 100).toFixed(2)}`;
@@ -73,7 +105,7 @@ function formatMoney(cents: number, currency = "GBP") {
 
 function getStockLabel(product: MerchandiseProduct) {
   if (product.stock_quantity === null) {
-    return "Available";
+    return "Availability to be confirmed";
   }
 
   const remaining = Math.max(
@@ -82,7 +114,7 @@ function getStockLabel(product: MerchandiseProduct) {
   );
 
   if (remaining <= 0) {
-    return "Currently out of stock";
+    return "Ask organiser for availability";
   }
 
   if (remaining === 1) {
@@ -125,7 +157,17 @@ function getSizeSummary(product: MerchandiseProduct) {
   return sizes.join(", ");
 }
 
-function getBestLogo(settings: TenantPublicSettings | null) {
+function getBestLogo({
+  settings,
+  canUseAdvancedBranding,
+}: {
+  settings: TenantPublicSettings | null;
+  canUseAdvancedBranding: boolean;
+}) {
+  if (!canUseAdvancedBranding) {
+    return "/brand/so-logo-mark.png";
+  }
+
   return (
     cleanText(settings?.public_logo_mark_url) ||
     cleanText(settings?.public_logo_url) ||
@@ -135,6 +177,12 @@ function getBestLogo(settings: TenantPublicSettings | null) {
 
 function getDisplayName(settings: TenantPublicSettings | null) {
   return cleanText(settings?.public_display_name) || "SO Fundraising Platform";
+}
+
+function getImageObjectPosition(product: MerchandiseProduct) {
+  return `${normaliseFocus(product.image_focus_x)}% ${normaliseFocus(
+    product.image_focus_y,
+  )}%`;
 }
 
 async function getPublishedProduct({
@@ -192,10 +240,17 @@ export async function generateMetadata({
   }
 
   const tenantSettings = tenantSettingsRaw as TenantPublicSettings | null;
+  const subscriptionTier = normaliseSubscriptionTier(
+    tenantSettings?.subscription_tier,
+  );
+  const canUseProductImages = subscriptionTier !== "community";
+
   const displayName = getDisplayName(tenantSettings);
   const description =
     cleanText(product.description) ||
     `Support ${displayName} through merchandise.`;
+
+  const imageUrl = canUseProductImages ? cleanText(product.image_url) : "";
 
   return {
     title: `${product.title} | ${displayName}`,
@@ -203,7 +258,7 @@ export async function generateMetadata({
     openGraph: {
       title: `${product.title} | ${displayName}`,
       description,
-      images: product.image_url ? [{ url: product.image_url }] : undefined,
+      images: imageUrl ? [{ url: imageUrl }] : undefined,
     },
   };
 }
@@ -225,23 +280,47 @@ export default async function PublicMerchandiseProductPage({
   }
 
   const tenantSettings = tenantSettingsRaw as TenantPublicSettings | null;
+
+  const subscriptionTier = normaliseSubscriptionTier(
+    tenantSettings?.subscription_tier,
+  );
+
+  const advancedBrandingCapability = checkSubscriptionCapability(
+    tenantSettings,
+    "advanced_branding",
+  );
+
+  const canUseAdvancedBranding = advancedBrandingCapability.allowed;
+  const canUseProductImages = subscriptionTier !== "community";
+
   const displayName = getDisplayName(tenantSettings);
-  const tagline =
-    cleanText(tenantSettings?.public_tagline) ||
-    "Supporting causes through premium fundraising campaigns.";
-  const logoUrl = getBestLogo(tenantSettings);
-  const primaryColour = normaliseHexColour(
-    tenantSettings?.public_primary_colour,
-    "#1683F8",
-  );
-  const accentColour = normaliseHexColour(
-    tenantSettings?.public_accent_colour,
-    "#FACC15",
-  );
+  const logoUrl = getBestLogo({
+    settings: tenantSettings,
+    canUseAdvancedBranding,
+  });
+
+  const primaryColour = canUseAdvancedBranding
+    ? normaliseHexColour(tenantSettings?.public_primary_colour, "#1683F8")
+    : "#1683F8";
+
+  const accentColour = canUseAdvancedBranding
+    ? normaliseHexColour(tenantSettings?.public_accent_colour, "#FACC15")
+    : "#FACC15";
+
+  const primaryTextColour = getReadableTextColour(primaryColour);
   const contactEmail = cleanText(tenantSettings?.public_contact_email);
   const contactName = cleanText(tenantSettings?.public_contact_name);
+  const footerText = canUseAdvancedBranding
+    ? cleanText(tenantSettings?.public_footer_text)
+    : "";
+
   const stockTone = getStockTone(product);
   const sizeOptions = getSizeOptions(product);
+  const productImageUrl = canUseProductImages ? cleanText(product.image_url) : "";
+
+  const heroBackground = canUseAdvancedBranding
+    ? `radial-gradient(circle at bottom right, ${accentColour}22, transparent 38%), radial-gradient(circle at top left, ${primaryColour}22, transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #111827 100%)`
+    : "radial-gradient(circle at bottom right, rgba(250,204,21,0.14), transparent 38%), radial-gradient(circle at top left, rgba(22,131,248,0.18), transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #172554 100%)";
 
   return (
     <main className="public-merchandise-page" style={styles.page}>
@@ -251,21 +330,36 @@ export default async function PublicMerchandiseProductPage({
         className="merchandise-hero"
         style={{
           ...styles.hero,
-          background: `radial-gradient(circle at bottom right, ${accentColour}22, transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 58%, ${primaryColour} 145%)`,
+          background: heroBackground,
         }}
       >
         <div style={styles.heroCopy}>
-          <Link href={`/c/${tenantSlug}`} style={styles.backLink}>
-            ← Back to all campaigns
+          <Link href={`/m/${tenantSlug}`} style={styles.backLink}>
+            ← Back to shop
           </Link>
 
-          <div style={styles.brandRow}>
-            <div style={styles.logoWrap}>
+          <div className="brandRow" style={styles.brandRow}>
+            <div
+              style={{
+                ...styles.logoWrap,
+                borderColor: canUseAdvancedBranding
+                  ? `${accentColour}66`
+                  : "rgba(255,255,255,0.55)",
+              }}
+            >
               <img src={logoUrl} alt={displayName} style={styles.logoImage} />
             </div>
 
             <div style={styles.brandCopy}>
-              <p style={styles.brandKicker}>Merchandise</p>
+              <p
+                style={{
+                  ...styles.brandKicker,
+                  color: canUseAdvancedBranding ? accentColour : "#facc15",
+                }}
+              >
+                Merchandise
+              </p>
+
               <h1 className="merchandise-title" style={styles.title}>
                 {product.title}
               </h1>
@@ -273,22 +367,25 @@ export default async function PublicMerchandiseProductPage({
           </div>
 
           <p style={styles.subtitle}>
-            {product.description ||
+            {cleanText(product.description) ||
               `Support ${displayName} through this merchandise item.`}
           </p>
 
           <div style={styles.heroPills}>
             <span
+              className="pricePill"
               style={{
                 ...styles.pricePill,
                 background: primaryColour,
                 borderColor: primaryColour,
+                color: primaryTextColour,
               }}
             >
               {formatMoney(product.price_cents, product.currency)}
             </span>
 
             <span
+              className="stockPill"
               style={{
                 ...styles.stockPill,
                 ...(stockTone === "closed"
@@ -302,7 +399,7 @@ export default async function PublicMerchandiseProductPage({
             </span>
 
             {sizeOptions.length ? (
-              <span style={styles.sizeHeroPill}>
+              <span className="sizeHeroPill" style={styles.sizeHeroPill}>
                 Sizes: {sizeOptions.join(", ")}
               </span>
             ) : null}
@@ -311,13 +408,13 @@ export default async function PublicMerchandiseProductPage({
 
         <aside style={styles.heroCard}>
           <div style={styles.heroCardImageWrap}>
-            {product.image_url ? (
+            {productImageUrl ? (
               <img
-                src={product.image_url}
+                src={productImageUrl}
                 alt={product.title}
                 style={{
                   ...styles.productImage,
-                  objectPosition: `${product.image_focus_x}% ${product.image_focus_y}%`,
+                  objectPosition: getImageObjectPosition(product),
                 }}
               />
             ) : (
@@ -328,8 +425,10 @@ export default async function PublicMerchandiseProductPage({
       </section>
 
       <section className="merchandise-info-grid" style={styles.infoGrid}>
-        <article style={styles.primaryPanel}>
-          <p style={styles.kicker}>Product details</p>
+        <article className="primaryPanel" style={styles.primaryPanel}>
+          <p style={{ ...styles.kicker, color: primaryColour }}>
+            Product details
+          </p>
 
           <h2 style={styles.sectionTitle}>Support {displayName}</h2>
 
@@ -338,7 +437,7 @@ export default async function PublicMerchandiseProductPage({
             purchasing and checkout will be added in a later controlled phase.
           </p>
 
-          <div style={styles.detailGrid}>
+          <div className="detailGrid" style={styles.detailGrid}>
             <DetailItem
               label="Price"
               value={formatMoney(product.price_cents, product.currency)}
@@ -352,7 +451,14 @@ export default async function PublicMerchandiseProductPage({
           </div>
 
           {sizeOptions.length ? (
-            <div style={styles.sizePanel}>
+            <div
+              style={{
+                ...styles.sizePanel,
+                borderColor: canUseAdvancedBranding
+                  ? `${accentColour}55`
+                  : "#dbeafe",
+              }}
+            >
               <p style={styles.sizePanelTitle}>Available sizes/options</p>
 
               <div style={styles.sizePillGrid}>
@@ -366,8 +472,10 @@ export default async function PublicMerchandiseProductPage({
           ) : null}
         </article>
 
-        <aside style={styles.actionPanel}>
-          <p style={styles.kicker}>Buying online</p>
+        <aside className="actionPanel" style={styles.actionPanel}>
+          <p style={{ ...styles.kicker, color: primaryColour }}>
+            Buying online
+          </p>
 
           <h2 style={styles.actionTitle}>Checkout coming soon</h2>
 
@@ -381,14 +489,19 @@ export default async function PublicMerchandiseProductPage({
           </div>
 
           <Link
-            href={`/c/${tenantSlug}`}
+            href={`/m/${tenantSlug}`}
             style={{
               ...styles.primaryLink,
               background: primaryColour,
               borderColor: primaryColour,
+              color: primaryTextColour,
             }}
           >
-            View all live campaigns →
+            View shop →
+          </Link>
+
+          <Link href={`/c/${tenantSlug}`} style={styles.secondaryLink}>
+            Public campaign hub →
           </Link>
 
           {contactEmail ? (
@@ -404,19 +517,22 @@ export default async function PublicMerchandiseProductPage({
         </aside>
       </section>
 
-      <section className="merchandise-footer-panel" style={styles.footerPanel}>
-        <div>
-          <p style={styles.footerBrand}>{displayName}</p>
+      {footerText ? (
+        <section
+          className="merchandise-footer-panel"
+          style={styles.footerPanel}
+        >
+          <div>
+            <p style={styles.footerBrand}>{displayName}</p>
 
-          <p style={styles.footerText}>
-            {cleanText(tenantSettings?.public_footer_text) || tagline}
-          </p>
-        </div>
+            <p style={styles.footerText}>{footerText}</p>
+          </div>
 
-        <Link href={`/c/${tenantSlug}`} style={styles.footerLink}>
-          Public campaign hub →
-        </Link>
-      </section>
+          <Link href={`/c/${tenantSlug}`} style={styles.footerLink}>
+            Public campaign hub →
+          </Link>
+        </section>
+      ) : null}
     </main>
   );
 }
@@ -471,13 +587,45 @@ const responsiveStyles = `
     border-radius: 28px !important;
   }
 
+  .public-merchandise-page .brandRow {
+    grid-template-columns: 58px minmax(0, 1fr) !important;
+    gap: 11px !important;
+  }
+
+  .public-merchandise-page .logoWrap {
+    width: 58px !important;
+    height: 58px !important;
+    border-radius: 18px !important;
+  }
+
   .public-merchandise-page .merchandise-title {
     font-size: clamp(38px, 13vw, 58px) !important;
     line-height: 0.96 !important;
   }
 
+  .public-merchandise-page .heroPills {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  .public-merchandise-page .pricePill,
+  .public-merchandise-page .stockPill,
+  .public-merchandise-page .sizeHeroPill {
+    width: 100% !important;
+  }
+
   .public-merchandise-page .merchandise-info-grid {
     gap: 12px !important;
+  }
+
+  .public-merchandise-page .primaryPanel,
+  .public-merchandise-page .actionPanel {
+    padding: 16px !important;
+    border-radius: 24px !important;
+  }
+
+  .public-merchandise-page .detailGrid {
+    grid-template-columns: 1fr !important;
   }
 
   .public-merchandise-page .merchandise-footer-panel {
@@ -487,6 +635,10 @@ const responsiveStyles = `
 
   .public-merchandise-page a {
     width: 100% !important;
+  }
+
+  .public-merchandise-page .backLink {
+    width: fit-content !important;
   }
 }
 `;
@@ -528,6 +680,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     width: "fit-content",
+    minHeight: 42,
     padding: "10px 14px",
     borderRadius: 999,
     background: "rgba(255,255,255,0.08)",
@@ -574,7 +727,6 @@ const styles: Record<string, CSSProperties> = {
 
   brandKicker: {
     margin: 0,
-    color: "#fef3c7",
     fontSize: 13,
     fontWeight: 950,
     textTransform: "uppercase",
@@ -615,7 +767,6 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 46,
     padding: "11px 16px",
     borderRadius: 999,
-    color: "#ffffff",
     border: "1px solid",
     fontSize: 17,
     fontWeight: 950,
@@ -683,7 +834,7 @@ const styles: Record<string, CSSProperties> = {
     placeItems: "center",
     minHeight: 360,
     background:
-      "radial-gradient(circle at top right, rgba(250,204,21,0.22), transparent 38%), rgba(255,255,255,0.08)",
+      "radial-gradient(circle at top right, rgba(250,204,21,0.18), transparent 38%), rgba(255,255,255,0.08)",
   },
 
   productImage: {
@@ -741,7 +892,6 @@ const styles: Record<string, CSSProperties> = {
 
   kicker: {
     margin: 0,
-    color: "#2563eb",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
@@ -870,7 +1020,6 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 48,
     padding: "11px 15px",
     borderRadius: 999,
-    color: "#ffffff",
     border: "1px solid",
     textDecoration: "none",
     fontWeight: 950,
