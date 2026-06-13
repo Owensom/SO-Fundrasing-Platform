@@ -4,7 +4,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { query, queryOne } from "@/lib/db";
 import { getTenantSettings } from "@/lib/tenant-settings";
-import { checkSubscriptionCapability } from "@/lib/subscription-capabilities";
+import {
+  checkSubscriptionCapability,
+  normaliseSubscriptionTier,
+} from "@/lib/subscription-capabilities";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -110,7 +113,17 @@ function getDisplayName(settings: TenantPublicSettings | null) {
   return cleanText(settings?.public_display_name) || "SO Fundraising Platform";
 }
 
-function getBestLogo(settings: TenantPublicSettings | null) {
+function getBestLogo({
+  settings,
+  canUseAdvancedBranding,
+}: {
+  settings: TenantPublicSettings | null;
+  canUseAdvancedBranding: boolean;
+}) {
+  if (!canUseAdvancedBranding) {
+    return "/brand/so-logo-mark.png";
+  }
+
   return (
     cleanText(settings?.public_logo_mark_url) ||
     cleanText(settings?.public_logo_url) ||
@@ -250,32 +263,54 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
 
   const tenantSettings = tenantSettingsRaw as TenantPublicSettings | null;
 
+  const subscriptionTier = normaliseSubscriptionTier(
+    tenantSettings?.subscription_tier,
+  );
+
   const merchandiseCapability = checkSubscriptionCapability(
     tenantSettings,
     "merchandise",
+  );
+
+  const advancedBrandingCapability = checkSubscriptionCapability(
+    tenantSettings,
+    "advanced_branding",
   );
 
   if (!merchandiseCapability.allowed) {
     notFound();
   }
 
+  const canUseAdvancedBranding = advancedBrandingCapability.allowed;
+  const canUseProductImages = subscriptionTier !== "community";
+
   const displayName = getDisplayName(tenantSettings);
   const tagline =
     cleanText(tenantSettings?.public_tagline) ||
     "Supporting causes through premium fundraising campaigns.";
-  const logoUrl = getBestLogo(tenantSettings);
-  const primaryColour = normaliseHexColour(
-    tenantSettings?.public_primary_colour,
-    "#1683F8",
-  );
-  const accentColour = normaliseHexColour(
-    tenantSettings?.public_accent_colour,
-    "#FACC15",
-  );
+  const logoUrl = getBestLogo({
+    settings: tenantSettings,
+    canUseAdvancedBranding,
+  });
+
+  const primaryColour = canUseAdvancedBranding
+    ? normaliseHexColour(tenantSettings?.public_primary_colour, "#1683F8")
+    : "#1683F8";
+
+  const accentColour = canUseAdvancedBranding
+    ? normaliseHexColour(tenantSettings?.public_accent_colour, "#FACC15")
+    : "#FACC15";
+
   const primaryTextColour = getReadableTextColour(primaryColour);
   const contactEmail = cleanText(tenantSettings?.public_contact_email);
   const contactName = cleanText(tenantSettings?.public_contact_name);
-  const footerText = cleanText(tenantSettings?.public_footer_text) || tagline;
+  const footerText = canUseAdvancedBranding
+    ? cleanText(tenantSettings?.public_footer_text)
+    : "";
+
+  const heroBackground = canUseAdvancedBranding
+    ? `radial-gradient(circle at bottom right, ${accentColour}26, transparent 38%), radial-gradient(circle at top left, ${primaryColour}26, transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #111827 100%)`
+    : "radial-gradient(circle at bottom right, rgba(250,204,21,0.14), transparent 38%), radial-gradient(circle at top left, rgba(22,131,248,0.18), transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #172554 100%)";
 
   return (
     <main className="public-merchandise-shop-page" style={styles.page}>
@@ -285,7 +320,7 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
         className="shopHero"
         style={{
           ...styles.hero,
-          background: `radial-gradient(circle at bottom right, ${accentColour}26, transparent 38%), radial-gradient(circle at top left, ${primaryColour}26, transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #111827 100%)`,
+          background: heroBackground,
         }}
       >
         <div style={styles.heroCopy}>
@@ -294,7 +329,14 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
           </Link>
 
           <div className="heroBrandRow" style={styles.heroBrandRow}>
-            <div style={styles.logoPlate}>
+            <div
+              style={{
+                ...styles.logoPlate,
+                borderColor: canUseAdvancedBranding
+                  ? `${accentColour}66`
+                  : "rgba(255,255,255,0.55)",
+              }}
+            >
               <img src={logoUrl} alt={displayName} style={styles.logoImage} />
             </div>
 
@@ -302,8 +344,10 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
               <p
                 style={{
                   ...styles.heroKicker,
-                  color: accentColour,
-                  borderColor: `${accentColour}88`,
+                  color: canUseAdvancedBranding ? accentColour : "#facc15",
+                  borderColor: canUseAdvancedBranding
+                    ? `${accentColour}88`
+                    : "rgba(250,204,21,0.72)",
                 }}
               >
                 Merchandise / Shop
@@ -392,8 +436,10 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
         <span
           style={{
             ...styles.countPill,
-            borderColor: `${accentColour}88`,
-            background: `${accentColour}18`,
+            borderColor: canUseAdvancedBranding
+              ? `${accentColour}88`
+              : "#bfdbfe",
+            background: canUseAdvancedBranding ? `${accentColour}18` : "#eff6ff",
           }}
         >
           {products.length} {products.length === 1 ? "item" : "items"}
@@ -407,8 +453,12 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
               style={{
                 ...styles.emptyIcon,
                 color: primaryColour,
-                background: `${primaryColour}12`,
-                borderColor: `${primaryColour}24`,
+                background: canUseAdvancedBranding
+                  ? `${primaryColour}12`
+                  : "rgba(37,99,235,0.10)",
+                borderColor: canUseAdvancedBranding
+                  ? `${primaryColour}24`
+                  : "rgba(37,99,235,0.18)",
               }}
             >
               🛍
@@ -445,14 +495,17 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
         ) : (
           products.map((product) => {
             const sizes = getSizeOptions(product);
+            const productImageUrl = canUseProductImages
+              ? cleanText(product.image_url)
+              : "";
 
             return (
               <article key={product.id} style={styles.productCard}>
                 <Link href={getProductHref(product)} style={styles.imageLink}>
                   <div style={styles.productImageWrap}>
-                    {product.image_url ? (
+                    {productImageUrl ? (
                       <img
-                        src={product.image_url}
+                        src={productImageUrl}
                         alt={product.title}
                         style={{
                           ...styles.productImage,
@@ -569,17 +622,19 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
         </Link>
       </section>
 
-      <footer className="shopFooter" style={styles.footerPanel}>
-        <div>
-          <p style={styles.footerBrand}>{displayName}</p>
+      {footerText ? (
+        <footer className="shopFooter" style={styles.footerPanel}>
+          <div>
+            <p style={styles.footerBrand}>{displayName}</p>
 
-          <p style={styles.footerText}>{footerText}</p>
-        </div>
+            <p style={styles.footerText}>{footerText}</p>
+          </div>
 
-        <Link href={`/c/${tenantSlug}`} style={styles.footerLink}>
-          Back to campaigns →
-        </Link>
-      </footer>
+          <Link href={`/c/${tenantSlug}`} style={styles.footerLink}>
+            Back to campaigns →
+          </Link>
+        </footer>
+      ) : null}
     </main>
   );
 }
