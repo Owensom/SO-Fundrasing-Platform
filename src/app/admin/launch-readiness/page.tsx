@@ -453,6 +453,7 @@ async function getSquares(tenantSlug: string) {
     [tenantSlug],
   );
 }
+
 async function getEvents(tenantSlug: string) {
   return query<EventReadinessRow>(
     `
@@ -735,6 +736,7 @@ function buildEventWarnings(events: EventReadinessRow[]) {
 
   return warnings;
 }
+
 function buildAuctionWarnings(auctions: Array<Record<string, unknown>>) {
   const warnings: CampaignWarning[] = [];
 
@@ -841,6 +843,15 @@ function buildTenantReadinessItems(input: {
         "/admin/launch-readiness",
       )}`,
       action: "View public hub",
+    },
+    {
+      title: "Phone shortcuts and sharing",
+      status: "Shortcut guidance live",
+      detail:
+        "Public buyer shortcut guidance, Share Kit buyer assets and the admin dashboard phone shortcut helper are available for launch operations.",
+      tone: "good",
+      href: "/admin/share",
+      action: "Open Share Kit",
     },
     {
       title: "Campaign readiness UI",
@@ -1049,8 +1060,9 @@ export default async function AdminLaunchReadinessPage() {
 
           <p style={styles.subtitle}>
             A read-only launch confidence check for this tenant. It highlights
-            branding, public hub, campaigns, payments, Gift Aid, support and
-            obvious campaign setup warnings without changing any live flow.
+            branding, public hub, sharing shortcuts, campaigns, payments,
+            Gift Aid, support and obvious campaign setup warnings without
+            changing any live flow.
           </p>
 
           <p style={styles.tenantLine}>
@@ -1103,14 +1115,17 @@ export default async function AdminLaunchReadinessPage() {
 
       <section className="metric-grid" style={styles.metricGrid}>
         <MetricCard label="Published campaigns" value={publishedCampaignCount} />
+
         <MetricCard
           label="Paid donations"
           value={formatMoney(paidDonationTotal)}
         />
+
         <MetricCard
           label="Paid event orders"
           value={formatMoney(paidEventOrderTotal)}
         />
+
         <MetricCard
           label="Campaign warnings"
           value={campaignWarnings.length}
@@ -1123,7 +1138,8 @@ export default async function AdminLaunchReadinessPage() {
           }
         />
       </section>
-            <section className="readiness-grid" style={styles.readinessGrid}>
+
+      <section className="readiness-grid" style={styles.readinessGrid}>
         {readinessItems.map((item) => (
           <ReadinessCard key={item.title} item={item} />
         ))}
@@ -1162,8 +1178,11 @@ export default async function AdminLaunchReadinessPage() {
                   <span style={styles.warningStatus}>
                     {statusLabel(warning.tone)}
                   </span>
+
                   <strong style={styles.warningTitle}>{warning.title}</strong>
+
                   <p style={styles.warningDetail}>{warning.detail}</p>
+
                   <span style={styles.warningAction}>Open campaign →</span>
                 </article>
               </Link>
@@ -1175,12 +1194,14 @@ export default async function AdminLaunchReadinessPage() {
       <section className="next-steps-grid" style={styles.nextStepsGrid}>
         <section style={styles.sectionCard}>
           <div style={styles.sectionEyebrow}>Launch sequence</div>
+
           <h2 style={styles.sectionTitle}>Recommended final checks</h2>
 
           <ol style={styles.stepList}>
             <li>Confirm branding and public contact email.</li>
             <li>Publish only campaigns that are ready to share.</li>
             <li>Open each public campaign page on mobile and desktop.</li>
+            <li>Confirm Share Kit links and phone shortcut guidance.</li>
             <li>Complete one controlled checkout or donation test.</li>
             <li>Confirm receipt email and admin order/reporting entry.</li>
             <li>Export CSV from the relevant orders/reporting page.</li>
@@ -1189,6 +1210,7 @@ export default async function AdminLaunchReadinessPage() {
 
         <section style={styles.sectionCard}>
           <div style={styles.sectionEyebrow}>Important</div>
+
           <h2 style={styles.sectionTitle}>Read-only by design</h2>
 
           <p style={styles.sectionText}>
@@ -1219,7 +1241,9 @@ function MetricCard({
   return (
     <article style={styles.metricCard}>
       <span style={styles.metricLabel}>{label}</span>
+
       <strong style={styles.metricValue}>{value}</strong>
+
       <span
         style={{
           ...styles.metricTone,
@@ -1258,7 +1282,9 @@ function ReadinessCard({ item }: { item: ReadinessItem }) {
       </div>
 
       <h2 style={styles.cardTitle}>{item.title}</h2>
+
       <strong style={styles.cardStatus}>{item.status}</strong>
+
       <p style={styles.cardDetail}>{item.detail}</p>
 
       {item.href ? (
