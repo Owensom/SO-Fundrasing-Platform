@@ -17,6 +17,12 @@ export const revalidate = 0;
 
 type MerchandiseProductStatus = "draft" | "published" | "closed";
 
+type MerchandiseOption = {
+  type?: string | null;
+  label?: string | null;
+  value?: string | null;
+};
+
 type MerchandiseProduct = {
   id: string;
   tenant_slug: string;
@@ -24,10 +30,13 @@ type MerchandiseProduct = {
   title: string;
   description: string;
   image_url: string | null;
+  image_focus_x: number | null;
+  image_focus_y: number | null;
   price_cents: number;
   currency: string;
   stock_quantity: number | null;
   sold_quantity: number;
+  options_json: MerchandiseOption[] | null;
   status: MerchandiseProductStatus;
   created_at: string;
   updated_at: string;
@@ -87,30 +96,79 @@ function statusStyle(status: string): CSSProperties {
 
   if (status === "closed") {
     return {
-      background: "#f8fafc",
-      color: "#475569",
-      borderColor: "#cbd5e1",
+      background: "#fff7ed",
+      color: "#9a3412",
+      borderColor: "#fed7aa",
     };
   }
 
   return {
-    background: "#fffbeb",
-    color: "#92400e",
-    borderColor: "#fde68a",
+    background: "#f1f5f9",
+    color: "#475569",
+    borderColor: "#e2e8f0",
   };
 }
 
-function getStockLabel(product: MerchandiseProduct) {
-  if (product.stock_quantity === null) {
-    return "Unlimited / not tracked";
-  }
+function focusValue(value: number | null | undefined) {
+  const number = Number(value);
 
-  const remaining = Math.max(
+  if (!Number.isFinite(number)) return 50;
+
+  return Math.max(0, Math.min(100, Math.round(number)));
+}
+
+function productImageStyle(product: MerchandiseProduct): CSSProperties {
+  return {
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+    objectPosition: `${focusValue(product.image_focus_x)}% ${focusValue(
+      product.image_focus_y,
+    )}%`,
+    display: "block",
+    padding: 14,
+    boxSizing: "border-box",
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 58%, #eff6ff 100%)",
+  };
+}
+
+function getStockRemaining(product: MerchandiseProduct) {
+  if (product.stock_quantity === null) return null;
+
+  return Math.max(
     0,
     Number(product.stock_quantity || 0) - Number(product.sold_quantity || 0),
   );
+}
+
+function getStockLabel(product: MerchandiseProduct) {
+  const remaining = getStockRemaining(product);
+
+  if (remaining === null) {
+    return "Unlimited / not tracked";
+  }
+
+  if (remaining === 1) {
+    return "1 remaining";
+  }
 
   return `${remaining} remaining`;
+}
+
+function getSizeOptions(product: MerchandiseProduct) {
+  if (!Array.isArray(product.options_json)) return [];
+
+  return product.options_json
+    .filter((option) => cleanText(option?.type).toLowerCase() === "size")
+    .map((option) => cleanText(option?.label || option?.value))
+    .filter(Boolean);
+}
+
+function getPublicProductHref(product: MerchandiseProduct) {
+  return `/m/${encodeURIComponent(product.tenant_slug)}/${encodeURIComponent(
+    product.slug,
+  )}`;
 }
 
 async function requireTenantAccess() {
@@ -143,10 +201,13 @@ async function listMerchandiseProducts(tenantSlug: string) {
         title,
         description,
         image_url,
+        image_focus_x,
+        image_focus_y,
         price_cents,
         currency,
         stock_quantity,
         sold_quantity,
+        options_json,
         status,
         created_at::text,
         updated_at::text
@@ -206,107 +267,125 @@ export default async function AdminMerchandisePage() {
       <style>{responsiveStyles}</style>
 
       <section className="merchandise-hero" style={styles.hero}>
-        <div style={styles.heroContent}>
-          <Link href="/admin" style={styles.backLink}>
-            ← Back to dashboard
-          </Link>
+        <div style={styles.heroImageWrap}>
+          <div style={styles.heroImageFallback}>SHOP</div>
+        </div>
 
-          <div style={styles.badgeRow}>
-            <span style={styles.badge}>Merchandise / Shop</span>
-            <span style={styles.softBadge}>Phase 7A setup</span>
+        <div style={styles.heroContent}>
+          <div style={styles.heroTopRow}>
+            <div style={styles.badgeRow}>
+              <span style={styles.statusBadge}>Merchandise / Shop</span>
+              <span style={styles.planBadge}>{getTierLabel(tier)} plan</span>
+              <span style={styles.phaseBadge}>Phase 7A setup</span>
+            </div>
+
+            <Link href="/admin" style={styles.secondaryButton}>
+              ← Back to dashboard
+            </Link>
           </div>
 
-          <h1
-            className="so-brand-heading merchandise-title"
-            style={styles.title}
-          >
-            Merchandise fundraising
+          <h1 className="merchandise-title" style={styles.heroTitle}>
+            Merchandise products
           </h1>
 
-          <p style={styles.subtitle}>
+          <p style={styles.heroDescription}>
             Set up tenant-branded merchandise products before public shop,
             checkout, stock handling and Stripe collection are connected in
             later phases.
           </p>
 
-          <p style={styles.tenantLine}>
-            Tenant: <strong>{tenantSlug}</strong> · Plan:{" "}
-            <strong>{getTierLabel(tier)}</strong>
-          </p>
-        </div>
+          <div className="merchandise-hero-stats" style={styles.heroStats}>
+            <StatCard label="Products" value={products.length} />
+            <StatCard label="Published" value={publishedProducts.length} />
+            <StatCard label="Sold quantity" value={soldQuantity} />
+            <StatCard
+              label="Tracked estimate"
+              value={formatMoney(estimatedRevenueCents)}
+            />
+          </div>
 
-        <div className="merchandise-hero-stats" style={styles.heroStats}>
-          <StatCard label="Products" value={products.length} dark />
-          <StatCard label="Published" value={publishedProducts.length} dark />
-          <StatCard label="Sold quantity" value={soldQuantity} dark />
-          <StatCard
-            label="Tracked estimate"
-            value={formatMoney(estimatedRevenueCents)}
-            dark
-          />
+          <div style={styles.heroMeta}>
+            <div>
+              <strong>Tenant:</strong> {tenantSlug}
+            </div>
+            <div>
+              <strong>Plan:</strong> {getTierLabel(tier)}
+            </div>
+          </div>
         </div>
       </section>
 
       {!merchandiseCapability.allowed ? (
-        <section style={styles.lockedPanel}>
-          <div style={styles.lockedIcon}>🔒</div>
+        <section style={styles.upgradeBanner}>
+          <div>
+            <div style={styles.upgradeEyebrow}>Professional feature</div>
 
-          <div style={styles.lockedCopy}>
-            <p style={styles.lockedKicker}>Upgrade required</p>
-
-            <h2 style={styles.lockedTitle}>
+            <h2 style={styles.upgradeTitle}>
               Merchandise requires Professional or Foundation
             </h2>
 
-            <p style={styles.lockedText}>
+            <p style={styles.upgradeText}>
               {merchandiseCapability.reason || getMerchandiseUpgradeMessage()}
             </p>
+          </div>
 
-            <Link href="/admin/settings/billing" style={styles.lockedButton}>
+          <div style={styles.upgradeActions}>
+            <Link href="/admin/settings/billing" style={styles.upgradeButton}>
               View billing →
             </Link>
           </div>
         </section>
       ) : (
         <>
-          <section className="merchandise-info-grid" style={styles.infoGrid}>
-            <InfoCard
-              title="Admin setup only"
-              text="This phase creates the merchandise workspace and product structure without opening public purchasing yet."
-            />
+          <section style={styles.readinessPanel}>
+            <div style={styles.readinessHeader}>
+              <div>
+                <div style={styles.readinessEyebrow}>Product setup</div>
 
-            <InfoCard
-              title="Checkout comes later"
-              text="Stripe checkout, receipts, webhook fulfilment and stock decrementing will be added in a controlled later phase."
-            />
+                <h2 style={styles.readinessTitle}>Merchandise workspace</h2>
 
-            <InfoCard
-              title="Tenant isolated"
-              text="Products are scoped to the current tenant and do not mix with raffles, squares, events or auctions."
-            />
-          </section>
+                <p style={styles.readinessIntro}>
+                  Add or edit product records here. Public shop display and
+                  checkout will only be connected after this admin model is
+                  stable.
+                </p>
+              </div>
 
-          <section className="merchandise-readiness-panel" style={styles.panel}>
-            <div>
-              <p style={styles.kicker}>Product setup</p>
+              <div className="merchandise-actions" style={styles.panelActions}>
+                <Link href="/admin/merchandise/new" style={styles.primaryButton}>
+                  New product →
+                </Link>
 
-              <h2 style={styles.panelTitle}>Merchandise products</h2>
-
-              <p style={styles.panelText}>
-                Add or edit product records here. Public shop display and
-                checkout will only be connected after this admin model is
-                stable.
-              </p>
+                <Link
+                  href="/admin/launch-readiness"
+                  style={styles.secondaryPanelButton}
+                >
+                  Launch Readiness →
+                </Link>
+              </div>
             </div>
 
-            <div style={styles.panelActions}>
-              <Link href="/admin/merchandise/new" style={styles.primaryLink}>
-                New product →
-              </Link>
+            <div className="merchandise-readiness-grid" style={styles.readinessGrid}>
+              <ReadinessItem
+                label="Admin setup"
+                value="Live"
+                detail="Product records, images, prices, stock and options can be managed."
+                tone="good"
+              />
 
-              <Link href="/admin/launch-readiness" style={styles.secondaryLink}>
-                Launch Readiness →
-              </Link>
+              <ReadinessItem
+                label="Public display"
+                value="Display only"
+                detail="Published product pages can be previewed, but purchasing is not connected yet."
+                tone="neutral"
+              />
+
+              <ReadinessItem
+                label="Checkout"
+                value="Not connected"
+                detail="Stripe checkout, receipts and stock decrementing will come in a later phase."
+                tone="warning"
+              />
             </div>
           </section>
 
@@ -326,10 +405,19 @@ export default async function AdminMerchandisePage() {
               </Link>
             </section>
           ) : (
-            <section className="merchandise-product-grid" style={styles.grid}>
-              {products.map((product) => (
-                <ProductCard key={product.id} product={product} />
-              ))}
+            <section id="merchandise-products" style={styles.sectionCard}>
+              <div style={styles.sectionHeader}>
+                <div>
+                  <div style={styles.sectionEyebrow}>Products</div>
+                  <h2 style={styles.sectionTitle}>Product catalogue</h2>
+                </div>
+              </div>
+
+              <div style={styles.itemsList}>
+                {products.map((product) => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
+              </div>
             </section>
           )}
 
@@ -358,31 +446,42 @@ export default async function AdminMerchandisePage() {
   );
 }
 
-function StatCard({
-  label,
-  value,
-  dark = false,
-}: {
-  label: string;
-  value: ReactNode;
-  dark?: boolean;
-}) {
+function StatCard({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <article style={dark ? styles.darkStatCard : styles.statCard}>
-      <span style={dark ? styles.darkStatLabel : styles.statLabel}>{label}</span>
-
-      <strong style={dark ? styles.darkStatValue : styles.statValue}>
-        {value}
-      </strong>
-    </article>
+    <div style={styles.statCard}>
+      <div style={styles.statLabel}>{label}</div>
+      <div style={styles.statValue}>{value}</div>
+    </div>
   );
 }
 
-function InfoCard({ title, text }: { title: string; text: string }) {
+function ReadinessItem({
+  label,
+  value,
+  detail,
+  tone,
+}: {
+  label: string;
+  value: ReactNode;
+  detail: string;
+  tone: "good" | "warning" | "neutral";
+}) {
   return (
-    <article style={styles.infoCard}>
-      <h2 style={styles.infoTitle}>{title}</h2>
-      <p style={styles.infoText}>{text}</p>
+    <article
+      style={{
+        ...styles.readinessItem,
+        ...(tone === "good"
+          ? styles.readinessItemGood
+          : tone === "warning"
+            ? styles.readinessItemWarning
+            : styles.readinessItemNeutral),
+      }}
+    >
+      <div style={styles.readinessContent}>
+        <span style={styles.readinessLabel}>{label}</span>
+        <strong style={styles.readinessValue}>{value}</strong>
+        <span style={styles.readinessDetail}>{detail}</span>
+      </div>
     </article>
   );
 }
@@ -406,73 +505,91 @@ function SummaryCard({
 }
 
 function ProductCard({ product }: { product: MerchandiseProduct }) {
+  const sizes = getSizeOptions(product);
+  const publicHref = getPublicProductHref(product);
+  const canPreviewPublic = product.status === "published";
+
   return (
-    <Link
-      href={`/admin/merchandise/${encodeURIComponent(product.id)}`}
-      style={styles.productLink}
-    >
-      <article style={styles.productCard}>
-        <div style={styles.productImageWrap}>
+    <article style={styles.itemCard}>
+      <div className="merchandise-item-layout" style={styles.itemLayout}>
+        <div style={styles.itemImagePreviewWrap}>
           {product.image_url ? (
             <img
               src={product.image_url}
               alt={product.title}
-              style={styles.productImage}
+              style={productImageStyle(product)}
             />
           ) : (
-            <div style={styles.productImageFallback}>SHOP</div>
+            <div style={styles.itemImageFallback}>SHOP</div>
           )}
         </div>
 
-        <div style={styles.productBody}>
-          <div style={styles.productTop}>
-            <span
-              style={{
-                ...styles.statusPill,
-                ...statusStyle(product.status),
-              }}
+        <div style={styles.itemContent}>
+          <div style={styles.itemSummary}>
+            <div style={styles.itemTitleBlock}>
+              <div style={styles.itemPillRow}>
+                <span
+                  style={{
+                    ...styles.itemStatusBadge,
+                    ...statusStyle(product.status),
+                  }}
+                >
+                  {statusLabel(product.status)}
+                </span>
+
+                <span style={styles.pricePill}>
+                  {formatMoney(product.price_cents, product.currency)}
+                </span>
+              </div>
+
+              <h3 style={styles.itemTitle}>{product.title}</h3>
+
+              <p style={styles.itemDescription}>
+                {product.description || "No product description added yet."}
+              </p>
+            </div>
+          </div>
+
+          <div className="merchandise-item-meta-grid" style={styles.itemMetaGrid}>
+            <InfoBlock label="Stock" value={getStockLabel(product)} />
+
+            <InfoBlock label="Sold" value={product.sold_quantity} />
+
+            <InfoBlock label="Sizes" value={sizes.length ? sizes.join(", ") : "Not set"} />
+
+            <InfoBlock label="Created" value={formatDate(product.created_at)} />
+          </div>
+
+          <div style={styles.itemActions}>
+            <Link
+              href={`/admin/merchandise/${encodeURIComponent(product.id)}`}
+              style={styles.editButton}
             >
-              {statusLabel(product.status)}
-            </span>
+              Edit product →
+            </Link>
 
-            <span style={styles.pricePill}>
-              {formatMoney(product.price_cents, product.currency)}
-            </span>
+            {canPreviewPublic ? (
+              <Link href={publicHref} target="_blank" style={styles.publicButton}>
+                View public page →
+              </Link>
+            ) : (
+              <span style={styles.disabledPublicButton}>
+                Public page available when published
+              </span>
+            )}
           </div>
-
-          <h2 style={styles.productTitle}>{product.title}</h2>
-
-          <p style={styles.productDescription}>
-            {product.description || "No product description added yet."}
-          </p>
-
-          <div style={styles.productMetaGrid}>
-            <div style={styles.productMeta}>
-              <span style={styles.productMetaLabel}>Stock</span>
-              <strong style={styles.productMetaValue}>
-                {getStockLabel(product)}
-              </strong>
-            </div>
-
-            <div style={styles.productMeta}>
-              <span style={styles.productMetaLabel}>Sold</span>
-              <strong style={styles.productMetaValue}>
-                {product.sold_quantity}
-              </strong>
-            </div>
-
-            <div style={styles.productMeta}>
-              <span style={styles.productMetaLabel}>Created</span>
-              <strong style={styles.productMetaValue}>
-                {formatDate(product.created_at)}
-              </strong>
-            </div>
-          </div>
-
-          <span style={styles.editLink}>Edit product →</span>
         </div>
-      </article>
-    </Link>
+      </div>
+    </article>
+  );
+}
+
+function InfoBlock({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div style={styles.infoCard}>
+      <div style={styles.infoLabel}>{label}</div>
+      <div style={styles.infoValue}>{value}</div>
+    </div>
   );
 }
 
@@ -486,6 +603,14 @@ const responsiveStyles = `
   overflow-x: hidden;
 }
 
+.admin-merchandise-page img,
+.admin-merchandise-page input,
+.admin-merchandise-page textarea,
+.admin-merchandise-page select,
+.admin-merchandise-page button {
+  max-width: 100%;
+}
+
 .admin-merchandise-page section,
 .admin-merchandise-page article,
 .admin-merchandise-page div,
@@ -493,53 +618,62 @@ const responsiveStyles = `
 .admin-merchandise-page p,
 .admin-merchandise-page h1,
 .admin-merchandise-page h2,
+.admin-merchandise-page h3,
 .admin-merchandise-page strong,
 .admin-merchandise-page span {
   min-width: 0;
   max-width: 100%;
 }
 
-@media (max-width: 1060px) {
-  .admin-merchandise-page .merchandise-hero {
+@media (max-width: 900px) {
+  .admin-merchandise-page .merchandise-hero,
+  .admin-merchandise-page .merchandise-item-layout {
     grid-template-columns: 1fr !important;
   }
 
   .admin-merchandise-page .merchandise-hero-stats,
-  .admin-merchandise-page .merchandise-info-grid,
-  .admin-merchandise-page .merchandise-summary-grid {
+  .admin-merchandise-page .merchandise-readiness-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .admin-merchandise-page .merchandise-actions {
+    width: 100% !important;
+    justify-content: stretch !important;
   }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 640px) {
   .admin-merchandise-page {
     padding: 18px 12px 44px !important;
   }
 
   .admin-merchandise-page .merchandise-hero,
-  .admin-merchandise-page .merchandise-readiness-panel {
+  .admin-merchandise-page .merchandise-readiness-panel,
+  .admin-merchandise-page .merchandise-section-card {
     padding: 20px !important;
-    border-radius: 26px !important;
+    border-radius: 24px !important;
   }
 
   .admin-merchandise-page .merchandise-title {
-    font-size: clamp(40px, 12vw, 58px) !important;
-    line-height: 0.98 !important;
+    font-size: clamp(34px, 12vw, 48px) !important;
+    line-height: 1 !important;
   }
 
   .admin-merchandise-page .merchandise-hero-stats,
-  .admin-merchandise-page .merchandise-info-grid,
-  .admin-merchandise-page .merchandise-product-grid,
-  .admin-merchandise-page .merchandise-summary-grid {
+  .admin-merchandise-page .merchandise-readiness-grid,
+  .admin-merchandise-page .merchandise-summary-grid,
+  .admin-merchandise-page .merchandise-item-meta-grid {
     grid-template-columns: 1fr !important;
   }
 
-  .admin-merchandise-page .merchandise-readiness-panel {
-    grid-template-columns: 1fr !important;
-  }
-
+  .admin-merchandise-page button,
   .admin-merchandise-page a {
-    width: 100% !important;
+    min-height: 46px !important;
+  }
+
+  .admin-merchandise-page .merchandise-actions,
+  .admin-merchandise-page .merchandise-item-actions {
+    grid-template-columns: 1fr !important;
   }
 }
 `;
@@ -547,49 +681,69 @@ const responsiveStyles = `
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
-    maxWidth: 1220,
+    maxWidth: 1180,
     margin: "0 auto",
     padding: "28px 16px 64px",
     minHeight: "100vh",
     background:
-      "radial-gradient(circle at top left, rgba(22,131,248,0.08), transparent 32%), radial-gradient(circle at top right, rgba(250,204,21,0.12), transparent 34%), #f8fafc",
+      "radial-gradient(circle at top left, rgba(251,191,36,0.10), transparent 34%), #f8fafc",
     color: "#0f172a",
+    boxSizing: "border-box",
     overflowX: "hidden",
   },
 
   hero: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.12fr) minmax(300px, 0.88fr)",
+    gridTemplateColumns: "minmax(260px, 0.72fr) minmax(0, 1.28fr)",
     gap: 22,
-    padding: 30,
-    borderRadius: 34,
+    padding: 24,
+    borderRadius: 28,
     background:
-      "radial-gradient(circle at bottom right, rgba(250,204,21,0.18), transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #172554 100%)",
+      "linear-gradient(135deg, #020617 0%, #0f172a 54%, #172554 100%)",
     color: "#ffffff",
     marginBottom: 18,
-    boxShadow: "0 28px 70px rgba(15,23,42,0.22)",
+    boxShadow: "0 24px 60px rgba(15,23,42,0.18)",
+    minWidth: 0,
     overflow: "hidden",
-    border: "1px solid rgba(148,163,184,0.22)",
+  },
+
+  heroImageWrap: {
+    minHeight: 260,
+    borderRadius: 22,
+    overflow: "hidden",
+    background: "#ffffff",
+    minWidth: 0,
+    display: "grid",
+    placeItems: "center",
+  },
+
+  heroImageFallback: {
+    display: "grid",
+    placeItems: "center",
+    width: 128,
+    height: 128,
+    borderRadius: 34,
+    background: "#0f172a",
+    color: "#facc15",
+    fontSize: 22,
+    fontWeight: 950,
+    letterSpacing: "0.08em",
+    boxShadow: "0 16px 36px rgba(15,23,42,0.18)",
   },
 
   heroContent: {
+    display: "grid",
+    gap: 14,
+    alignContent: "start",
     minWidth: 0,
   },
 
-  backLink: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "fit-content",
-    marginBottom: 16,
-    padding: "10px 14px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.08)",
-    color: "#ffffff",
-    border: "1px solid rgba(255,255,255,0.18)",
-    textDecoration: "none",
-    fontSize: 13,
-    fontWeight: 950,
+  heroTopRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    minWidth: 0,
   },
 
   badgeRow: {
@@ -597,259 +751,295 @@ const styles: Record<string, CSSProperties> = {
     gap: 8,
     flexWrap: "wrap",
     alignItems: "center",
-    marginBottom: 14,
+    minWidth: 0,
   },
 
-  badge: {
-    display: "inline-flex",
-    padding: "8px 12px",
-    borderRadius: 999,
-    background: "rgba(37,99,235,0.22)",
-    color: "#dbeafe",
-    border: "1px solid rgba(147,197,253,0.34)",
-    fontSize: 13,
-    fontWeight: 950,
-  },
-
-  softBadge: {
-    display: "inline-flex",
-    padding: "8px 12px",
-    borderRadius: 999,
-    background: "rgba(251,191,36,0.16)",
-    color: "#fef3c7",
-    border: "1px solid rgba(251,191,36,0.32)",
-    fontSize: 13,
-    fontWeight: 950,
-  },
-
-  title: {
+  heroTitle: {
     margin: 0,
-    fontSize: "clamp(52px, 7vw, 82px)",
-    lineHeight: 0.92,
-    letterSpacing: "-0.08em",
-    color: "#ffffff",
+    fontSize: "clamp(36px, 6vw, 58px)",
+    lineHeight: 0.96,
+    letterSpacing: "-0.07em",
     overflowWrap: "anywhere",
-    textShadow: "0 18px 45px rgba(0,0,0,0.22)",
   },
 
-  subtitle: {
-    margin: "18px 0 0",
-    maxWidth: 780,
+  heroDescription: {
+    margin: 0,
     color: "#dbeafe",
-    fontSize: 18,
     lineHeight: 1.6,
     fontWeight: 700,
     overflowWrap: "anywhere",
   },
 
-  tenantLine: {
-    margin: "16px 0 0",
+  heroStats: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+    gap: 10,
+    minWidth: 0,
+  },
+
+  heroMeta: {
+    display: "grid",
+    gap: 6,
     color: "#bfdbfe",
     fontSize: 14,
-    fontWeight: 850,
+    fontWeight: 750,
     overflowWrap: "anywhere",
   },
 
-  heroStats: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 12,
-    alignContent: "start",
+  statusBadge: {
+    width: "fit-content",
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #bbf7d0",
+    fontSize: 13,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  planBadge: {
+    width: "fit-content",
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.08)",
+    color: "#dbeafe",
+    border: "1px solid rgba(191,219,254,0.36)",
+    fontSize: 13,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  phaseBadge: {
+    width: "fit-content",
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "rgba(251,191,36,0.12)",
+    color: "#fde68a",
+    border: "1px solid rgba(251,191,36,0.54)",
+    fontSize: 13,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  secondaryButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 42,
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    textDecoration: "none",
+    fontWeight: 950,
   },
 
   statCard: {
-    display: "grid",
-    gap: 6,
-    padding: 16,
-    borderRadius: 20,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-  },
-
-  darkStatCard: {
-    display: "grid",
-    gap: 6,
-    padding: 18,
-    borderRadius: 22,
-    background: "rgba(255,255,255,0.08)",
-    border: "1px solid rgba(148,163,184,0.26)",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
-    backdropFilter: "blur(12px)",
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.09)",
+    border: "1px solid rgba(255,255,255,0.16)",
+    minWidth: 0,
   },
 
   statLabel: {
-    color: "#64748b",
-    fontSize: 13,
-    fontWeight: 850,
-  },
-
-  darkStatLabel: {
-    color: "#bfdbfe",
-    fontSize: 13,
-    fontWeight: 850,
+    color: "#fde68a",
+    fontSize: 12,
+    fontWeight: 900,
   },
 
   statValue: {
-    color: "#0f172a",
-    fontSize: 28,
-    fontWeight: 950,
-    letterSpacing: "-0.05em",
-  },
-
-  darkStatValue: {
+    marginTop: 4,
     color: "#ffffff",
-    fontSize: 30,
+    fontSize: 22,
     fontWeight: 950,
-    letterSpacing: "-0.05em",
     overflowWrap: "anywhere",
   },
 
-  lockedPanel: {
+  upgradeBanner: {
     display: "grid",
-    gridTemplateColumns: "68px minmax(0, 1fr)",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
     gap: 18,
-    padding: 22,
-    borderRadius: 28,
+    alignItems: "center",
+    padding: 20,
+    borderRadius: 24,
     background:
-      "linear-gradient(135deg, rgba(255,247,237,0.96), rgba(255,255,255,1) 70%)",
-    border: "1px solid #fed7aa",
-    boxShadow: "0 12px 30px rgba(194,65,12,0.08)",
+      "linear-gradient(135deg, #fffbeb 0%, #ffffff 60%, #eff6ff 100%)",
+    border: "1px solid rgba(217,119,6,0.32)",
+    boxShadow: "0 16px 40px rgba(15,23,42,0.07)",
+    marginBottom: 18,
+    minWidth: 0,
   },
 
-  lockedIcon: {
-    display: "grid",
-    placeItems: "center",
-    width: 62,
-    height: 62,
-    borderRadius: 20,
-    background: "#ffedd5",
-    border: "1px solid #fdba74",
-    fontSize: 28,
-  },
-
-  lockedCopy: {
-    display: "grid",
-    gap: 8,
-  },
-
-  lockedKicker: {
-    margin: 0,
-    color: "#c2410c",
+  upgradeEyebrow: {
+    color: "#b45309",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
+    marginBottom: 8,
   },
 
-  lockedTitle: {
+  upgradeTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 30,
-    lineHeight: 1.08,
-    letterSpacing: "-0.05em",
+    fontSize: 24,
+    lineHeight: 1.1,
+    letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
   },
 
-  lockedText: {
-    margin: 0,
-    color: "#7c2d12",
+  upgradeText: {
+    margin: "8px 0 0",
+    color: "#475569",
     lineHeight: 1.55,
-    fontWeight: 750,
+    fontWeight: 700,
+    overflowWrap: "anywhere",
   },
 
-  lockedButton: {
+  upgradeActions: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+  },
+
+  upgradeButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    width: "fit-content",
     minHeight: 44,
-    padding: "10px 15px",
+    padding: "11px 16px",
     borderRadius: 999,
     background: "#0f172a",
     color: "#ffffff",
     textDecoration: "none",
     fontWeight: 950,
+    whiteSpace: "nowrap",
   },
 
-  infoGrid: {
+  readinessPanel: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 14,
-    marginBottom: 18,
-  },
-
-  infoCard: {
-    display: "grid",
-    gap: 8,
-    padding: 16,
-    borderRadius: 22,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
-  },
-
-  infoTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 20,
-    lineHeight: 1.12,
-    letterSpacing: "-0.035em",
-  },
-
-  infoText: {
-    margin: 0,
-    color: "#64748b",
-    lineHeight: 1.5,
-    fontSize: 14,
-    fontWeight: 750,
-  },
-
-  panel: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) auto",
     gap: 16,
-    alignItems: "center",
-    padding: 22,
-    borderRadius: 28,
+    padding: 18,
+    borderRadius: 24,
     background:
-      "linear-gradient(135deg, rgba(255,255,255,1), rgba(239,246,255,0.88))",
-    border: "1px solid #bfdbfe",
-    boxShadow: "0 12px 30px rgba(22,131,248,0.08)",
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 56%, #eff6ff 100%)",
+    border: "1px solid #dbeafe",
+    boxShadow: "0 8px 28px rgba(15,23,42,0.055)",
     marginBottom: 18,
+    minWidth: 0,
   },
 
-  kicker: {
-    margin: "0 0 7px",
+  readinessHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+
+  readinessEyebrow: {
     color: "#2563eb",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
+    marginBottom: 5,
   },
 
-  panelTitle: {
+  readinessTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 30,
-    lineHeight: 1.08,
-    letterSpacing: "-0.05em",
+    fontSize: "clamp(22px, 5vw, 28px)",
+    letterSpacing: "-0.045em",
+    lineHeight: 1.05,
+    overflowWrap: "anywhere",
   },
 
-  panelText: {
-    margin: "8px 0 0",
-    color: "#475569",
-    lineHeight: 1.55,
+  readinessIntro: {
+    margin: "7px 0 0",
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.45,
     fontWeight: 750,
     maxWidth: 760,
   },
 
+  readinessGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  readinessItem: {
+    display: "grid",
+    gap: 3,
+    padding: 13,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+    boxShadow: "0 8px 20px rgba(15,23,42,0.04)",
+  },
+
+  readinessItemGood: {
+    background: "linear-gradient(135deg, #ecfdf5 0%, #ffffff 78%)",
+    borderColor: "#bbf7d0",
+    boxShadow: "0 10px 24px rgba(22,163,74,0.09)",
+  },
+
+  readinessItemWarning: {
+    background: "linear-gradient(135deg, #fff7ed 0%, #ffffff 78%)",
+    borderColor: "#fed7aa",
+    boxShadow: "0 10px 24px rgba(234,88,12,0.09)",
+  },
+
+  readinessItemNeutral: {
+    background: "linear-gradient(135deg, #f8fafc 0%, #ffffff 78%)",
+    borderColor: "#e2e8f0",
+    boxShadow: "0 8px 20px rgba(15,23,42,0.04)",
+  },
+
+  readinessContent: {
+    display: "grid",
+    gap: 3,
+    minWidth: 0,
+  },
+
+  readinessLabel: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  readinessValue: {
+    color: "#0f172a",
+    fontSize: 16,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
+  readinessDetail: {
+    color: "#64748b",
+    fontSize: 12,
+    lineHeight: 1.35,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
   panelActions: {
     display: "grid",
+    gridTemplateColumns: "1fr",
     gap: 10,
     justifyItems: "stretch",
     minWidth: 210,
   },
 
-  primaryLink: {
+  primaryButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
@@ -864,7 +1054,7 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "center",
   },
 
-  secondaryLink: {
+  secondaryPanelButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
@@ -875,6 +1065,247 @@ const styles: Record<string, CSSProperties> = {
     color: "#0f172a",
     border: "1px solid #cbd5e1",
     textDecoration: "none",
+    fontWeight: 950,
+    textAlign: "center",
+  },
+
+  sectionCard: {
+    display: "grid",
+    gap: 18,
+    padding: 22,
+    borderRadius: 26,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
+    marginBottom: 18,
+    minWidth: 0,
+    overflow: "hidden",
+  },
+
+  sectionHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    flexWrap: "wrap",
+    minWidth: 0,
+  },
+
+  sectionEyebrow: {
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: 6,
+  },
+
+  sectionTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 28,
+    letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
+  },
+
+  itemsList: {
+    display: "grid",
+    gap: 12,
+  },
+
+  itemCard: {
+    borderRadius: 22,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    padding: 14,
+    minWidth: 0,
+    overflow: "hidden",
+    boxShadow: "0 8px 24px rgba(15,23,42,0.04)",
+  },
+
+  itemLayout: {
+    display: "grid",
+    gridTemplateColumns: "260px minmax(0, 1fr)",
+    gap: 16,
+    alignItems: "stretch",
+    minWidth: 0,
+  },
+
+  itemImagePreviewWrap: {
+    width: "100%",
+    minHeight: 240,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    overflow: "hidden",
+    display: "grid",
+    placeItems: "center",
+    minWidth: 0,
+  },
+
+  itemImageFallback: {
+    display: "grid",
+    placeItems: "center",
+    width: 92,
+    height: 92,
+    borderRadius: 28,
+    background: "#0f172a",
+    color: "#facc15",
+    fontSize: 16,
+    fontWeight: 950,
+    letterSpacing: "0.08em",
+  },
+
+  itemContent: {
+    display: "grid",
+    gap: 13,
+    alignContent: "start",
+    minWidth: 0,
+  },
+
+  itemSummary: {
+    display: "grid",
+    gap: 10,
+    minWidth: 0,
+  },
+
+  itemTitleBlock: {
+    display: "grid",
+    gap: 8,
+    minWidth: 0,
+  },
+
+  itemPillRow: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    alignItems: "center",
+    minWidth: 0,
+  },
+
+  itemStatusBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    width: "fit-content",
+    padding: "7px 10px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 12,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  pricePill: {
+    display: "inline-flex",
+    alignItems: "center",
+    width: "fit-content",
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  itemTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 28,
+    lineHeight: 1.06,
+    letterSpacing: "-0.045em",
+    overflowWrap: "anywhere",
+  },
+
+  itemDescription: {
+    margin: 0,
+    color: "#64748b",
+    lineHeight: 1.5,
+    fontSize: 14,
+    fontWeight: 730,
+    overflowWrap: "anywhere",
+  },
+
+  itemMetaGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: 10,
+    minWidth: 0,
+  },
+
+  infoCard: {
+    padding: 13,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+
+  infoLabel: {
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    marginBottom: 5,
+  },
+
+  infoValue: {
+    color: "#0f172a",
+    fontWeight: 850,
+    lineHeight: 1.35,
+    fontSize: 13,
+    overflowWrap: "anywhere",
+  },
+
+  itemActions: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
+
+  editButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 42,
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+    boxShadow: "0 10px 20px rgba(22,131,248,0.14)",
+  },
+
+  publicButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 42,
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid #cbd5e1",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+  },
+
+  disabledPublicButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 42,
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#e2e8f0",
+    color: "#475569",
+    border: "1px solid #cbd5e1",
+    fontSize: 13,
     fontWeight: 950,
     textAlign: "center",
   },
@@ -922,152 +1353,6 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     border: "1px solid #1683f8",
     textDecoration: "none",
-    fontWeight: 950,
-  },
-
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))",
-    gap: 16,
-    marginBottom: 18,
-  },
-
-  productLink: {
-    display: "block",
-    color: "inherit",
-    textDecoration: "none",
-    height: "100%",
-  },
-
-  productCard: {
-    display: "grid",
-    gridTemplateRows: "180px minmax(0, 1fr)",
-    borderRadius: 28,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
-    overflow: "hidden",
-    height: "100%",
-  },
-
-  productImageWrap: {
-    display: "grid",
-    placeItems: "center",
-    background:
-      "radial-gradient(circle at top right, rgba(250,204,21,0.16), transparent 38%), #f8fafc",
-    borderBottom: "1px solid #e2e8f0",
-  },
-
-  productImage: {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    display: "block",
-  },
-
-  productImageFallback: {
-    display: "grid",
-    placeItems: "center",
-    width: 86,
-    height: 86,
-    borderRadius: 26,
-    background: "#0f172a",
-    color: "#facc15",
-    fontSize: 16,
-    fontWeight: 950,
-    letterSpacing: "0.08em",
-  },
-
-  productBody: {
-    display: "grid",
-    gap: 11,
-    padding: 17,
-  },
-
-  productTop: {
-    display: "flex",
-    gap: 8,
-    justifyContent: "space-between",
-    alignItems: "center",
-    flexWrap: "wrap",
-  },
-
-  statusPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    width: "fit-content",
-    padding: "7px 10px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontSize: 12,
-    fontWeight: 950,
-  },
-
-  pricePill: {
-    display: "inline-flex",
-    alignItems: "center",
-    width: "fit-content",
-    padding: "7px 10px",
-    borderRadius: 999,
-    background: "#eff6ff",
-    color: "#1d4ed8",
-    border: "1px solid #bfdbfe",
-    fontSize: 12,
-    fontWeight: 950,
-  },
-
-  productTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 25,
-    lineHeight: 1.08,
-    letterSpacing: "-0.045em",
-    overflowWrap: "anywhere",
-  },
-
-  productDescription: {
-    margin: 0,
-    color: "#64748b",
-    lineHeight: 1.5,
-    fontSize: 14,
-    fontWeight: 730,
-    overflowWrap: "anywhere",
-  },
-
-  productMetaGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 8,
-  },
-
-  productMeta: {
-    display: "grid",
-    gap: 4,
-    padding: 10,
-    borderRadius: 16,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-  },
-
-  productMetaLabel: {
-    color: "#64748b",
-    fontSize: 11,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-  },
-
-  productMetaValue: {
-    color: "#0f172a",
-    fontSize: 12,
-    lineHeight: 1.35,
-    fontWeight: 900,
-    overflowWrap: "anywhere",
-  },
-
-  editLink: {
-    color: "#2563eb",
-    fontSize: 13,
     fontWeight: 950,
   },
 
