@@ -6,8 +6,16 @@ import Link from "next/link";
 export const metadata = {
   title: "SO Fundraising Platform",
   description: "Multi-tenant raffle and fundraising platform",
+  manifest: "/manifest.webmanifest",
   icons: {
-    icon: "/icon.png",
+    icon: "/brand/icon.png",
+    shortcut: "/brand/icon.png",
+    apple: "/brand/icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    title: "SO Fundraising",
+    statusBarStyle: "default",
   },
 };
 
