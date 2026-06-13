@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { headers, cookies } from "next/headers";
 import { auth } from "@/auth";
+import { query } from "@/lib/db";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { getTenantSettings } from "@/lib/tenant-settings";
 import {
@@ -29,6 +30,14 @@ type ApiResponse = {
   ok: boolean;
   items?: RaffleItem[];
   error?: string;
+};
+
+type MerchandiseProduct = {
+  id: string;
+  status: string;
+  price_cents: number;
+  currency: string;
+  sold_quantity: number;
 };
 
 type TenantBillingLike = {
@@ -65,6 +74,29 @@ async function getAdminRaffles(): Promise<RaffleItem[]> {
     if (!data.ok || !data.items) return [];
 
     return data.items;
+  } catch {
+    return [];
+  }
+}
+
+async function listMerchandiseProducts(
+  tenantSlug: string,
+): Promise<MerchandiseProduct[]> {
+  try {
+    return query<MerchandiseProduct>(
+      `
+        select
+          id,
+          status,
+          price_cents,
+          currency,
+          sold_quantity
+        from merchandise_products
+        where tenant_slug = $1
+        order by created_at desc
+      `,
+      [tenantSlug],
+    );
   } catch {
     return [];
   }
@@ -110,12 +142,13 @@ export default async function AdminDashboardPage() {
     "/admin",
   )}`;
 
-  const [raffles, squares, events, auctions, tenantSettingsRaw] =
+  const [raffles, squares, events, auctions, merchandiseProducts, tenantSettingsRaw] =
     await Promise.all([
       getAdminRaffles(),
       listSquaresGames(tenantSlug),
       listEvents(tenantSlug),
       listAuctions(tenantSlug),
+      listMerchandiseProducts(tenantSlug),
       getTenantSettings(tenantSlug),
     ]);
 
@@ -145,6 +178,11 @@ export default async function AdminDashboardPage() {
     "auctions",
   );
 
+  const merchandiseCapability = checkSubscriptionCapability(
+    subscriptionTenant,
+    "merchandise",
+  );
+
   const brandingCapability = checkSubscriptionCapability(
     subscriptionTenant,
     "advanced_branding",
@@ -166,6 +204,10 @@ export default async function AdminDashboardPage() {
   const publishedEvents = events.filter((item) => item.status === "published");
 
   const publishedAuctions = auctions.filter(
+    (item) => item.status === "published",
+  );
+
+  const publishedMerchandiseProducts = merchandiseProducts.filter(
     (item) => item.status === "published",
   );
 
@@ -192,6 +234,18 @@ export default async function AdminDashboardPage() {
     return sum + sold * Number(game.price_per_square_cents || 0);
   }, 0);
 
+  const merchandiseSold = merchandiseProducts.reduce(
+    (sum, product) => sum + Number(product.sold_quantity || 0),
+    0,
+  );
+
+  const merchandiseRevenueCents = merchandiseProducts.reduce(
+    (sum, product) =>
+      sum +
+      Number(product.sold_quantity || 0) * Number(product.price_cents || 0),
+    0,
+  );
+
   const totalRaffleTicketsSold = raffles.reduce(
     (sum, raffle) => sum + Number(raffle.sold_tickets || 0),
     0,
@@ -212,7 +266,7 @@ export default async function AdminDashboardPage() {
     publishedAuctions.length;
 
   const combinedEstimatedRevenueCents =
-    raffleRevenueCents + squaresRevenueCents;
+    raffleRevenueCents + squaresRevenueCents + merchandiseRevenueCents;
 
   return (
     <main className="admin-dashboard-page" style={styles.page}>
@@ -355,12 +409,22 @@ export default async function AdminDashboardPage() {
           />
 
           <PlanFeature
+            label="Merchandise"
+            included={merchandiseCapability.allowed}
+            text={
+              merchandiseCapability.allowed
+                ? "Included on this plan"
+                : "Professional required"
+            }
+          />
+
+          <PlanFeature
             label="Advanced branding"
             included={brandingCapability.allowed}
             text={
               brandingCapability.allowed
                 ? "Included on this plan"
-                : "Professional required"
+                : "Foundation required"
             }
           />
 
@@ -432,6 +496,12 @@ export default async function AdminDashboardPage() {
           label="Active auctions"
           value={publishedAuctions.length}
           text={`${auctions.length} total auctions created`}
+        />
+
+        <FocusCard
+          label="Merchandise products"
+          value={merchandiseProducts.length}
+          text={`${publishedMerchandiseProducts.length} published · ${merchandiseSold} sold`}
         />
 
         <FocusCard
@@ -547,8 +617,8 @@ export default async function AdminDashboardPage() {
           </h2>
 
           <p style={styles.sectionText}>
-            Open the main campaign areas for raffles, squares, events and
-            auctions. Each workspace now includes clearer readiness guidance
+            Open the main campaign areas for raffles, squares, events, auctions
+            and merchandise. Each workspace includes clearer readiness guidance
             before launch.
           </p>
         </div>
@@ -586,6 +656,17 @@ export default async function AdminDashboardPage() {
           description="Run premium auction fundraising campaigns."
           stats={`${auctions.length} total · ${publishedAuctions.length} published`}
           locked={!auctionCapability.allowed}
+          lockText="Professional required"
+        />
+
+        <DashboardCard
+          href="/admin/merchandise"
+          badgeText="SHOP"
+          title="Merchandise"
+          description="Set up branded merchandise products before public shop and checkout are connected."
+          stats={`${merchandiseProducts.length} products · ${publishedMerchandiseProducts.length} published`}
+          tone="gold"
+          locked={!merchandiseCapability.allowed}
           lockText="Professional required"
         />
       </section>
@@ -740,6 +821,12 @@ export default async function AdminDashboardPage() {
               label="Auctions"
               total={auctions.length}
               published={publishedAuctions.length}
+            />
+
+            <DataBlock
+              label="Merchandise"
+              total={merchandiseProducts.length}
+              published={publishedMerchandiseProducts.length}
             />
           </div>
         </section>
@@ -1457,7 +1544,7 @@ const styles: Record<string, CSSProperties> = {
 
   focusGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
     gap: 12,
     marginBottom: 18,
   },
