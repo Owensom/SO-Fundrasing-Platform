@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { queryOne } from "@/lib/db";
+import { query, queryOne } from "@/lib/db";
 import { getTenantSettings } from "@/lib/tenant-settings";
 import {
   checkSubscriptionCapability,
@@ -11,6 +11,12 @@ import {
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+type PageProps = {
+  params: Promise<{
+    tenantSlug: string;
+  }>;
+};
 
 type MerchandiseOption = {
   type?: string | null;
@@ -103,58 +109,8 @@ function formatMoney(cents: number, currency = "GBP") {
   }
 }
 
-function getStockLabel(product: MerchandiseProduct) {
-  if (product.stock_quantity === null) {
-    return "Availability to be confirmed";
-  }
-
-  const remaining = Math.max(
-    0,
-    Number(product.stock_quantity || 0) - Number(product.sold_quantity || 0),
-  );
-
-  if (remaining <= 0) {
-    return "Ask organiser for availability";
-  }
-
-  if (remaining === 1) {
-    return "1 item remaining";
-  }
-
-  return `${remaining} items remaining`;
-}
-
-function getStockTone(product: MerchandiseProduct) {
-  if (product.stock_quantity === null) return "good";
-
-  const remaining = Math.max(
-    0,
-    Number(product.stock_quantity || 0) - Number(product.sold_quantity || 0),
-  );
-
-  if (remaining <= 0) return "closed";
-  if (remaining <= 5) return "warning";
-
-  return "good";
-}
-
-function getSizeOptions(product: MerchandiseProduct) {
-  if (!Array.isArray(product.options_json)) return [];
-
-  return product.options_json
-    .filter((option) => cleanText(option?.type).toLowerCase() === "size")
-    .map((option) => cleanText(option?.label || option?.value))
-    .filter(Boolean);
-}
-
-function getSizeSummary(product: MerchandiseProduct) {
-  const sizes = getSizeOptions(product);
-
-  if (sizes.length === 0) {
-    return "No size options";
-  }
-
-  return sizes.join(", ");
+function getDisplayName(settings: TenantPublicSettings | null) {
+  return cleanText(settings?.public_display_name) || "SO Fundraising Platform";
 }
 
 function getBestLogo({
@@ -175,8 +131,50 @@ function getBestLogo({
   );
 }
 
-function getDisplayName(settings: TenantPublicSettings | null) {
-  return cleanText(settings?.public_display_name) || "SO Fundraising Platform";
+function getProductHref(product: MerchandiseProduct) {
+  return `/m/${encodeURIComponent(product.tenant_slug)}/${encodeURIComponent(
+    product.slug,
+  )}`;
+}
+
+function getSizeOptions(product: MerchandiseProduct) {
+  if (!Array.isArray(product.options_json)) return [];
+
+  return product.options_json
+    .filter((option) => cleanText(option?.type).toLowerCase() === "size")
+    .map((option) => cleanText(option?.label || option?.value))
+    .filter(Boolean);
+}
+
+function getSizeSummary(product: MerchandiseProduct) {
+  const sizes = getSizeOptions(product);
+
+  if (sizes.length === 0) {
+    return "No size options";
+  }
+
+  if (sizes.length <= 4) {
+    return sizes.join(", ");
+  }
+
+  return `${sizes.slice(0, 4).join(", ")} +${sizes.length - 4} more`;
+}
+
+function getAvailabilityLabel(product: MerchandiseProduct) {
+  if (product.stock_quantity === null) {
+    return "Availability to be confirmed";
+  }
+
+  const remaining = Math.max(
+    0,
+    Number(product.stock_quantity || 0) - Number(product.sold_quantity || 0),
+  );
+
+  if (remaining <= 0) {
+    return "Ask organiser for availability";
+  }
+
+  return "Available to enquire about";
 }
 
 function getImageObjectPosition(product: MerchandiseProduct) {
@@ -185,14 +183,32 @@ function getImageObjectPosition(product: MerchandiseProduct) {
   )}%`;
 }
 
-async function getPublishedProduct({
-  tenantSlug,
-  slug,
-}: {
-  tenantSlug: string;
-  slug: string;
-}) {
-  return queryOne<MerchandiseProduct>(
+async function getTenantPublicSettings(tenantSlug: string) {
+  return queryOne<TenantPublicSettings>(
+    `
+      select
+        public_display_name,
+        public_tagline,
+        public_logo_url,
+        public_logo_mark_url,
+        public_primary_colour,
+        public_accent_colour,
+        public_footer_text,
+        public_contact_email,
+        public_contact_name,
+        subscription_tier,
+        subscription_status,
+        platform_owner_bypass
+      from tenant_settings
+      where tenant_slug = $1
+      limit 1
+    `,
+    [tenantSlug],
+  );
+}
+
+async function getPublishedMerchandiseProducts(tenantSlug: string) {
+  return query<MerchandiseProduct>(
     `
       select
         id,
@@ -213,85 +229,43 @@ async function getPublishedProduct({
         updated_at::text
       from merchandise_products
       where tenant_slug = $1
-        and slug = $2
         and status = 'published'
-      limit 1
+      order by created_at desc
     `,
-    [tenantSlug, slug],
+    [tenantSlug],
   );
 }
 
 export async function generateMetadata({
   params,
-}: {
-  params: Promise<{ tenantSlug: string; slug: string }>;
-}): Promise<Metadata> {
-  const { tenantSlug, slug } = await params;
-
-  const [product, tenantSettingsRaw] = await Promise.all([
-    getPublishedProduct({ tenantSlug, slug }),
-    getTenantSettings(tenantSlug),
-  ]);
-
-  if (!product) {
-    return {
-      title: "Merchandise not available",
-    };
-  }
-
-  const tenantSettings = tenantSettingsRaw as TenantPublicSettings | null;
-
-  const merchandiseCapability = checkSubscriptionCapability(
-    tenantSettings,
-    "merchandise",
-  );
-
-  if (!merchandiseCapability.allowed) {
-    return {
-      title: "Merchandise not available",
-    };
-  }
-
-  const subscriptionTier = normaliseSubscriptionTier(
-    tenantSettings?.subscription_tier,
-  );
-
-  const canUseProductImages = subscriptionTier !== "community";
+}: PageProps): Promise<Metadata> {
+  const { tenantSlug } = await params;
+  const tenantSettings = await getTenantPublicSettings(tenantSlug);
   const displayName = getDisplayName(tenantSettings);
-  const description =
-    cleanText(product.description) ||
-    `Support ${displayName} through merchandise.`;
-
-  const imageUrl = canUseProductImages ? cleanText(product.image_url) : "";
 
   return {
-    title: `${product.title} | ${displayName}`,
-    description,
+    title: `Merchandise | ${displayName}`,
+    description: `Browse merchandise from ${displayName}.`,
     openGraph: {
-      title: `${product.title} | ${displayName}`,
-      description,
-      images: imageUrl ? [{ url: imageUrl }] : undefined,
+      title: `Merchandise | ${displayName}`,
+      description: `Browse merchandise from ${displayName}.`,
     },
   };
 }
 
-export default async function PublicMerchandiseProductPage({
-  params,
-}: {
-  params: Promise<{ tenantSlug: string; slug: string }>;
-}) {
-  const { tenantSlug, slug } = await params;
+export default async function PublicMerchandiseShopPage({ params }: PageProps) {
+  const { tenantSlug } = await params;
 
-  const [product, tenantSettingsRaw] = await Promise.all([
-    getPublishedProduct({ tenantSlug, slug }),
-    getTenantSettings(tenantSlug),
+  const [tenantSettingsRaw, products] = await Promise.all([
+    getTenantPublicSettings(tenantSlug),
+    getPublishedMerchandiseProducts(tenantSlug),
   ]);
 
-  if (!product) {
-    notFound();
-  }
-
   const tenantSettings = tenantSettingsRaw as TenantPublicSettings | null;
+
+  const subscriptionTier = normaliseSubscriptionTier(
+    tenantSettings?.subscription_tier,
+  );
 
   const merchandiseCapability = checkSubscriptionCapability(
     tenantSettings,
@@ -307,14 +281,13 @@ export default async function PublicMerchandiseProductPage({
     notFound();
   }
 
-  const subscriptionTier = normaliseSubscriptionTier(
-    tenantSettings?.subscription_tier,
-  );
-
   const canUseAdvancedBranding = advancedBrandingCapability.allowed;
   const canUseProductImages = subscriptionTier !== "community";
 
   const displayName = getDisplayName(tenantSettings);
+  const tagline =
+    cleanText(tenantSettings?.public_tagline) ||
+    "Supporting causes through premium fundraising campaigns.";
   const logoUrl = getBestLogo({
     settings: tenantSettings,
     canUseAdvancedBranding,
@@ -335,34 +308,30 @@ export default async function PublicMerchandiseProductPage({
     ? cleanText(tenantSettings?.public_footer_text)
     : "";
 
-  const stockTone = getStockTone(product);
-  const sizeOptions = getSizeOptions(product);
-  const productImageUrl = canUseProductImages ? cleanText(product.image_url) : "";
-
   const heroBackground = canUseAdvancedBranding
-    ? `radial-gradient(circle at bottom right, ${accentColour}22, transparent 38%), radial-gradient(circle at top left, ${primaryColour}22, transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #111827 100%)`
+    ? `radial-gradient(circle at bottom right, ${accentColour}26, transparent 38%), radial-gradient(circle at top left, ${primaryColour}26, transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #111827 100%)`
     : "radial-gradient(circle at bottom right, rgba(250,204,21,0.14), transparent 38%), radial-gradient(circle at top left, rgba(22,131,248,0.18), transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #172554 100%)";
 
   return (
-    <main className="public-merchandise-page" style={styles.page}>
+    <main className="public-merchandise-shop-page" style={styles.page}>
       <style>{responsiveStyles}</style>
 
       <section
-        className="merchandise-hero"
+        className="shopHero"
         style={{
           ...styles.hero,
           background: heroBackground,
         }}
       >
         <div style={styles.heroCopy}>
-          <Link href={`/m/${tenantSlug}`} style={styles.backLink}>
-            ← Back to shop
+          <Link href={`/c/${tenantSlug}`} style={styles.backLink}>
+            ← Back to all campaigns
           </Link>
 
-          <div className="brandRow" style={styles.brandRow}>
+          <div className="heroBrandRow" style={styles.heroBrandRow}>
             <div
               style={{
-                ...styles.logoWrap,
+                ...styles.logoPlate,
                 borderColor: canUseAdvancedBranding
                   ? `${accentColour}66`
                   : "rgba(255,255,255,0.55)",
@@ -371,176 +340,290 @@ export default async function PublicMerchandiseProductPage({
               <img src={logoUrl} alt={displayName} style={styles.logoImage} />
             </div>
 
-            <div style={styles.brandCopy}>
+            <div style={styles.heroBrandCopy}>
               <p
                 style={{
-                  ...styles.brandKicker,
+                  ...styles.heroKicker,
                   color: canUseAdvancedBranding ? accentColour : "#facc15",
+                  borderColor: canUseAdvancedBranding
+                    ? `${accentColour}88`
+                    : "rgba(250,204,21,0.72)",
                 }}
               >
-                Merchandise
+                Merchandise / Shop
               </p>
 
-              <h1 className="merchandise-title" style={styles.title}>
-                {product.title}
+              <h1 className="shopTitle" style={styles.heroTitle}>
+                {displayName} shop
               </h1>
             </div>
           </div>
 
-          <p style={styles.subtitle}>
-            {cleanText(product.description) ||
-              `Support ${displayName} through this merchandise item.`}
+          <p style={styles.heroText}>
+            Browse published merchandise items. Online checkout is not connected
+            yet, so supporters can view products and contact the organiser.
           </p>
 
-          <div style={styles.heroPills}>
-            <span
+          <div className="heroStats" style={styles.heroStats}>
+            <div style={styles.heroStat}>
+              <span style={styles.heroStatLabel}>Published items</span>
+              <strong style={styles.heroStatValue}>{products.length}</strong>
+            </div>
+
+            <div style={styles.heroStat}>
+              <span style={styles.heroStatLabel}>Checkout</span>
+              <strong style={styles.heroStatValue}>Coming soon</strong>
+            </div>
+          </div>
+        </div>
+
+        <aside style={styles.heroPanel}>
+          <span style={styles.panelIcon}>🛍</span>
+
+          <p style={styles.panelKicker}>Display-only phase</p>
+
+          <h2 style={styles.panelTitle}>Shop browsing is live</h2>
+
+          <p style={styles.panelText}>
+            Products are visible publicly. Secure merchandise checkout, stock
+            handling, receipts and fulfilment will be added later.
+          </p>
+
+          {contactEmail ? (
+            <a
+              href={`mailto:${contactEmail}?subject=${encodeURIComponent(
+                `Merchandise enquiry for ${displayName}`,
+              )}`}
               style={{
-                ...styles.pricePill,
+                ...styles.heroButton,
                 background: primaryColour,
                 borderColor: primaryColour,
                 color: primaryTextColour,
               }}
             >
-              {formatMoney(product.price_cents, product.currency)}
-            </span>
-
-            <span
+              Contact {contactName || "organiser"} →
+            </a>
+          ) : (
+            <Link
+              href={`/c/${tenantSlug}/contact`}
               style={{
-                ...styles.stockPill,
-                ...(stockTone === "closed"
-                  ? styles.stockPillClosed
-                  : stockTone === "warning"
-                    ? styles.stockPillWarning
-                    : styles.stockPillGood),
+                ...styles.heroButton,
+                background: primaryColour,
+                borderColor: primaryColour,
+                color: primaryTextColour,
               }}
             >
-              {getStockLabel(product)}
-            </span>
-
-            {sizeOptions.length ? (
-              <span style={styles.sizeHeroPill}>
-                Sizes: {sizeOptions.join(", ")}
-              </span>
-            ) : null}
-          </div>
-        </div>
-
-        <aside style={styles.heroCard}>
-          <div style={styles.heroCardImageWrap}>
-            {productImageUrl ? (
-              <img
-                src={productImageUrl}
-                alt={product.title}
-                style={{
-                  ...styles.productImage,
-                  objectPosition: getImageObjectPosition(product),
-                }}
-              />
-            ) : (
-              <div style={styles.imageFallback}>SHOP</div>
-            )}
-          </div>
+              Contact organiser →
+            </Link>
+          )}
         </aside>
       </section>
 
-      <section className="merchandise-info-grid" style={styles.infoGrid}>
-        <article style={styles.primaryPanel}>
+      <section className="shopHeader" style={styles.shopHeader}>
+        <div>
           <p style={{ ...styles.kicker, color: primaryColour }}>
-            Product details
+            Published merchandise
           </p>
 
-          <h2 style={styles.sectionTitle}>Support {displayName}</h2>
+          <h2 style={styles.sectionTitle}>Shop items</h2>
 
           <p style={styles.sectionText}>
-            This merchandise page is currently for public display only. Online
-            purchasing and checkout will be added in a later controlled phase.
+            Products below are available for public viewing and organiser
+            enquiries.
           </p>
+        </div>
 
-          <div style={styles.detailGrid}>
-            <DetailItem
-              label="Price"
-              value={formatMoney(product.price_cents, product.currency)}
-            />
+        <span
+          style={{
+            ...styles.countPill,
+            borderColor: canUseAdvancedBranding
+              ? `${accentColour}88`
+              : "#bfdbfe",
+            background: canUseAdvancedBranding ? `${accentColour}18` : "#eff6ff",
+          }}
+        >
+          {products.length} {products.length === 1 ? "item" : "items"}
+        </span>
+      </section>
 
-            <DetailItem label="Availability" value={getStockLabel(product)} />
-
-            <DetailItem label="Sizes / options" value={getSizeSummary(product)} />
-
-            <DetailItem label="Organisation" value={displayName} />
-          </div>
-
-          {sizeOptions.length ? (
+      <section className="productGrid" style={styles.productGrid}>
+        {products.length === 0 ? (
+          <article style={styles.emptyCard}>
             <div
               style={{
-                ...styles.sizePanel,
+                ...styles.emptyIcon,
+                color: primaryColour,
+                background: canUseAdvancedBranding
+                  ? `${primaryColour}12`
+                  : "rgba(37,99,235,0.10)",
                 borderColor: canUseAdvancedBranding
-                  ? `${accentColour}55`
-                  : "#dbeafe",
+                  ? `${primaryColour}24`
+                  : "rgba(37,99,235,0.18)",
               }}
             >
-              <p style={styles.sizePanelTitle}>Available sizes/options</p>
-
-              <div style={styles.sizePillGrid}>
-                {sizeOptions.map((size) => (
-                  <span key={size} style={styles.sizePill}>
-                    {size}
-                  </span>
-                ))}
-              </div>
+              🛍
             </div>
-          ) : null}
-        </article>
 
-        <aside style={styles.actionPanel}>
-          <p style={{ ...styles.kicker, color: primaryColour }}>
-            Buying online
+            <h2 style={styles.emptyTitle}>Merchandise coming soon</h2>
+
+            <p style={styles.emptyText}>
+              This organiser has not published any merchandise items yet. You
+              can still view their live campaigns or contact them directly.
+            </p>
+
+            <div className="emptyActions" style={styles.emptyActions}>
+              <Link
+                href={`/c/${tenantSlug}`}
+                style={{
+                  ...styles.primaryButton,
+                  background: primaryColour,
+                  borderColor: primaryColour,
+                  color: primaryTextColour,
+                }}
+              >
+                View campaigns →
+              </Link>
+
+              <Link
+                href={`/c/${tenantSlug}/contact`}
+                style={styles.secondaryButton}
+              >
+                Contact organiser
+              </Link>
+            </div>
+          </article>
+        ) : (
+          products.map((product) => {
+            const sizes = getSizeOptions(product);
+            const productImageUrl = canUseProductImages
+              ? cleanText(product.image_url)
+              : "";
+
+            return (
+              <article key={product.id} style={styles.productCard}>
+                <Link href={getProductHref(product)} style={styles.imageLink}>
+                  <div style={styles.productImageWrap}>
+                    {productImageUrl ? (
+                      <img
+                        src={productImageUrl}
+                        alt={product.title}
+                        style={{
+                          ...styles.productImage,
+                          objectPosition: getImageObjectPosition(product),
+                        }}
+                      />
+                    ) : (
+                      <div style={styles.imageFallback}>
+                        <span>SHOP</span>
+                      </div>
+                    )}
+                  </div>
+                </Link>
+
+                <div style={styles.productBody}>
+                  <div style={styles.productTopRow}>
+                    <span style={styles.typePill}>🛍 Merchandise</span>
+                    <span style={styles.statusPill}>Display only</span>
+                  </div>
+
+                  <h2 style={styles.productTitle}>{product.title}</h2>
+
+                  <p style={styles.productText}>
+                    {cleanText(product.description) ||
+                      "Merchandise item available for organiser enquiry."}
+                  </p>
+
+                  {sizes.length ? (
+                    <div style={styles.sizeRow}>
+                      {sizes.slice(0, 5).map((size) => (
+                        <span key={size} style={styles.sizePill}>
+                          {size}
+                        </span>
+                      ))}
+
+                      {sizes.length > 5 ? (
+                        <span style={styles.sizePill}>
+                          +{sizes.length - 5}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  <div style={styles.productMetaGrid}>
+                    <MiniMeta
+                      label="Price"
+                      value={formatMoney(product.price_cents, product.currency)}
+                    />
+
+                    <MiniMeta
+                      label="Availability"
+                      value={getAvailabilityLabel(product)}
+                    />
+
+                    <MiniMeta
+                      label="Sizes/options"
+                      value={getSizeSummary(product)}
+                    />
+                  </div>
+
+                  <div className="productActions" style={styles.productActions}>
+                    <Link
+                      href={getProductHref(product)}
+                      style={{
+                        ...styles.primaryButton,
+                        background: primaryColour,
+                        borderColor: primaryColour,
+                        color: primaryTextColour,
+                      }}
+                    >
+                      View product →
+                    </Link>
+
+                    {contactEmail ? (
+                      <a
+                        href={`mailto:${contactEmail}?subject=${encodeURIComponent(
+                          `Merchandise enquiry: ${product.title}`,
+                        )}`}
+                        style={styles.secondaryButton}
+                      >
+                        Ask organiser
+                      </a>
+                    ) : (
+                      <Link
+                        href={`/c/${tenantSlug}/contact`}
+                        style={styles.secondaryButton}
+                      >
+                        Ask organiser
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              </article>
+            );
+          })
+        )}
+      </section>
+
+      <section className="shopNotice" style={styles.shopNotice}>
+        <div>
+          <p style={styles.noticeKicker}>Checkout status</p>
+
+          <h2 style={styles.noticeTitle}>Online buying is coming later</h2>
+
+          <p style={styles.noticeText}>
+            This shop is currently for public display and enquiries only. Paid
+            merchandise checkout, order receipts, stock counting and fulfilment
+            controls will be connected in a later controlled phase.
           </p>
+        </div>
 
-          <h2 style={styles.actionTitle}>Checkout coming soon</h2>
-
-          <p style={styles.actionText}>
-            This product is ready for public display. Secure online purchasing,
-            stock handling and receipts will be connected in a later phase.
-          </p>
-
-          <div style={styles.disabledCheckout}>
-            Online checkout not connected yet
-          </div>
-
-          <Link
-            href={`/m/${tenantSlug}`}
-            style={{
-              ...styles.primaryLink,
-              background: primaryColour,
-              borderColor: primaryColour,
-              color: primaryTextColour,
-            }}
-          >
-            View shop →
-          </Link>
-
-          <Link href={`/c/${tenantSlug}`} style={styles.secondaryLink}>
-            Public campaign hub →
-          </Link>
-
-          {contactEmail ? (
-            <a
-              href={`mailto:${contactEmail}?subject=${encodeURIComponent(
-                `Merchandise enquiry: ${product.title}`,
-              )}`}
-              style={styles.secondaryLink}
-            >
-              Contact {contactName || "organiser"} →
-            </a>
-          ) : null}
-        </aside>
+        <Link href={`/c/${tenantSlug}`} style={styles.noticeLink}>
+          Public campaign hub →
+        </Link>
       </section>
 
       {footerText ? (
-        <section
-          className="merchandise-footer-panel"
-          style={styles.footerPanel}
-        >
+        <footer className="shopFooter" style={styles.footerPanel}>
           <div>
             <p style={styles.footerBrand}>{displayName}</p>
 
@@ -548,115 +631,103 @@ export default async function PublicMerchandiseProductPage({
           </div>
 
           <Link href={`/c/${tenantSlug}`} style={styles.footerLink}>
-            Public campaign hub →
+            Back to campaigns →
           </Link>
-        </section>
+        </footer>
       ) : null}
     </main>
   );
 }
 
-function DetailItem({ label, value }: { label: string; value: string }) {
+function MiniMeta({ label, value }: { label: string; value: string }) {
   return (
-    <div style={styles.detailItem}>
-      <span style={styles.detailLabel}>{label}</span>
-      <strong style={styles.detailValue}>{value}</strong>
+    <div style={styles.miniMeta}>
+      <span style={styles.miniMetaLabel}>{label}</span>
+      <strong style={styles.miniMetaValue}>{value}</strong>
     </div>
   );
 }
 
 const responsiveStyles = `
-.public-merchandise-page,
-.public-merchandise-page * {
+.public-merchandise-shop-page,
+.public-merchandise-shop-page * {
   box-sizing: border-box;
 }
 
-.public-merchandise-page {
+.public-merchandise-shop-page {
   overflow-x: hidden;
 }
 
-.public-merchandise-page section,
-.public-merchandise-page article,
-.public-merchandise-page aside,
-.public-merchandise-page div,
-.public-merchandise-page a,
-.public-merchandise-page p,
-.public-merchandise-page h1,
-.public-merchandise-page h2,
-.public-merchandise-page strong,
-.public-merchandise-page span {
+.public-merchandise-shop-page section,
+.public-merchandise-shop-page article,
+.public-merchandise-shop-page aside,
+.public-merchandise-shop-page div,
+.public-merchandise-shop-page a,
+.public-merchandise-shop-page p,
+.public-merchandise-shop-page h1,
+.public-merchandise-shop-page h2,
+.public-merchandise-shop-page strong,
+.public-merchandise-shop-page span {
   min-width: 0;
   max-width: 100%;
 }
 
-@media (max-width: 920px) {
-  .public-merchandise-page .merchandise-hero,
-  .public-merchandise-page .merchandise-info-grid {
+@media (max-width: 1020px) {
+  .public-merchandise-shop-page .shopHero {
     grid-template-columns: 1fr !important;
+  }
+
+  .public-merchandise-shop-page .productGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
 
-@media (max-width: 640px) {
-  .public-merchandise-page {
-    padding: 14px 10px 34px !important;
+@media (max-width: 720px) {
+  .public-merchandise-shop-page {
+    padding: 14px 10px 40px !important;
   }
 
-  .public-merchandise-page .merchandise-hero {
-    padding: 18px !important;
-    border-radius: 28px !important;
-  }
-
-  .public-merchandise-page .brandRow {
-    grid-template-columns: 58px minmax(0, 1fr) !important;
-    gap: 11px !important;
-  }
-
-  .public-merchandise-page .logoWrap {
-    width: 58px !important;
-    height: 58px !important;
-    border-radius: 18px !important;
-  }
-
-  .public-merchandise-page .merchandise-title {
-    font-size: clamp(38px, 13vw, 58px) !important;
-    line-height: 0.96 !important;
-  }
-
-  .public-merchandise-page .heroPills {
-    display: grid !important;
-    grid-template-columns: 1fr !important;
-  }
-
-  .public-merchandise-page .pricePill,
-  .public-merchandise-page .stockPill,
-  .public-merchandise-page .sizeHeroPill {
-    width: 100% !important;
-  }
-
-  .public-merchandise-page .merchandise-info-grid {
-    gap: 12px !important;
-  }
-
-  .public-merchandise-page .primaryPanel,
-  .public-merchandise-page .actionPanel {
+  .public-merchandise-shop-page .shopHero,
+  .public-merchandise-shop-page .shopHeader,
+  .public-merchandise-shop-page .shopNotice,
+  .public-merchandise-shop-page .shopFooter {
     padding: 16px !important;
     border-radius: 24px !important;
   }
 
-  .public-merchandise-page .detailGrid {
+  .public-merchandise-shop-page .heroBrandRow {
+    grid-template-columns: 58px minmax(0, 1fr) !important;
+    gap: 11px !important;
+  }
+
+  .public-merchandise-shop-page .shopTitle {
+    font-size: clamp(38px, 13vw, 58px) !important;
+    line-height: 0.96 !important;
+  }
+
+  .public-merchandise-shop-page .heroStats,
+  .public-merchandise-shop-page .productGrid,
+  .public-merchandise-shop-page .productActions,
+  .public-merchandise-shop-page .emptyActions {
     grid-template-columns: 1fr !important;
   }
 
-  .public-merchandise-page .merchandise-footer-panel {
+  .public-merchandise-shop-page .productImageWrap {
+    height: 210px !important;
+  }
+
+  .public-merchandise-shop-page .shopHeader,
+  .public-merchandise-shop-page .shopNotice,
+  .public-merchandise-shop-page .shopFooter {
     display: grid !important;
     justify-items: stretch !important;
   }
 
-  .public-merchandise-page a {
+  .public-merchandise-shop-page a {
     width: 100% !important;
   }
 
-  .public-merchandise-page .backLink {
+  .public-merchandise-shop-page .backLink {
     width: fit-content !important;
   }
 }
@@ -666,7 +737,7 @@ const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: "100vh",
     width: "100%",
-    padding: "24px 14px 48px",
+    padding: "24px 14px 52px",
     background:
       "radial-gradient(circle at top left, rgba(22,131,248,0.08), transparent 34%), radial-gradient(circle at top right, rgba(250,204,21,0.12), transparent 32%), #f8fafc",
     color: "#0f172a",
@@ -675,13 +746,13 @@ const styles: Record<string, CSSProperties> = {
 
   hero: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.08fr) minmax(300px, 0.92fr)",
-    gap: 24,
+    gridTemplateColumns: "minmax(0, 1.08fr) minmax(300px, 0.52fr)",
+    gap: 22,
     width: "100%",
     maxWidth: 1180,
     margin: "0 auto 16px",
-    padding: 30,
-    borderRadius: 36,
+    padding: 28,
+    borderRadius: 34,
     color: "#ffffff",
     boxShadow: "0 28px 70px rgba(15,23,42,0.24)",
     border: "1px solid rgba(148,163,184,0.26)",
@@ -710,14 +781,14 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
   },
 
-  brandRow: {
+  heroBrandRow: {
     display: "grid",
     gridTemplateColumns: "76px minmax(0, 1fr)",
     gap: 14,
     alignItems: "center",
   },
 
-  logoWrap: {
+  logoPlate: {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -739,32 +810,38 @@ const styles: Record<string, CSSProperties> = {
     boxSizing: "border-box",
   },
 
-  brandCopy: {
+  heroBrandCopy: {
     display: "grid",
-    gap: 5,
+    gap: 7,
   },
 
-  brandKicker: {
+  heroKicker: {
+    display: "inline-flex",
+    width: "fit-content",
     margin: 0,
-    fontSize: 13,
+    padding: "7px 11px",
+    borderRadius: 999,
+    background: "rgba(15,23,42,0.34)",
+    border: "1px solid",
+    fontSize: 11,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
 
-  title: {
+  heroTitle: {
     margin: 0,
     color: "#ffffff",
-    fontSize: "clamp(50px, 7vw, 86px)",
+    fontSize: "clamp(50px, 7vw, 84px)",
     lineHeight: 0.9,
     letterSpacing: "-0.085em",
     overflowWrap: "anywhere",
     textShadow: "0 18px 45px rgba(0,0,0,0.24)",
   },
 
-  subtitle: {
+  heroText: {
     margin: 0,
-    maxWidth: 800,
+    maxWidth: 820,
     color: "#dbeafe",
     fontSize: 18,
     lineHeight: 1.6,
@@ -772,146 +849,117 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
-  heroPills: {
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-    alignItems: "center",
-  },
-
-  pricePill: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 46,
-    padding: "11px 16px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontSize: 17,
-    fontWeight: 950,
-    boxShadow: "0 12px 24px rgba(0,0,0,0.16)",
-  },
-
-  stockPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 46,
-    padding: "11px 16px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontSize: 14,
-    fontWeight: 950,
-  },
-
-  stockPillGood: {
-    background: "#dcfce7",
-    color: "#166534",
-    borderColor: "#86efac",
-  },
-
-  stockPillWarning: {
-    background: "#fffbeb",
-    color: "#92400e",
-    borderColor: "#fde68a",
-  },
-
-  stockPillClosed: {
-    background: "#fef2f2",
-    color: "#991b1b",
-    borderColor: "#fecaca",
-  },
-
-  sizeHeroPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 46,
-    padding: "11px 16px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.10)",
-    color: "#ffffff",
-    border: "1px solid rgba(255,255,255,0.22)",
-    fontSize: 14,
-    fontWeight: 950,
-    overflowWrap: "anywhere",
-  },
-
-  heroCard: {
+  heroStats: {
     display: "grid",
-    alignContent: "stretch",
-    minHeight: 360,
-    borderRadius: 30,
+    gridTemplateColumns: "repeat(2, minmax(0, 190px))",
+    gap: 10,
+  },
+
+  heroStat: {
+    display: "grid",
+    gap: 4,
+    padding: 13,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.10)",
+    border: "1px solid rgba(255,255,255,0.16)",
+  },
+
+  heroStatLabel: {
+    color: "#bfdbfe",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  heroStatValue: {
+    color: "#ffffff",
+    fontSize: 20,
+    lineHeight: 1.1,
+    fontWeight: 950,
+  },
+
+  heroPanel: {
+    display: "grid",
+    gap: 12,
+    alignContent: "center",
+    padding: 20,
+    borderRadius: 26,
     background: "rgba(255,255,255,0.10)",
     border: "1px solid rgba(255,255,255,0.18)",
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)",
-    overflow: "hidden",
   },
 
-  heroCardImageWrap: {
+  panelIcon: {
     display: "grid",
     placeItems: "center",
-    minHeight: 360,
-    background:
-      "radial-gradient(circle at top right, rgba(250,204,21,0.18), transparent 38%), rgba(255,255,255,0.08)",
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.14)",
+    border: "1px solid rgba(255,255,255,0.18)",
+    fontSize: 25,
   },
 
-  productImage: {
-    display: "block",
-    width: "100%",
-    height: "100%",
-    minHeight: 360,
-    objectFit: "cover",
-  },
-
-  imageFallback: {
-    display: "grid",
-    placeItems: "center",
-    width: 126,
-    height: 126,
-    borderRadius: 34,
-    background: "#ffffff",
-    color: "#0f172a",
-    border: "1px solid rgba(255,255,255,0.62)",
-    fontSize: 20,
+  panelKicker: {
+    margin: 0,
+    color: "#fef3c7",
+    fontSize: 12,
     fontWeight: 950,
+    textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
 
-  infoGrid: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(280px, 0.45fr)",
-    gap: 16,
+  panelTitle: {
+    margin: 0,
+    color: "#ffffff",
+    fontSize: 30,
+    lineHeight: 1.04,
+    letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
+  },
+
+  panelText: {
+    margin: 0,
+    color: "#dbeafe",
+    lineHeight: 1.55,
+    fontWeight: 730,
+    overflowWrap: "anywhere",
+  },
+
+  heroButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    minHeight: 46,
+    padding: "11px 15px",
+    borderRadius: 999,
+    border: "1px solid",
+    textDecoration: "none",
+    fontWeight: 950,
+    textAlign: "center",
+  },
+
+  shopHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    flexWrap: "wrap",
+    alignItems: "flex-start",
     width: "100%",
     maxWidth: 1180,
     margin: "0 auto 16px",
-  },
-
-  primaryPanel: {
-    display: "grid",
-    gap: 12,
-    padding: 22,
-    borderRadius: 28,
+    padding: 18,
+    borderRadius: 24,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
-  },
-
-  actionPanel: {
-    display: "grid",
-    gap: 12,
-    alignContent: "start",
-    padding: 22,
-    borderRadius: 28,
-    background:
-      "linear-gradient(135deg, rgba(255,255,255,1), rgba(239,246,255,0.9))",
-    border: "1px solid #bfdbfe",
-    boxShadow: "0 10px 30px rgba(22,131,248,0.08)",
+    boxShadow: "0 12px 30px rgba(15,23,42,0.05)",
   },
 
   kicker: {
-    margin: 0,
-    fontSize: 12,
+    margin: "0 0 5px",
+    fontSize: 11,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
@@ -920,72 +968,147 @@ const styles: Record<string, CSSProperties> = {
   sectionTitle: {
     margin: 0,
     color: "#0f172a",
-    fontSize: 32,
+    fontSize: 30,
     lineHeight: 1.06,
     letterSpacing: "-0.055em",
     overflowWrap: "anywhere",
   },
 
   sectionText: {
-    margin: 0,
-    color: "#475569",
-    lineHeight: 1.6,
+    margin: "6px 0 0",
+    color: "#64748b",
+    lineHeight: 1.45,
     fontWeight: 740,
     overflowWrap: "anywhere",
   },
 
-  detailGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))",
-    gap: 10,
-    marginTop: 6,
+  countPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    minHeight: 36,
+    padding: "8px 12px",
+    borderRadius: 999,
+    color: "#0f172a",
+    border: "1px solid",
+    fontSize: 12,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
   },
 
-  detailItem: {
+  productGrid: {
     display: "grid",
-    gap: 5,
-    padding: 13,
-    borderRadius: 18,
-    background: "#f8fafc",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 14,
+    width: "100%",
+    maxWidth: 1180,
+    margin: "0 auto 16px",
+  },
+
+  productCard: {
+    display: "flex",
+    flexDirection: "column",
+    minWidth: 0,
+    overflow: "hidden",
+    borderRadius: 26,
+    background: "#ffffff",
     border: "1px solid #e2e8f0",
+    boxShadow: "0 14px 34px rgba(15,23,42,0.07)",
   },
 
-  detailLabel: {
-    color: "#64748b",
+  imageLink: {
+    display: "block",
+    width: "100%",
+    textDecoration: "none",
+  },
+
+  productImageWrap: {
+    width: "100%",
+    height: 220,
+    overflow: "hidden",
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 58%, #eff6ff 100%)",
+    borderBottom: "1px solid #e2e8f0",
+  },
+
+  productImage: {
+    display: "block",
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+  },
+
+  imageFallback: {
+    display: "grid",
+    placeItems: "center",
+    width: "100%",
+    height: "100%",
+    color: "#0f172a",
+    fontSize: 18,
+    fontWeight: 950,
+    letterSpacing: "0.08em",
+  },
+
+  productBody: {
+    display: "flex",
+    flexDirection: "column",
+    flex: 1,
+    gap: 11,
+    padding: 15,
+  },
+
+  productTopRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 8,
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+
+  typePill: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#fdf2f8",
+    color: "#9d174d",
+    border: "1px solid #fbcfe8",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+
+  statusPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#f1f5f9",
+    color: "#475569",
+    border: "1px solid #e2e8f0",
     fontSize: 11,
     fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
   },
 
-  detailValue: {
+  productTitle: {
+    margin: 0,
     color: "#0f172a",
-    fontSize: 15,
-    lineHeight: 1.35,
-    fontWeight: 950,
+    fontSize: 24,
+    lineHeight: 1.05,
+    letterSpacing: "-0.05em",
     overflowWrap: "anywhere",
   },
 
-  sizePanel: {
-    display: "grid",
-    gap: 10,
-    padding: 14,
-    borderRadius: 20,
-    background:
-      "linear-gradient(135deg, #f8fafc 0%, #ffffff 56%, #eff6ff 100%)",
-    border: "1px solid #dbeafe",
-  },
-
-  sizePanelTitle: {
+  productText: {
     margin: 0,
-    color: "#0f172a",
-    fontSize: 14,
-    fontWeight: 950,
+    color: "#64748b",
+    lineHeight: 1.5,
+    fontWeight: 720,
+    overflowWrap: "anywhere",
   },
 
-  sizePillGrid: {
+  sizeRow: {
     display: "flex",
-    gap: 8,
+    gap: 7,
     flexWrap: "wrap",
   },
 
@@ -993,64 +1116,75 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 38,
-    padding: "8px 12px",
+    minHeight: 32,
+    padding: "6px 10px",
     borderRadius: 999,
-    background: "#ffffff",
+    background: "#f8fafc",
     color: "#0f172a",
-    border: "1px solid #cbd5e1",
+    border: "1px solid #e2e8f0",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+
+  productMetaGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: 8,
+    marginTop: "auto",
+  },
+
+  miniMeta: {
+    display: "grid",
+    gap: 3,
+    padding: 10,
+    borderRadius: 15,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+
+  miniMetaLabel: {
+    color: "#64748b",
+    fontSize: 10,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  miniMetaValue: {
+    color: "#0f172a",
     fontSize: 13,
-    fontWeight: 950,
+    lineHeight: 1.35,
+    fontWeight: 900,
+    overflowWrap: "anywhere",
   },
 
-  actionTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 28,
-    lineHeight: 1.08,
-    letterSpacing: "-0.05em",
+  productActions: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 9,
+    marginTop: 4,
   },
 
-  actionText: {
-    margin: 0,
-    color: "#475569",
-    lineHeight: 1.55,
-    fontWeight: 740,
-  },
-
-  disabledCheckout: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 48,
-    padding: "11px 14px",
-    borderRadius: 999,
-    background: "#e2e8f0",
-    color: "#475569",
-    border: "1px solid #cbd5e1",
-    fontWeight: 950,
-    textAlign: "center",
-  },
-
-  primaryLink: {
+  primaryButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 48,
-    padding: "11px 15px",
+    minHeight: 44,
+    padding: "11px 13px",
     borderRadius: 999,
     border: "1px solid",
     textDecoration: "none",
     fontWeight: 950,
     textAlign: "center",
+    lineHeight: 1.15,
   },
 
-  secondaryLink: {
+  secondaryButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 48,
-    padding: "11px 15px",
+    minHeight: 44,
+    padding: "11px 13px",
     borderRadius: 999,
     background: "#ffffff",
     color: "#0f172a",
@@ -1058,6 +1192,111 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 950,
     textAlign: "center",
+    lineHeight: 1.15,
+  },
+
+  emptyCard: {
+    gridColumn: "1 / -1",
+    display: "grid",
+    justifyItems: "center",
+    gap: 12,
+    padding: 34,
+    borderRadius: 28,
+    background: "#ffffff",
+    border: "1px dashed #cbd5e1",
+    textAlign: "center",
+  },
+
+  emptyIcon: {
+    display: "grid",
+    placeItems: "center",
+    width: 58,
+    height: 58,
+    borderRadius: 20,
+    border: "1px solid",
+    fontSize: 25,
+    fontWeight: 950,
+  },
+
+  emptyTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 30,
+    lineHeight: 1.05,
+    letterSpacing: "-0.05em",
+  },
+
+  emptyText: {
+    maxWidth: 620,
+    margin: 0,
+    color: "#64748b",
+    lineHeight: 1.55,
+    fontWeight: 750,
+  },
+
+  emptyActions: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 9,
+    width: "min(100%, 440px)",
+  },
+
+  shopNotice: {
+    display: "flex",
+    gap: 14,
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+    maxWidth: 1180,
+    margin: "0 auto 16px",
+    padding: 18,
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(239,246,255,0.92))",
+    border: "1px solid #bfdbfe",
+    boxShadow: "0 10px 30px rgba(22,131,248,0.06)",
+  },
+
+  noticeKicker: {
+    margin: "0 0 5px",
+    color: "#2563eb",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  noticeTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 24,
+    lineHeight: 1.08,
+    letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
+  },
+
+  noticeText: {
+    margin: "6px 0 0",
+    color: "#475569",
+    lineHeight: 1.5,
+    fontWeight: 730,
+    overflowWrap: "anywhere",
+  },
+
+  noticeLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    minHeight: 42,
+    padding: "10px 13px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
   },
 
   footerPanel: {
