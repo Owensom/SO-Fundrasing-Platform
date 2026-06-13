@@ -25,6 +25,14 @@ type ProductIdRow = {
   id: string;
 };
 
+type MerchandiseOption = {
+  type: "size";
+  label: string;
+  value: string;
+};
+
+const STANDARD_SIZE_OPTIONS = ["XS", "S", "M", "L", "XL", "XXL"];
+
 function cleanText(value: unknown, fallback = "") {
   const clean = String(value ?? "").trim();
   return clean || fallback;
@@ -50,7 +58,10 @@ function normaliseCurrency(value: unknown) {
 }
 
 function parsePriceCents(value: unknown) {
-  const clean = cleanText(value).replace(/[£,$]/g, "");
+  const clean = cleanText(value)
+    .replace(/[£,$]/g, "")
+    .replace(":", ".")
+    .replace(/[^\d.]/g, "");
 
   if (!clean) return 0;
 
@@ -94,6 +105,38 @@ function slugify(value: string) {
       .replace(/(^-|-$)/g, "")
       .slice(0, 80) || "product"
   );
+}
+
+function buildSizeOptions(formData: FormData) {
+  const selectedStandardSizes = formData
+    .getAll("size_options")
+    .map((value) => cleanText(value).toUpperCase())
+    .filter((value) => STANDARD_SIZE_OPTIONS.includes(value));
+
+  const customSizes = cleanText(formData.get("custom_size_options"))
+    .split(",")
+    .map((value) => cleanText(value))
+    .filter(Boolean);
+
+  const seen = new Set<string>();
+  const options: MerchandiseOption[] = [];
+
+  for (const size of [...selectedStandardSizes, ...customSizes]) {
+    const label = cleanText(size);
+    const key = label.toLowerCase();
+
+    if (!label || seen.has(key)) continue;
+
+    seen.add(key);
+
+    options.push({
+      type: "size",
+      label,
+      value: label,
+    });
+  }
+
+  return options;
 }
 
 async function requireTenantAccess() {
@@ -186,6 +229,7 @@ export async function createMerchandiseProduct(formData: FormData) {
   const status = normaliseStatus(formData.get("status"));
   const imageFocusX = parseFocus(formData.get("image_focus_x"));
   const imageFocusY = parseFocus(formData.get("image_focus_y"));
+  const options = buildSizeOptions(formData);
 
   if (!title) {
     redirect("/admin/merchandise/new?error=title-required");
@@ -224,7 +268,7 @@ export async function createMerchandiseProduct(formData: FormData) {
         $9,
         $10,
         $11,
-        '[]'::jsonb
+        $12::jsonb
       )
       returning id
     `,
@@ -240,6 +284,7 @@ export async function createMerchandiseProduct(formData: FormData) {
       currency,
       stockQuantity,
       status,
+      JSON.stringify(options),
     ],
   );
 
@@ -267,6 +312,7 @@ export async function updateMerchandiseProduct(formData: FormData) {
   const status = normaliseStatus(formData.get("status"));
   const imageFocusX = parseFocus(formData.get("image_focus_x"));
   const imageFocusY = parseFocus(formData.get("image_focus_y"));
+  const options = buildSizeOptions(formData);
 
   if (!title) {
     redirect(
@@ -295,7 +341,8 @@ export async function updateMerchandiseProduct(formData: FormData) {
         price_cents = $9,
         currency = $10,
         stock_quantity = $11,
-        status = $12
+        status = $12,
+        options_json = $13::jsonb
       where tenant_slug = $1
         and id = $2
     `,
@@ -312,6 +359,7 @@ export async function updateMerchandiseProduct(formData: FormData) {
       currency,
       stockQuantity,
       status,
+      JSON.stringify(options),
     ],
   );
 
