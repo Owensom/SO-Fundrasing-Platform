@@ -310,7 +310,8 @@ const responsiveStyles = `
 
 @media (max-width: 1040px) {
   .admin-share-page .share-hero,
-  .admin-share-page .share-public-hub-panel {
+  .admin-share-page .share-public-hub-panel,
+  .admin-share-page .share-buyer-shortcut-panel {
     grid-template-columns: 1fr !important;
   }
 
@@ -341,11 +342,13 @@ const responsiveStyles = `
   .admin-share-page .share-info-grid,
   .admin-share-page .share-kit-grid,
   .admin-share-page .share-selector-panel,
-  .admin-share-page .share-public-hub-panel {
+  .admin-share-page .share-public-hub-panel,
+  .admin-share-page .share-buyer-shortcut-panel {
     grid-template-columns: 1fr !important;
   }
 
   .admin-share-page .share-public-hub-panel,
+  .admin-share-page .share-buyer-shortcut-panel,
   .admin-share-page .share-selector-panel {
     padding: 18px !important;
     border-radius: 24px !important;
@@ -353,6 +356,7 @@ const responsiveStyles = `
 
   .admin-share-page .share-preview-actions,
   .admin-share-page .share-hub-actions,
+  .admin-share-page .share-buyer-actions,
   .admin-share-page .share-qr-actions {
     grid-template-columns: 1fr !important;
   }
