@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import ImageFocusUploadField from "@/components/admin/ImageFocusUploadField";
+import ImageFocusUploadField from "@/components/ImageFocusUploadField";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { getTenantSettings } from "@/lib/tenant-settings";
 import {
