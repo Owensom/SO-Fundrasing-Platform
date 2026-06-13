@@ -518,8 +518,7 @@ export default async function TenantCampaignsPage({
         })
         .slice(0, 3)
     : [];
-
-  const campaignTypeNames = auctionCapability.allowed
+    const campaignTypeNames = auctionCapability.allowed
     ? "raffles, squares, events and auctions"
     : "raffles, squares and events";
 
@@ -554,7 +553,8 @@ export default async function TenantCampaignsPage({
   const brandLogoSrc = publicLogoMarkUrl || publicLogoUrl;
   const primaryTextColour = getReadableTextColour(primaryColour);
   const accentTextColour = getReadableTextColour(accentColour);
-    const chooserItems: CampaignChooserItem[] = [
+
+  const chooserItems: CampaignChooserItem[] = [
     {
       type: "all",
       label: "All campaigns",
@@ -955,8 +955,7 @@ export default async function TenantCampaignsPage({
               </div>
             </section>
           </div>
-
-          <div style={styles.supportPanel}>
+                    <div style={styles.supportPanel}>
             <div style={styles.supportPanelHeader}>
               <span style={styles.supportPanelKicker}>Ways to help</span>
               <h2 style={styles.supportPanelTitle}>Support options</h2>
@@ -1068,7 +1067,8 @@ export default async function TenantCampaignsPage({
           </div>
         ) : null}
       </section>
-            <section className="contactStrip" style={styles.contactStrip}>
+
+      <section className="contactStrip" style={styles.contactStrip}>
         <div
           style={{
             ...styles.contactStripIcon,
@@ -1153,7 +1153,7 @@ export default async function TenantCampaignsPage({
               </p>
 
               <h2 style={styles.purchaseSuccessTitle}>
-               Thank you — your support is complete
+                Thank you — your support is complete
               </h2>
 
               <p style={styles.purchaseSuccessText}>
@@ -1430,7 +1430,10 @@ export default async function TenantCampaignsPage({
                 </p>
 
                 <div style={styles.campaignCardActionStack}>
-                  <div className="primaryActionRow" style={styles.primaryActionRow}>
+                  <div
+                    className="primaryActionRow"
+                    style={styles.primaryActionRow}
+                  >
                     <Link
                       href={getCampaignUrl(campaign)}
                       style={brandedPrimaryActionStyle}
@@ -1459,6 +1462,53 @@ export default async function TenantCampaignsPage({
         )}
       </section>
 
+      <section
+        className="homeScreenHelper"
+        style={{
+          ...styles.homeScreenHelper,
+          borderColor: canUseAdvancedBranding
+            ? `${accentColour}55`
+            : "#e2e8f0",
+        }}
+      >
+        <div
+          style={{
+            ...styles.homeScreenIcon,
+            background: canUseAdvancedBranding
+              ? `${primaryColour}12`
+              : "#f8fafc",
+            color: canUseAdvancedBranding ? primaryColour : "#2563eb",
+            borderColor: canUseAdvancedBranding
+              ? `${primaryColour}24`
+              : "#dbeafe",
+          }}
+        >
+          ⇧
+        </div>
+
+        <div style={styles.homeScreenCopy}>
+          <h2 style={styles.homeScreenTitle}>
+            Save this fundraiser to your phone
+          </h2>
+
+          <p style={styles.homeScreenText}>
+            Add this page to your home screen so you can quickly return to live
+            campaigns later.
+          </p>
+
+          <div className="homeScreenSteps" style={styles.homeScreenSteps}>
+            <span>
+              <strong>iPhone / iPad:</strong> tap Share, then Add to Home Screen.
+            </span>
+
+            <span>
+              <strong>Android:</strong> tap the browser menu, then Install app or
+              Add to Home screen.
+            </span>
+          </div>
+        </div>
+      </section>
+
       {publicFooterText ? (
         <footer
           style={{
@@ -1481,7 +1531,6 @@ function MiniMeta({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-
 const responsiveStyles = `
 .tenant-campaigns-page,
 .tenant-campaigns-page * {
@@ -1509,7 +1558,8 @@ const responsiveStyles = `
   .tenant-campaigns-page .brandHeader,
   .tenant-campaigns-page .heroMainGrid,
   .tenant-campaigns-page .featuredCard,
-  .tenant-campaigns-page .contactStrip {
+  .tenant-campaigns-page .contactStrip,
+  .tenant-campaigns-page .homeScreenHelper {
     grid-template-columns: 1fr !important;
   }
 
@@ -1538,7 +1588,8 @@ const responsiveStyles = `
   .tenant-campaigns-page .featuredCard,
   .tenant-campaigns-page .contactStrip,
   .tenant-campaigns-page .liveCampaignsHeader,
-  .tenant-campaigns-page .purchaseSuccessPanel {
+  .tenant-campaigns-page .purchaseSuccessPanel,
+  .tenant-campaigns-page .homeScreenHelper {
     padding: 14px !important;
     border-radius: 22px !important;
   }
@@ -1643,8 +1694,17 @@ const responsiveStyles = `
     justify-content: center !important;
     text-align: center !important;
   }
+
+  .tenant-campaigns-page .homeScreenHelper {
+    text-align: left !important;
+  }
+
+  .tenant-campaigns-page .homeScreenSteps {
+    grid-template-columns: 1fr !important;
+  }
 }
 `;
+
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -2694,6 +2754,69 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "center",
     lineHeight: 1.15,
     boxSizing: "border-box",
+  },
+
+  homeScreenHelper: {
+    display: "grid",
+    gridTemplateColumns: "46px minmax(0, 1fr)",
+    gap: 12,
+    alignItems: "start",
+    padding: 14,
+    borderRadius: 22,
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.92), rgba(248,250,252,0.84))",
+    border: "1px solid",
+    boxShadow: "0 10px 24px rgba(15,23,42,0.045)",
+    marginTop: 16,
+    minWidth: 0,
+  },
+
+  homeScreenIcon: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    border: "1px solid",
+    fontSize: 20,
+    fontWeight: 950,
+    flexShrink: 0,
+  },
+
+  homeScreenCopy: {
+    display: "grid",
+    gap: 6,
+    minWidth: 0,
+  },
+
+  homeScreenTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 19,
+    lineHeight: 1.08,
+    letterSpacing: "-0.04em",
+    overflowWrap: "anywhere",
+  },
+
+  homeScreenText: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 760,
+    overflowWrap: "anywhere",
+  },
+
+  homeScreenSteps: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 8,
+    marginTop: 2,
+    color: "#475569",
+    fontSize: 12,
+    lineHeight: 1.42,
+    fontWeight: 720,
   },
 
   footer: {
