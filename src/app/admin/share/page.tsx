@@ -253,6 +253,54 @@ export default async function AdminSharePage() {
         />
       </section>
 
+      <section className="share-workflow-panel" style={styles.workflowPanel}>
+        <div style={styles.workflowHeader}>
+          <div>
+            <p style={styles.workflowKicker}>Simple sharing workflow</p>
+
+            <h2 style={styles.workflowTitle}>
+              Use the right asset for the right moment
+            </h2>
+
+            <p style={styles.workflowText}>
+              Start broad, then narrow down. The public hub is best for most
+              launch posts and posters, while campaign-specific assets are best
+              when you want to push one raffle, event, auction or squares game.
+            </p>
+          </div>
+
+          <Link href={`/c/${tenantSlug}`} target="_blank" style={styles.hubLink}>
+            View public hub →
+          </Link>
+        </div>
+
+        <div className="share-workflow-grid" style={styles.workflowGrid}>
+          <WorkflowStep
+            number="1"
+            title="Start with the Public Hub"
+            text="Use this for most social posts, posters and QR boards because supporters can browse every active campaign in one branded place."
+          />
+
+          <WorkflowStep
+            number="2"
+            title="Use the Buyer Shortcut"
+            text="Use this when supporters need a quick phone link they can save, scan, reopen or share in WhatsApp groups."
+          />
+
+          <WorkflowStep
+            number="3"
+            title="Choose campaign-specific assets"
+            text="Use these when promoting one specific raffle, event, auction or squares game with its own link, donation link, caption or QR."
+          />
+
+          <WorkflowStep
+            number="4"
+            title="Post the image and paste the link"
+            text="Download the tile or QR image, upload it to the post, then paste the copied link or caption so supporters can tap or scan."
+          />
+        </div>
+      </section>
+
       <CampaignShareKitClient
         campaigns={campaigns}
         branding={branding}
@@ -288,6 +336,26 @@ function InfoCard({ title, text }: { title: string; text: string }) {
   );
 }
 
+function WorkflowStep({
+  number,
+  title,
+  text,
+}: {
+  number: string;
+  title: string;
+  text: string;
+}) {
+  return (
+    <article style={styles.workflowStep}>
+      <span style={styles.workflowNumber}>{number}</span>
+      <div style={styles.workflowStepCopy}>
+        <h3 style={styles.workflowStepTitle}>{title}</h3>
+        <p style={styles.workflowStepText}>{text}</p>
+      </div>
+    </article>
+  );
+}
+
 const responsiveStyles = `
 .admin-share-page,
 .admin-share-page * {
@@ -318,7 +386,8 @@ const responsiveStyles = `
   .admin-share-page .share-hero-stats,
   .admin-share-page .share-info-grid,
   .admin-share-page .share-kit-grid,
-  .admin-share-page .share-selector-panel {
+  .admin-share-page .share-selector-panel,
+  .admin-share-page .share-workflow-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
@@ -343,15 +412,21 @@ const responsiveStyles = `
   .admin-share-page .share-kit-grid,
   .admin-share-page .share-selector-panel,
   .admin-share-page .share-public-hub-panel,
-  .admin-share-page .share-buyer-shortcut-panel {
+  .admin-share-page .share-buyer-shortcut-panel,
+  .admin-share-page .share-workflow-grid {
     grid-template-columns: 1fr !important;
   }
 
   .admin-share-page .share-public-hub-panel,
   .admin-share-page .share-buyer-shortcut-panel,
-  .admin-share-page .share-selector-panel {
+  .admin-share-page .share-selector-panel,
+  .admin-share-page .share-workflow-panel {
     padding: 18px !important;
     border-radius: 24px !important;
+  }
+
+  .admin-share-page .share-workflow-header {
+    grid-template-columns: 1fr !important;
   }
 
   .admin-share-page .share-preview-actions,
@@ -575,6 +650,134 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.5,
     fontSize: 14,
     fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  workflowPanel: {
+    display: "grid",
+    gap: 16,
+    padding: 22,
+    borderRadius: 28,
+    background:
+      "radial-gradient(circle at top right, rgba(22,131,248,0.10), transparent 34%), linear-gradient(135deg, #ffffff 0%, #eff6ff 100%)",
+    border: "1px solid #bfdbfe",
+    boxShadow: "0 12px 30px rgba(22,131,248,0.08)",
+    marginBottom: 18,
+    minWidth: 0,
+    overflow: "hidden",
+  },
+
+  workflowHeader: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 14,
+    alignItems: "start",
+    minWidth: 0,
+  },
+
+  workflowKicker: {
+    margin: "0 0 7px",
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  workflowTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 28,
+    lineHeight: 1.06,
+    letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
+  },
+
+  workflowText: {
+    margin: "8px 0 0",
+    color: "#475569",
+    lineHeight: 1.55,
+    fontSize: 14,
+    fontWeight: 750,
+    maxWidth: 850,
+    overflowWrap: "anywhere",
+  },
+
+  hubLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    width: "fit-content",
+    maxWidth: "100%",
+    padding: "10px 15px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    border: "1px solid #0f172a",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+    textAlign: "center",
+    whiteSpace: "nowrap",
+  },
+
+  workflowGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: 12,
+    minWidth: 0,
+  },
+
+  workflowStep: {
+    display: "grid",
+    gridTemplateColumns: "38px minmax(0, 1fr)",
+    gap: 11,
+    alignItems: "start",
+    padding: 14,
+    borderRadius: 20,
+    background: "#ffffff",
+    border: "1px solid #dbeafe",
+    boxShadow: "0 6px 18px rgba(15,23,42,0.04)",
+    minWidth: 0,
+  },
+
+  workflowNumber: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 34,
+    height: 34,
+    borderRadius: 14,
+    background: "#1683f8",
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: 950,
+    boxShadow: "0 8px 18px rgba(22,131,248,0.20)",
+    flexShrink: 0,
+  },
+
+  workflowStepCopy: {
+    display: "grid",
+    gap: 5,
+    minWidth: 0,
+  },
+
+  workflowStepTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 16,
+    lineHeight: 1.16,
+    letterSpacing: "-0.03em",
+    overflowWrap: "anywhere",
+  },
+
+  workflowStepText: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 730,
     overflowWrap: "anywhere",
   },
 };
