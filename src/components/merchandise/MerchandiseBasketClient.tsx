@@ -22,6 +22,39 @@ type MerchandiseBasketClientProps = {
   primaryTextColour: string;
 };
 
+type BasketValidationResult = {
+  ok?: boolean;
+  error?: string;
+  errors?: string[];
+  message?: string;
+  basket?: {
+    tenantSlug?: string;
+    itemCount?: number;
+    currency?: string;
+    subtotalCents?: number;
+    lines?: Array<{
+      productId: string;
+      productSlug: string;
+      title: string;
+      optionLabel: string | null;
+      quantity: number;
+      currency: string;
+      unitPriceCents: number;
+      lineTotalCents: number;
+      remainingStock: number | null;
+      eventLinked: boolean;
+      linkedEventId: string | null;
+      requiredDetails: {
+        bookingReference: boolean;
+        tableNumber: boolean;
+        seatNumber: boolean;
+        guestName: boolean;
+      };
+      fulfilmentMethods: string[];
+    }>;
+  };
+};
+
 function getBasketKey(tenantSlug: string) {
   return `so_merchandise_basket_${tenantSlug}`;
 }
@@ -58,6 +91,15 @@ function formatMoney(cents: number, currency = "GBP") {
   }
 }
 
+function getValidationPayloadItems(items: BasketItem[]) {
+  return items.map((item) => ({
+    productId: item.productId,
+    productSlug: item.productSlug,
+    optionLabel: item.optionLabel,
+    quantity: item.quantity,
+  }));
+}
+
 export default function MerchandiseBasketClient({
   tenantSlug,
   shopHref,
@@ -65,6 +107,9 @@ export default function MerchandiseBasketClient({
   primaryTextColour,
 }: MerchandiseBasketClientProps) {
   const [items, setItems] = useState<BasketItem[]>([]);
+  const [isValidating, setIsValidating] = useState(false);
+  const [validationResult, setValidationResult] =
+    useState<BasketValidationResult | null>(null);
 
   useEffect(() => {
     setItems(readBasket(tenantSlug));
@@ -93,6 +138,7 @@ export default function MerchandiseBasketClient({
 
   function updateItems(nextItems: BasketItem[]) {
     setItems(nextItems);
+    setValidationResult(null);
     writeBasket(tenantSlug, nextItems);
   }
 
@@ -112,6 +158,35 @@ export default function MerchandiseBasketClient({
 
   function clearBasket() {
     updateItems([]);
+  }
+
+  async function validateBasket() {
+    setIsValidating(true);
+    setValidationResult(null);
+
+    try {
+      const response = await fetch("/api/merchandise/basket/validate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          tenantSlug,
+          items: getValidationPayloadItems(items),
+        }),
+      });
+
+      const json = (await response.json()) as BasketValidationResult;
+      setValidationResult(json);
+    } catch {
+      setValidationResult({
+        ok: false,
+        error:
+          "We could not validate the basket. Please refresh the page and try again.",
+      });
+    } finally {
+      setIsValidating(false);
+    }
   }
 
   if (items.length === 0) {
@@ -213,13 +288,14 @@ export default function MerchandiseBasketClient({
                       }
                       style={styles.qtyInput}
                     >
-                      {Array.from({ length: 20 }, (_, itemIndex) => itemIndex + 1).map(
-                        (value) => (
-                          <option key={value} value={value}>
-                            {value}
-                          </option>
-                        ),
-                      )}
+                      {Array.from(
+                        { length: 20 },
+                        (_, itemIndex) => itemIndex + 1,
+                      ).map((value) => (
+                        <option key={value} value={value}>
+                          {value}
+                        </option>
+                      ))}
                     </select>
                   </label>
 
@@ -267,13 +343,60 @@ export default function MerchandiseBasketClient({
             </div>
           </div>
 
-          <div style={styles.checkoutNotice}>
-            <strong>Checkout coming next</strong>
-            <span>
-              Basket review is active. Stripe payment, order creation, stock
-              updates and receipts are not connected yet.
-            </span>
-          </div>
+          {validationResult ? (
+            <div
+              style={{
+                ...styles.validationPanel,
+                ...(validationResult.ok
+                  ? styles.validationGood
+                  : styles.validationBad),
+              }}
+            >
+              <strong style={styles.validationTitle}>
+                {validationResult.ok ? "Basket validated" : "Please check basket"}
+              </strong>
+
+              <span style={styles.validationText}>
+                {validationResult.ok
+                  ? validationResult.message ||
+                    "Basket is valid and ready for the next checkout phase."
+                  : validationResult.error || "Something needs to be corrected."}
+              </span>
+
+              {validationResult.ok && validationResult.basket ? (
+                <span style={styles.validationMeta}>
+                  Server subtotal:{" "}
+                  {formatMoney(
+                    validationResult.basket.subtotalCents || 0,
+                    validationResult.basket.currency || basketSummary.currency,
+                  )}
+                </span>
+              ) : null}
+            </div>
+          ) : (
+            <div style={styles.checkoutNotice}>
+              <strong>Validate before checkout</strong>
+              <span>
+                This checks live product status, stock, price, options and
+                tenant rules before we connect Stripe.
+              </span>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={validateBasket}
+            disabled={isValidating}
+            style={{
+              ...styles.validateButton,
+              background: primaryColour,
+              borderColor: primaryColour,
+              color: primaryTextColour,
+              opacity: isValidating ? 0.72 : 1,
+            }}
+          >
+            {isValidating ? "Validating basket..." : "Validate basket"}
+          </button>
 
           <button type="button" disabled style={styles.disabledButton}>
             Checkout not connected yet
@@ -283,9 +406,9 @@ export default function MerchandiseBasketClient({
             href={shopHref}
             style={{
               ...styles.primaryButton,
-              background: primaryColour,
-              borderColor: primaryColour,
-              color: primaryTextColour,
+              background: "#ffffff",
+              borderColor: "#cbd5e1",
+              color: "#0f172a",
             }}
           >
             Continue shopping →
@@ -529,6 +652,55 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.4,
     fontWeight: 760,
+  },
+
+  validationPanel: {
+    display: "grid",
+    gap: 5,
+    padding: 13,
+    borderRadius: 18,
+    border: "1px solid",
+    fontSize: 13,
+    lineHeight: 1.4,
+    fontWeight: 760,
+  },
+
+  validationGood: {
+    background: "#f0fdf4",
+    color: "#166534",
+    borderColor: "#bbf7d0",
+  },
+
+  validationBad: {
+    background: "#fef2f2",
+    color: "#991b1b",
+    borderColor: "#fecaca",
+  },
+
+  validationTitle: {
+    color: "inherit",
+    fontSize: 14,
+    fontWeight: 950,
+  },
+
+  validationText: {
+    color: "inherit",
+  },
+
+  validationMeta: {
+    color: "inherit",
+    fontWeight: 950,
+  },
+
+  validateButton: {
+    width: "100%",
+    minHeight: 48,
+    padding: "11px 15px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontWeight: 950,
+    cursor: "pointer",
+    boxShadow: "0 12px 24px rgba(22,131,248,0.16)",
   },
 
   disabledButton: {
