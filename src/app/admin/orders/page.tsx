@@ -15,7 +15,13 @@ type PageProps = {
   }>;
 };
 
-type ActivityType = "raffle" | "squares" | "event" | "auction" | "donation";
+type ActivityType =
+  | "raffle"
+  | "squares"
+  | "event"
+  | "auction"
+  | "donation"
+  | "merchandise";
 
 type UnifiedOrder = {
   id: string;
@@ -85,6 +91,7 @@ function typeLabel(type: ActivityType) {
   if (type === "squares") return "Squares";
   if (type === "event") return "Event";
   if (type === "auction") return "Auction";
+  if (type === "merchandise") return "Merchandise";
   return "Donation";
 }
 
@@ -118,6 +125,14 @@ function typeStyle(type: ActivityType): CSSProperties {
       background: "#f5f3ff",
       color: "#6d28d9",
       border: "1px solid #ddd6fe",
+    };
+  }
+
+  if (type === "merchandise") {
+    return {
+      background: "#fff7ed",
+      color: "#9a3412",
+      border: "1px solid #fed7aa",
     };
   }
 
@@ -198,6 +213,23 @@ function donationPaymentStatusLabel(value: unknown) {
   return "Pending";
 }
 
+function merchandiseStatusLabel(value: unknown) {
+  const clean = String(value || "checkout_started").trim().toLowerCase();
+
+  if (clean === "paid") return "Paid";
+  if (clean === "checkout_started") return "Checkout started";
+  if (clean === "cancelled") return "Cancelled";
+  if (clean === "refunded") return "Refunded";
+
+  return clean
+    .split("_")
+    .filter(Boolean)
+    .map((part, index) =>
+      index === 0 ? part.charAt(0).toUpperCase() + part.slice(1) : part,
+    )
+    .join(" ");
+}
+
 async function safeQuery<T extends RawRow>(
   label: string,
   sql: string,
@@ -261,6 +293,7 @@ async function getRaffleOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
     };
   });
 }
+
 async function getSquaresOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
   const rows = await safeQuery(
     "squares",
@@ -507,6 +540,110 @@ async function getDonationOrders(tenantSlug: string): Promise<UnifiedOrder[]> {
   });
 }
 
+async function getMerchandiseOrders(
+  tenantSlug: string,
+): Promise<UnifiedOrder[]> {
+  const rows = await safeQuery(
+    "merchandise",
+    `
+      select
+        merchandise_order.id::text,
+        merchandise_order.order_reference,
+        merchandise_order.status,
+        merchandise_order.customer_name,
+        merchandise_order.customer_email,
+        merchandise_order.total_cents,
+        merchandise_order.currency,
+        merchandise_order.fulfilment_status,
+        merchandise_order.fulfilment_method,
+        merchandise_order.created_at::text,
+        merchandise_order.paid_at::text,
+        merchandise_order.linked_event_id::text,
+        linked_event.title as linked_event_title,
+        coalesce(
+          string_agg(
+            merchandise_item.product_title ||
+            case
+              when nullif(merchandise_item.option_label, '') is not null
+                then ' (' || merchandise_item.option_label || ')'
+              else ''
+            end ||
+            ' ×' || merchandise_item.quantity::text,
+            ', '
+            order by merchandise_item.created_at asc
+          ),
+          'Merchandise order'
+        ) as item_summary,
+        count(merchandise_item.id)::int as item_count
+      from merchandise_orders merchandise_order
+      left join merchandise_order_items merchandise_item
+        on merchandise_item.order_id = merchandise_order.id
+       and merchandise_item.tenant_slug = merchandise_order.tenant_slug
+      left join events linked_event
+        on linked_event.id = merchandise_order.linked_event_id
+       and linked_event.tenant_slug = merchandise_order.tenant_slug
+      where merchandise_order.tenant_slug = $1
+      group by
+        merchandise_order.id,
+        merchandise_order.order_reference,
+        merchandise_order.status,
+        merchandise_order.customer_name,
+        merchandise_order.customer_email,
+        merchandise_order.total_cents,
+        merchandise_order.currency,
+        merchandise_order.fulfilment_status,
+        merchandise_order.fulfilment_method,
+        merchandise_order.created_at,
+        merchandise_order.paid_at,
+        merchandise_order.linked_event_id,
+        linked_event.title
+      order by merchandise_order.created_at desc
+      limit 500
+    `,
+    [tenantSlug],
+  );
+
+  return rows.map((row) => {
+    const orderId = cleanText(row.id);
+    const orderReference = cleanText(row.order_reference, orderId);
+    const status = merchandiseStatusLabel(row.status);
+    const linkedEventTitle = cleanText(row.linked_event_title);
+    const fulfilmentStatus = cleanText(row.fulfilment_status);
+    const fulfilmentMethod = cleanText(row.fulfilment_method);
+    const itemSummary = cleanText(row.item_summary, "Merchandise order");
+
+    const detailBits = [
+      orderReference,
+      itemSummary,
+      linkedEventTitle ? `Event: ${linkedEventTitle}` : "",
+      fulfilmentStatus ? `Fulfilment: ${fulfilmentStatus}` : "",
+      fulfilmentMethod ? `Method: ${fulfilmentMethod}` : "",
+    ].filter(Boolean);
+
+    return {
+      id: `merchandise-${orderId || orderReference}`,
+      type: "merchandise",
+      campaignId: orderId || null,
+      campaignTitle: "Merchandise order",
+      campaignSlug: null,
+      customerName: cleanText(row.customer_name, "Merchandise customer"),
+      customerEmail: cleanText(row.customer_email, "No email"),
+      detail: detailBits.join(" · "),
+      amountCents: safeNumber(row.total_cents, 0),
+      currency: cleanText(row.currency, "GBP"),
+      status,
+      createdAt:
+        row.paid_at && status === "Paid"
+          ? String(row.paid_at)
+          : row.created_at
+            ? String(row.created_at)
+            : null,
+      adminHref: "/admin/merchandise/orders",
+      publicHref: `/m/${tenantSlug}`,
+    };
+  });
+}
+
 function filterOrders(
   orders: UnifiedOrder[],
   typeFilter: string,
@@ -573,6 +710,7 @@ function buildCsvHref(orders: UnifiedOrder[]) {
 
   return `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
 }
+
 function EventOrdersGuestsLink({ order }: { order: UnifiedOrder }) {
   if (order.type !== "event" || !order.campaignId) {
     return null;
@@ -591,6 +729,14 @@ function EventOrdersGuestsLink({ order }: { order: UnifiedOrder }) {
 function PrimaryOrderAction({ order }: { order: UnifiedOrder }) {
   if (order.type === "event" && order.campaignId) {
     return <EventOrdersGuestsLink order={order} />;
+  }
+
+  if (order.type === "merchandise") {
+    return (
+      <Link href="/admin/merchandise/orders" style={styles.smallLink}>
+        Merchandise orders
+      </Link>
+    );
   }
 
   if (!order.adminHref) {
@@ -613,6 +759,14 @@ function SecondaryOrderAction({ order }: { order: UnifiedOrder }) {
     return (
       <Link href={order.adminHref} style={styles.smallLinkMuted}>
         Event admin
+      </Link>
+    );
+  }
+
+  if (order.type === "merchandise") {
+    return (
+      <Link href="/admin/merchandise" style={styles.smallLinkMuted}>
+        Shop admin
       </Link>
     );
   }
@@ -653,6 +807,14 @@ function TertiaryOrderAction({ order }: { order: UnifiedOrder }) {
     );
   }
 
+  if (order.type === "merchandise" && order.publicHref) {
+    return (
+      <Link href={order.publicHref} target="_blank" style={styles.smallLinkMuted}>
+        Public shop
+      </Link>
+    );
+  }
+
   return (
     <Link href={customerSearchHref} style={styles.smallLinkMuted}>
       Customer rows
@@ -687,12 +849,14 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
     eventOrders,
     auctionOrders,
     donationOrders,
+    merchandiseOrders,
   ] = await Promise.all([
     getRaffleOrders(tenantSlug),
     getSquaresOrders(tenantSlug),
     getEventOrders(tenantSlug),
     getAuctionOrders(tenantSlug),
     getDonationOrders(tenantSlug),
+    getMerchandiseOrders(tenantSlug),
   ]);
 
   const allOrders = [
@@ -701,6 +865,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
     ...eventOrders,
     ...auctionOrders,
     ...donationOrders,
+    ...merchandiseOrders,
   ].sort((a, b) => activityTime(b.createdAt) - activityTime(a.createdAt));
 
   const filteredOrders = filterOrders(allOrders, selectedType, searchTerm);
@@ -734,8 +899,8 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
             </h1>
 
             <p style={styles.subtitle}>
-              Unified activity across raffles, squares, events, auctions and
-              donations for this tenant.
+              Unified activity across raffles, squares, events, auctions,
+              donations and merchandise for this tenant.
             </p>
 
             <div className="heroStats" style={styles.heroStats}>
@@ -763,6 +928,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
               <MiniMetric label="Events" value={eventOrders.length} />
               <MiniMetric label="Auctions" value={auctionOrders.length} />
               <MiniMetric label="Donations" value={donationOrders.length} />
+              <MiniMetric label="Merchandise" value={merchandiseOrders.length} />
             </div>
           </div>
         </div>
@@ -785,11 +951,11 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
           </Link>
 
           <Link
-            href="/admin/donations"
+            href="/admin/merchandise/orders"
             className="secondaryButton heroSecondaryButton"
             style={styles.heroSecondaryButton}
           >
-            Donations report
+            Merchandise orders
           </Link>
 
           <a
@@ -812,6 +978,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
         <SummaryCard label="Event rows" value={eventOrders.length} />
         <SummaryCard label="Auction bids" value={auctionOrders.length} />
         <SummaryCard label="Donations" value={donationOrders.length} />
+        <SummaryCard label="Merchandise" value={merchandiseOrders.length} />
       </section>
 
       <section className="filterCard" style={styles.filterCard}>
@@ -825,7 +992,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
             <input
               name="q"
               defaultValue={searchTerm}
-              placeholder="Search customer, email, campaign, item or donation..."
+              placeholder="Search customer, email, campaign, item, order reference or donation..."
               style={styles.input}
             />
           </label>
@@ -839,6 +1006,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
               <option value="event">Events</option>
               <option value="auction">Auctions</option>
               <option value="donation">Donations</option>
+              <option value="merchandise">Merchandise</option>
             </select>
           </label>
 
@@ -859,7 +1027,8 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
           </Link>
         </form>
       </section>
-            <section className="ordersCard" style={styles.ordersCard}>
+
+      <section className="ordersCard" style={styles.ordersCard}>
         <div style={styles.sectionHeader}>
           <div>
             <p style={styles.kicker}>Unified orders</p>
@@ -870,7 +1039,8 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
 
             <p style={styles.sectionText}>
               This page reads from raffle ticket sales, squares sales, event
-              orders, silent auction bids and public donations.
+              orders, silent auction bids, public donations and merchandise
+              orders.
             </p>
           </div>
 
@@ -879,8 +1049,9 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
 
         {filteredOrders.length === 0 ? (
           <div style={styles.emptyBox}>
-            No matching activity found yet. Once orders, bids, donations or
-            ticket sales are recorded, they will appear here.
+            No matching activity found yet. Once orders, bids, donations,
+            merchandise purchases or ticket sales are recorded, they will appear
+            here.
           </div>
         ) : (
           <>
@@ -1192,7 +1363,8 @@ const styles: Record<string, CSSProperties> = {
     overflow: "hidden",
     border: "1px solid rgba(148,163,184,0.22)",
   },
-    heroMainGrid: {
+
+  heroMainGrid: {
     position: "relative",
     zIndex: 1,
     display: "grid",
@@ -1364,7 +1536,7 @@ const styles: Record<string, CSSProperties> = {
 
   summaryGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(8, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
     gap: 12,
     marginBottom: 16,
   },
