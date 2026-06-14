@@ -167,13 +167,13 @@ function getBestLogo({
   canUseAdvancedBranding: boolean;
 }) {
   if (!canUseAdvancedBranding) {
-    return "/brand/so-logo-mark.png";
+    return DEFAULT_MERCHANDISE_IMAGE_SRC;
   }
 
   return (
     cleanText(settings?.public_logo_mark_url) ||
     cleanText(settings?.public_logo_url) ||
-    "/brand/so-logo-mark.png"
+    DEFAULT_MERCHANDISE_IMAGE_SRC
   );
 }
 
@@ -351,7 +351,7 @@ export default async function PublicMerchandiseProductPage({
                   : "rgba(255,255,255,0.55)",
               }}
             >
-              <img src={logoUrl} alt={displayName} style={styles.logoImage} />
+              <img src={logoUrl} alt="Merchandise" style={styles.logoImage} />
             </div>
 
             <div style={styles.brandCopy}>
