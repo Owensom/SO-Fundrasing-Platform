@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 
 type BasketItem = {
@@ -22,6 +22,27 @@ type MerchandiseBasketClientProps = {
   primaryTextColour: string;
 };
 
+type ValidatedBasketLine = {
+  productId: string;
+  productSlug: string;
+  title: string;
+  optionLabel: string | null;
+  quantity: number;
+  currency: string;
+  unitPriceCents: number;
+  lineTotalCents: number;
+  remainingStock: number | null;
+  eventLinked: boolean;
+  linkedEventId: string | null;
+  requiredDetails: {
+    bookingReference: boolean;
+    tableNumber: boolean;
+    seatNumber: boolean;
+    guestName: boolean;
+  };
+  fulfilmentMethods: string[];
+};
+
 type BasketValidationResult = {
   ok?: boolean;
   error?: string;
@@ -32,27 +53,23 @@ type BasketValidationResult = {
     itemCount?: number;
     currency?: string;
     subtotalCents?: number;
-    lines?: Array<{
-      productId: string;
-      productSlug: string;
-      title: string;
-      optionLabel: string | null;
-      quantity: number;
-      currency: string;
-      unitPriceCents: number;
-      lineTotalCents: number;
-      remainingStock: number | null;
-      eventLinked: boolean;
-      linkedEventId: string | null;
-      requiredDetails: {
-        bookingReference: boolean;
-        tableNumber: boolean;
-        seatNumber: boolean;
-        guestName: boolean;
-      };
-      fulfilmentMethods: string[];
-    }>;
+    lines?: ValidatedBasketLine[];
   };
+};
+
+type BuyerDetails = {
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  customerNote: string;
+};
+
+type LineFulfilmentDetails = {
+  fulfilmentMethod: string;
+  bookingReference: string;
+  tableNumber: string;
+  seatNumber: string;
+  guestName: string;
 };
 
 function getBasketKey(tenantSlug: string) {
@@ -80,6 +97,10 @@ function writeBasket(tenantSlug: string, items: BasketItem[]) {
   window.localStorage.setItem(getBasketKey(tenantSlug), JSON.stringify(items));
 }
 
+function cleanText(value: unknown) {
+  return String(value ?? "").trim();
+}
+
 function formatMoney(cents: number, currency = "GBP") {
   try {
     return new Intl.NumberFormat("en-GB", {
@@ -100,6 +121,39 @@ function getValidationPayloadItems(items: BasketItem[]) {
   }));
 }
 
+function getLineKey(line: ValidatedBasketLine) {
+  return `${line.productId}::${line.optionLabel || "__no_option__"}`;
+}
+
+function formatFulfilmentMethod(method: string) {
+  if (method === "collect_stand") return "Collect from merchandise stand";
+  if (method === "collect_table") return "Collect from table";
+  if (method === "deliver_table") return "Deliver to table";
+  if (method === "deliver_seat") return "Deliver to seat";
+  if (method === "post_after_event") return "Post after event";
+  if (method === "arrange_with_organiser") return "Arrange with organiser";
+
+  return method;
+}
+
+function getInitialLineDetails(lines: ValidatedBasketLine[]) {
+  const details: Record<string, LineFulfilmentDetails> = {};
+
+  for (const line of lines) {
+    const key = getLineKey(line);
+
+    details[key] = {
+      fulfilmentMethod: line.fulfilmentMethods[0] || "arrange_with_organiser",
+      bookingReference: "",
+      tableNumber: "",
+      seatNumber: "",
+      guestName: "",
+    };
+  }
+
+  return details;
+}
+
 export default function MerchandiseBasketClient({
   tenantSlug,
   shopHref,
@@ -110,6 +164,22 @@ export default function MerchandiseBasketClient({
   const [isValidating, setIsValidating] = useState(false);
   const [validationResult, setValidationResult] =
     useState<BasketValidationResult | null>(null);
+
+  const [buyerDetails, setBuyerDetails] = useState<BuyerDetails>({
+    customerName: "",
+    customerEmail: "",
+    customerPhone: "",
+    customerNote: "",
+  });
+
+  const [lineDetails, setLineDetails] = useState<
+    Record<string, LineFulfilmentDetails>
+  >({});
+
+  const [detailsMessage, setDetailsMessage] = useState<{
+    tone: "good" | "bad";
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
     setItems(readBasket(tenantSlug));
@@ -136,9 +206,17 @@ export default function MerchandiseBasketClient({
     };
   }, [items]);
 
+  const validatedLines = validationResult?.ok
+    ? validationResult.basket?.lines || []
+    : [];
+
+  const hasValidatedBasket = validationResult?.ok && validatedLines.length > 0;
+
   function updateItems(nextItems: BasketItem[]) {
     setItems(nextItems);
     setValidationResult(null);
+    setLineDetails({});
+    setDetailsMessage(null);
     writeBasket(tenantSlug, nextItems);
   }
 
@@ -160,9 +238,40 @@ export default function MerchandiseBasketClient({
     updateItems([]);
   }
 
+  function updateBuyerField(field: keyof BuyerDetails, value: string) {
+    setBuyerDetails((current) => ({
+      ...current,
+      [field]: value,
+    }));
+    setDetailsMessage(null);
+  }
+
+  function updateLineField(
+    lineKey: string,
+    field: keyof LineFulfilmentDetails,
+    value: string,
+  ) {
+    setLineDetails((current) => ({
+      ...current,
+      [lineKey]: {
+        ...(current[lineKey] || {
+          fulfilmentMethod: "arrange_with_organiser",
+          bookingReference: "",
+          tableNumber: "",
+          seatNumber: "",
+          guestName: "",
+        }),
+        [field]: value,
+      },
+    }));
+    setDetailsMessage(null);
+  }
+
   async function validateBasket() {
     setIsValidating(true);
     setValidationResult(null);
+    setLineDetails({});
+    setDetailsMessage(null);
 
     try {
       const response = await fetch("/api/merchandise/basket/validate", {
@@ -178,6 +287,10 @@ export default function MerchandiseBasketClient({
 
       const json = (await response.json()) as BasketValidationResult;
       setValidationResult(json);
+
+      if (json.ok && json.basket?.lines) {
+        setLineDetails(getInitialLineDetails(json.basket.lines));
+      }
     } catch {
       setValidationResult({
         ok: false,
@@ -187,6 +300,94 @@ export default function MerchandiseBasketClient({
     } finally {
       setIsValidating(false);
     }
+  }
+
+  function checkDetailsReady(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const customerName = cleanText(buyerDetails.customerName);
+    const customerEmail = cleanText(buyerDetails.customerEmail);
+
+    if (!customerName) {
+      setDetailsMessage({
+        tone: "bad",
+        text: "Please enter your name.",
+      });
+      return;
+    }
+
+    if (!customerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+      setDetailsMessage({
+        tone: "bad",
+        text: "Please enter a valid email address.",
+      });
+      return;
+    }
+
+    for (const line of validatedLines) {
+      const key = getLineKey(line);
+      const details = lineDetails[key];
+
+      if (!details?.fulfilmentMethod) {
+        setDetailsMessage({
+          tone: "bad",
+          text: `Please choose fulfilment for ${line.title}.`,
+        });
+        return;
+      }
+
+      if (
+        line.fulfilmentMethods.length > 0 &&
+        !line.fulfilmentMethods.includes(details.fulfilmentMethod)
+      ) {
+        setDetailsMessage({
+          tone: "bad",
+          text: `Please choose a valid fulfilment option for ${line.title}.`,
+        });
+        return;
+      }
+
+      if (
+        line.requiredDetails.bookingReference &&
+        !cleanText(details.bookingReference)
+      ) {
+        setDetailsMessage({
+          tone: "bad",
+          text: `Please enter the booking reference for ${line.title}.`,
+        });
+        return;
+      }
+
+      if (line.requiredDetails.tableNumber && !cleanText(details.tableNumber)) {
+        setDetailsMessage({
+          tone: "bad",
+          text: `Please enter the table number for ${line.title}.`,
+        });
+        return;
+      }
+
+      if (line.requiredDetails.seatNumber && !cleanText(details.seatNumber)) {
+        setDetailsMessage({
+          tone: "bad",
+          text: `Please enter the seat number for ${line.title}.`,
+        });
+        return;
+      }
+
+      if (line.requiredDetails.guestName && !cleanText(details.guestName)) {
+        setDetailsMessage({
+          tone: "bad",
+          text: `Please enter the guest name for ${line.title}.`,
+        });
+        return;
+      }
+    }
+
+    setDetailsMessage({
+      tone: "good",
+      text:
+        "Buyer and fulfilment details are ready. The next phase will create a pending merchandise order before Stripe checkout.",
+    });
   }
 
   if (items.length === 0) {
@@ -378,7 +579,7 @@ export default function MerchandiseBasketClient({
               <strong>Validate before checkout</strong>
               <span>
                 This checks live product status, stock, price, options and
-                tenant rules before we connect Stripe.
+                tenant rules before we collect buyer details.
               </span>
             </div>
           )}
@@ -399,7 +600,7 @@ export default function MerchandiseBasketClient({
           </button>
 
           <button type="button" disabled style={styles.disabledButton}>
-            Checkout not connected yet
+            Stripe checkout not connected yet
           </button>
 
           <a
@@ -415,6 +616,251 @@ export default function MerchandiseBasketClient({
           </a>
         </aside>
       </div>
+
+      {hasValidatedBasket ? (
+        <form
+          className="basket-details-form"
+          style={styles.detailsPanel}
+          onSubmit={checkDetailsReady}
+        >
+          <div style={styles.detailsHeader}>
+            <div>
+              <p style={{ ...styles.kicker, color: primaryColour }}>
+                Buyer and fulfilment
+              </p>
+
+              <h2 style={styles.detailsTitle}>Add checkout details</h2>
+
+              <p style={styles.detailsIntro}>
+                These details will be used in the next phase to create a pending
+                merchandise order before Stripe checkout.
+              </p>
+            </div>
+          </div>
+
+          <div className="details-grid" style={styles.detailsGrid}>
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>Your name</span>
+              <input
+                type="text"
+                value={buyerDetails.customerName}
+                onChange={(event) =>
+                  updateBuyerField("customerName", event.target.value)
+                }
+                style={styles.input}
+                autoComplete="name"
+              />
+            </label>
+
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>Email address</span>
+              <input
+                type="email"
+                value={buyerDetails.customerEmail}
+                onChange={(event) =>
+                  updateBuyerField("customerEmail", event.target.value)
+                }
+                style={styles.input}
+                autoComplete="email"
+              />
+            </label>
+
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>Phone optional</span>
+              <input
+                type="tel"
+                value={buyerDetails.customerPhone}
+                onChange={(event) =>
+                  updateBuyerField("customerPhone", event.target.value)
+                }
+                style={styles.input}
+                autoComplete="tel"
+              />
+            </label>
+          </div>
+
+          <div style={styles.fulfilmentLineList}>
+            {validatedLines.map((line) => {
+              const lineKey = getLineKey(line);
+              const details = lineDetails[lineKey] || {
+                fulfilmentMethod:
+                  line.fulfilmentMethods[0] || "arrange_with_organiser",
+                bookingReference: "",
+                tableNumber: "",
+                seatNumber: "",
+                guestName: "",
+              };
+
+              const requiresAnyDetails =
+                line.requiredDetails.bookingReference ||
+                line.requiredDetails.tableNumber ||
+                line.requiredDetails.seatNumber ||
+                line.requiredDetails.guestName;
+
+              return (
+                <article key={lineKey} style={styles.fulfilmentLineCard}>
+                  <div>
+                    <h3 style={styles.fulfilmentLineTitle}>{line.title}</h3>
+
+                    <p style={styles.fulfilmentLineMeta}>
+                      {line.quantity} ×{" "}
+                      {formatMoney(line.unitPriceCents, line.currency)}
+                      {line.optionLabel ? ` · ${line.optionLabel}` : ""}
+                    </p>
+                  </div>
+
+                  <label style={styles.field}>
+                    <span style={styles.fieldLabel}>Fulfilment option</span>
+                    <select
+                      value={details.fulfilmentMethod}
+                      onChange={(event) =>
+                        updateLineField(
+                          lineKey,
+                          "fulfilmentMethod",
+                          event.target.value,
+                        )
+                      }
+                      style={styles.input}
+                    >
+                      {line.fulfilmentMethods.map((method) => (
+                        <option key={method} value={method}>
+                          {formatFulfilmentMethod(method)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  {requiresAnyDetails ? (
+                    <div className="line-detail-grid" style={styles.lineDetailGrid}>
+                      {line.requiredDetails.bookingReference ? (
+                        <label style={styles.field}>
+                          <span style={styles.fieldLabel}>
+                            Booking reference
+                          </span>
+                          <input
+                            type="text"
+                            value={details.bookingReference}
+                            onChange={(event) =>
+                              updateLineField(
+                                lineKey,
+                                "bookingReference",
+                                event.target.value,
+                              )
+                            }
+                            style={styles.input}
+                          />
+                        </label>
+                      ) : null}
+
+                      {line.requiredDetails.tableNumber ? (
+                        <label style={styles.field}>
+                          <span style={styles.fieldLabel}>Table number</span>
+                          <input
+                            type="text"
+                            value={details.tableNumber}
+                            onChange={(event) =>
+                              updateLineField(
+                                lineKey,
+                                "tableNumber",
+                                event.target.value,
+                              )
+                            }
+                            style={styles.input}
+                          />
+                        </label>
+                      ) : null}
+
+                      {line.requiredDetails.seatNumber ? (
+                        <label style={styles.field}>
+                          <span style={styles.fieldLabel}>Seat number</span>
+                          <input
+                            type="text"
+                            value={details.seatNumber}
+                            onChange={(event) =>
+                              updateLineField(
+                                lineKey,
+                                "seatNumber",
+                                event.target.value,
+                              )
+                            }
+                            style={styles.input}
+                          />
+                        </label>
+                      ) : null}
+
+                      {line.requiredDetails.guestName ? (
+                        <label style={styles.field}>
+                          <span style={styles.fieldLabel}>Guest name</span>
+                          <input
+                            type="text"
+                            value={details.guestName}
+                            onChange={(event) =>
+                              updateLineField(
+                                lineKey,
+                                "guestName",
+                                event.target.value,
+                              )
+                            }
+                            style={styles.input}
+                          />
+                        </label>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <p style={styles.noExtraDetailsText}>
+                      No extra event details are required for this item.
+                    </p>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+
+          <label style={styles.field}>
+            <span style={styles.fieldLabel}>Note for organiser optional</span>
+            <textarea
+              value={buyerDetails.customerNote}
+              onChange={(event) =>
+                updateBuyerField("customerNote", event.target.value)
+              }
+              style={styles.textarea}
+              rows={4}
+              placeholder="Add any helpful collection, delivery or merchandise note."
+            />
+          </label>
+
+          {detailsMessage ? (
+            <div
+              style={{
+                ...styles.detailsMessage,
+                ...(detailsMessage.tone === "good"
+                  ? styles.detailsMessageGood
+                  : styles.detailsMessageBad),
+              }}
+            >
+              {detailsMessage.text}
+            </div>
+          ) : null}
+
+          <div style={styles.detailsActions}>
+            <button
+              type="submit"
+              style={{
+                ...styles.validateButton,
+                background: primaryColour,
+                borderColor: primaryColour,
+                color: primaryTextColour,
+              }}
+            >
+              Check checkout details
+            </button>
+
+            <button type="button" disabled style={styles.disabledButton}>
+              Create order not connected yet
+            </button>
+          </div>
+        </form>
+      ) : null}
     </section>
   );
 }
@@ -431,6 +877,13 @@ const responsiveStyles = `
   }
 }
 
+@media (max-width: 700px) {
+  .merchandise-basket-client .details-grid,
+  .merchandise-basket-client .line-detail-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 @media (max-width: 640px) {
   .merchandise-basket-client .basket-item {
     grid-template-columns: 1fr !important;
@@ -438,12 +891,15 @@ const responsiveStyles = `
 
   .merchandise-basket-client .basket-item-actions {
     align-items: stretch !important;
+    justify-items: stretch !important;
   }
 }
 `;
 
 const styles: Record<string, CSSProperties> = {
   wrapper: {
+    display: "grid",
+    gap: 16,
     width: "100%",
   },
 
@@ -727,6 +1183,152 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontWeight: 950,
     textAlign: "center",
+  },
+
+  detailsPanel: {
+    display: "grid",
+    gap: 14,
+    padding: 18,
+    borderRadius: 28,
+    background: "#ffffff",
+    border: "1px solid #dbeafe",
+    boxShadow: "0 10px 30px rgba(22,131,248,0.06)",
+  },
+
+  detailsHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+
+  detailsTitle: {
+    margin: "4px 0 0",
+    color: "#0f172a",
+    fontSize: 32,
+    lineHeight: 1.05,
+    letterSpacing: "-0.055em",
+  },
+
+  detailsIntro: {
+    margin: "8px 0 0",
+    color: "#64748b",
+    lineHeight: 1.5,
+    fontWeight: 760,
+  },
+
+  detailsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  field: {
+    display: "grid",
+    gap: 6,
+  },
+
+  fieldLabel: {
+    color: "#475569",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+
+  input: {
+    width: "100%",
+    minHeight: 46,
+    padding: "10px 12px",
+    borderRadius: 14,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontWeight: 850,
+    outline: "none",
+  },
+
+  textarea: {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: 14,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontWeight: 760,
+    lineHeight: 1.45,
+    outline: "none",
+    resize: "vertical",
+  },
+
+  fulfilmentLineList: {
+    display: "grid",
+    gap: 10,
+  },
+
+  fulfilmentLineCard: {
+    display: "grid",
+    gap: 11,
+    padding: 14,
+    borderRadius: 22,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+
+  fulfilmentLineTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 20,
+    lineHeight: 1.1,
+    letterSpacing: "-0.035em",
+  },
+
+  fulfilmentLineMeta: {
+    margin: "4px 0 0",
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.35,
+    fontWeight: 780,
+  },
+
+  lineDetailGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  noExtraDetailsText: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 760,
+  },
+
+  detailsMessage: {
+    padding: 13,
+    borderRadius: 18,
+    border: "1px solid",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 850,
+  },
+
+  detailsMessageGood: {
+    background: "#f0fdf4",
+    color: "#166534",
+    borderColor: "#bbf7d0",
+  },
+
+  detailsMessageBad: {
+    background: "#fef2f2",
+    color: "#991b1b",
+    borderColor: "#fecaca",
+  },
+
+  detailsActions: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: 10,
   },
 
   emptyPanel: {
