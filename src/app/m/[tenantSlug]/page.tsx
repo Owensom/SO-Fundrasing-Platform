@@ -141,6 +141,10 @@ function getProductHref(product: MerchandiseProduct) {
   )}`;
 }
 
+function getBasketHref(tenantSlug: string) {
+  return `/m/${encodeURIComponent(tenantSlug)}/basket`;
+}
+
 function getSizeOptions(product: MerchandiseProduct) {
   if (!Array.isArray(product.options_json)) return [];
 
@@ -166,7 +170,7 @@ function getSizeSummary(product: MerchandiseProduct) {
 
 function getAvailabilityLabel(product: MerchandiseProduct) {
   if (product.stock_quantity === null) {
-    return "Availability to be confirmed";
+    return "Available to buy";
   }
 
   const remaining = Math.max(
@@ -175,10 +179,14 @@ function getAvailabilityLabel(product: MerchandiseProduct) {
   );
 
   if (remaining <= 0) {
-    return "Ask organiser for availability";
+    return "Sold out";
   }
 
-  return "Available to enquire about";
+  if (remaining === 1) {
+    return "1 left";
+  }
+
+  return `${remaining} available`;
 }
 
 function getImageObjectPosition(product: MerchandiseProduct) {
@@ -240,7 +248,7 @@ function getFulfilmentSummary(product: MerchandiseProduct) {
   }
 
   if (labels.length === 0) {
-    return "Fulfilment to be confirmed";
+    return "Fulfilment confirmed at checkout";
   }
 
   if (labels.length <= 2) {
@@ -279,10 +287,10 @@ function getCustomerDetailSummary(product: MerchandiseProduct) {
   }
 
   if (details.length === 0) {
-    return "No extra details noted";
+    return "No extra details needed";
   }
 
-  return `${details.join(", ")} may be needed later`;
+  return `${details.join(", ")} collected at checkout`;
 }
 
 function getLinkedEventDisplay(product: MerchandiseProduct) {
@@ -386,10 +394,10 @@ export async function generateMetadata({
 
   return {
     title: `Merchandise | ${displayName}`,
-    description: `Browse merchandise from ${displayName}.`,
+    description: `Browse merchandise from ${displayName} and check out securely online.`,
     openGraph: {
       title: `Merchandise | ${displayName}`,
-      description: `Browse merchandise from ${displayName}.`,
+      description: `Browse merchandise from ${displayName} and check out securely online.`,
     },
   };
 }
@@ -606,7 +614,7 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
             </strong>
 
             <span style={styles.brandFeatureText}>
-              Public browsing is live. Checkout is coming soon.
+              Browse items and check out securely online.
             </span>
           </div>
         </div>
@@ -642,23 +650,9 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
               View items ↓
             </a>
 
-            {contactEmail ? (
-              <a
-                href={`mailto:${contactEmail}?subject=${encodeURIComponent(
-                  `Merchandise enquiry for ${displayName}`,
-                )}`}
-                style={styles.heroActionSecondary}
-              >
-                Ask organiser →
-              </a>
-            ) : (
-              <Link
-                href={`/c/${tenantSlug}/contact`}
-                style={styles.heroActionSecondary}
-              >
-                Ask organiser →
-              </Link>
-            )}
+            <Link href={getBasketHref(tenantSlug)} style={styles.heroActionSecondary}>
+              Basket →
+            </Link>
           </div>
         </div>
 
@@ -669,8 +663,9 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
             </h2>
 
             <p style={styles.subtitle}>
-              Browse published merchandise, check fulfilment guidance and
-              contact the organiser. Online checkout is coming soon.
+              Browse published merchandise, add items to your basket and check
+              out securely online. Event-linked collection and delivery details
+              are collected during checkout where needed.
             </p>
           </div>
 
@@ -692,7 +687,7 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
 
             <div style={styles.heroStat}>
               <span style={styles.heroStatLabel}>Checkout</span>
-              <strong style={styles.heroStatValue}>Coming soon</strong>
+              <strong style={styles.heroStatValue}>Live</strong>
             </div>
           </div>
         </div>
@@ -716,8 +711,8 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
           <h2 style={styles.sectionTitle}>Shop items</h2>
 
           <p style={styles.sectionText}>
-            Products below are available for public viewing, organiser enquiries
-            and fulfilment guidance.
+            Choose an item, add it to your basket, and complete payment securely
+            through Stripe checkout.
           </p>
         </div>
 
@@ -833,7 +828,7 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
                     </span>
 
                     <span className="statusPill" style={styles.statusPill}>
-                      Display only
+                      Checkout live
                     </span>
                   </div>
 
@@ -853,7 +848,7 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
                       ) : null}
 
                       {customerDetailCount > 0 ? (
-                        <span style={styles.detailBadge}>Details later</span>
+                        <span style={styles.detailBadge}>Checkout details</span>
                       ) : null}
                     </div>
                   ) : null}
@@ -862,7 +857,7 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
 
                   <p style={styles.productText}>
                     {cleanText(product.description) ||
-                      "Merchandise item available for organiser enquiry."}
+                      "Merchandise item available to buy online."}
                   </p>
 
                   {sizes.length ? (
@@ -908,7 +903,7 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
 
                     {customerDetailCount > 0 ? (
                       <MiniMeta
-                        label="Details later"
+                        label="Checkout details"
                         value={getCustomerDetailSummary(product)}
                       />
                     ) : null}
@@ -919,26 +914,15 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
                       href={getProductHref(product)}
                       style={brandedPrimaryActionStyle}
                     >
-                      View product →
+                      View / buy →
                     </Link>
 
-                    {contactEmail ? (
-                      <a
-                        href={`mailto:${contactEmail}?subject=${encodeURIComponent(
-                          `Merchandise enquiry: ${product.title}`,
-                        )}`}
-                        style={styles.secondaryButton}
-                      >
-                        Ask organiser
-                      </a>
-                    ) : (
-                      <Link
-                        href={`/c/${tenantSlug}/contact`}
-                        style={styles.secondaryButton}
-                      >
-                        Ask organiser
-                      </Link>
-                    )}
+                    <Link
+                      href={getBasketHref(tenantSlug)}
+                      style={styles.secondaryButton}
+                    >
+                      Basket
+                    </Link>
                   </div>
                 </div>
               </article>
@@ -951,17 +935,18 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
         <div>
           <p style={styles.noticeKicker}>Checkout status</p>
 
-          <h2 style={styles.noticeTitle}>Online buying is coming later</h2>
+          <h2 style={styles.noticeTitle}>Secure online checkout is live</h2>
 
           <p style={styles.noticeText}>
-            This shop is currently for public display and enquiries only. Paid
-            merchandise checkout, order receipts, stock counting and fulfilment
-            controls will be connected in a later controlled phase.
+            Add products to your basket and complete payment through Stripe.
+            Paid merchandise orders are recorded for the organiser after
+            successful payment. Merchandise-specific receipt emails are still a
+            planned polish step.
           </p>
         </div>
 
-        <Link href={`/c/${tenantSlug}`} style={styles.noticeLink}>
-          Public campaign hub →
+        <Link href={getBasketHref(tenantSlug)} style={styles.noticeLink}>
+          View basket →
         </Link>
       </section>
 
@@ -1641,9 +1626,9 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     padding: "6px 9px",
     borderRadius: 999,
-    background: "#f8fafc",
-    color: "#64748b",
-    border: "1px solid #e2e8f0",
+    background: "#ecfdf5",
+    color: "#166534",
+    border: "1px solid #bbf7d0",
     fontSize: 10,
     fontWeight: 950,
     whiteSpace: "nowrap",
