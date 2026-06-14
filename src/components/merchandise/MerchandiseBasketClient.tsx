@@ -73,6 +73,22 @@ type PendingOrderResult = {
   };
 };
 
+type StripeCheckoutResult = {
+  ok?: boolean;
+  error?: string;
+  url?: string;
+  sessionId?: string;
+  order?: {
+    id: string;
+    orderReference: string;
+    status: string;
+    subtotalCents: number;
+    totalCents: number;
+    platformFeeCents: number;
+    currency: string;
+  };
+};
+
 type BuyerDetails = {
   customerName: string;
   customerEmail: string;
@@ -179,11 +195,18 @@ export default function MerchandiseBasketClient({
   const [items, setItems] = useState<BasketItem[]>([]);
   const [isValidating, setIsValidating] = useState(false);
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+  const [isStartingStripeCheckout, setIsStartingStripeCheckout] =
+    useState(false);
+
   const [validationResult, setValidationResult] =
     useState<BasketValidationResult | null>(null);
+
   const [orderResult, setOrderResult] = useState<PendingOrderResult | null>(
     null,
   );
+
+  const [stripeCheckoutResult, setStripeCheckoutResult] =
+    useState<StripeCheckoutResult | null>(null);
 
   const [buyerDetails, setBuyerDetails] = useState<BuyerDetails>({
     customerName: "",
@@ -231,9 +254,11 @@ export default function MerchandiseBasketClient({
     : [];
 
   const hasValidatedBasket = validationResult?.ok && validatedLines.length > 0;
+  const hasPendingOrder = Boolean(orderResult?.ok && orderResult.order?.id);
 
   function resetOrderState() {
     setOrderResult(null);
+    setStripeCheckoutResult(null);
     setDetailsMessage(null);
   }
 
@@ -297,6 +322,7 @@ export default function MerchandiseBasketClient({
     setValidationResult(null);
     setLineDetails({});
     setOrderResult(null);
+    setStripeCheckoutResult(null);
     setDetailsMessage(null);
 
     try {
@@ -415,6 +441,7 @@ export default function MerchandiseBasketClient({
 
     setIsCreatingOrder(true);
     setOrderResult(null);
+    setStripeCheckoutResult(null);
 
     try {
       const response = await fetch("/api/merchandise/orders/create", {
@@ -437,7 +464,7 @@ export default function MerchandiseBasketClient({
         setDetailsMessage({
           tone: "good",
           text:
-            "Pending order created. Stripe checkout will be connected in the next controlled phase.",
+            "Pending order created. You can now continue to Stripe checkout.",
         });
       } else {
         setDetailsMessage({
@@ -461,6 +488,61 @@ export default function MerchandiseBasketClient({
       });
     } finally {
       setIsCreatingOrder(false);
+    }
+  }
+
+  async function startStripeCheckout() {
+    if (!orderResult?.ok || !orderResult.order?.id) {
+      setStripeCheckoutResult({
+        ok: false,
+        error: "Please create a pending order first.",
+      });
+      return;
+    }
+
+    setIsStartingStripeCheckout(true);
+    setStripeCheckoutResult(null);
+
+    try {
+      const response = await fetch("/api/merchandise/orders/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          tenantSlug,
+          orderId: orderResult.order.id,
+          orderReference: orderResult.order.orderReference,
+        }),
+      });
+
+      const json = (await response.json()) as StripeCheckoutResult;
+      setStripeCheckoutResult(json);
+
+      if (!json.ok || !json.url) {
+        setDetailsMessage({
+          tone: "bad",
+          text: json.error || "Stripe checkout could not be started.",
+        });
+        setIsStartingStripeCheckout(false);
+        return;
+      }
+
+      window.location.href = json.url;
+    } catch {
+      setStripeCheckoutResult({
+        ok: false,
+        error:
+          "We could not start Stripe checkout. Please refresh the page and try again.",
+      });
+
+      setDetailsMessage({
+        tone: "bad",
+        text:
+          "We could not start Stripe checkout. Please refresh the page and try again.",
+      });
+
+      setIsStartingStripeCheckout(false);
     }
   }
 
@@ -634,7 +716,7 @@ export default function MerchandiseBasketClient({
               <span style={styles.validationText}>
                 {validationResult.ok
                   ? validationResult.message ||
-                    "Basket is valid and ready for the next checkout phase."
+                    "Basket is valid and ready for checkout details."
                   : validationResult.error || "Something needs to be corrected."}
               </span>
 
@@ -661,20 +743,16 @@ export default function MerchandiseBasketClient({
           <button
             type="button"
             onClick={validateBasket}
-            disabled={isValidating || Boolean(orderResult?.ok)}
+            disabled={isValidating || hasPendingOrder}
             style={{
               ...styles.validateButton,
               background: primaryColour,
               borderColor: primaryColour,
               color: primaryTextColour,
-              opacity: isValidating || orderResult?.ok ? 0.72 : 1,
+              opacity: isValidating || hasPendingOrder ? 0.72 : 1,
             }}
           >
             {isValidating ? "Validating basket..." : "Validate basket"}
-          </button>
-
-          <button type="button" disabled style={styles.disabledButton}>
-            Stripe checkout not connected yet
           </button>
 
           <a
@@ -707,7 +785,7 @@ export default function MerchandiseBasketClient({
 
               <p style={styles.detailsIntro}>
                 These details are used to create a pending merchandise order
-                before Stripe checkout is connected.
+                before Stripe checkout.
               </p>
             </div>
           </div>
@@ -945,13 +1023,27 @@ export default function MerchandiseBasketClient({
             </div>
           ) : null}
 
+          {stripeCheckoutResult && !stripeCheckoutResult.ok ? (
+            <div style={{ ...styles.orderResultPanel, ...styles.orderResultBad }}>
+              <strong style={styles.orderResultTitle}>
+                Stripe checkout not started
+              </strong>
+              <span style={styles.orderResultText}>
+                {stripeCheckoutResult.error ||
+                  "Stripe checkout could not be started."}
+              </span>
+            </div>
+          ) : null}
+
           <div style={styles.detailsActions}>
             <button
               type="submit"
+              disabled={hasPendingOrder}
               style={{
                 ...styles.secondaryActionButton,
                 borderColor: primaryColour,
                 color: primaryColour,
+                opacity: hasPendingOrder ? 0.72 : 1,
               }}
             >
               Check checkout details
@@ -960,24 +1052,38 @@ export default function MerchandiseBasketClient({
             <button
               type="button"
               onClick={createPendingOrder}
-              disabled={isCreatingOrder || Boolean(orderResult?.ok)}
+              disabled={isCreatingOrder || hasPendingOrder}
               style={{
                 ...styles.validateButton,
                 background: primaryColour,
                 borderColor: primaryColour,
                 color: primaryTextColour,
-                opacity: isCreatingOrder || orderResult?.ok ? 0.72 : 1,
+                opacity: isCreatingOrder || hasPendingOrder ? 0.72 : 1,
               }}
             >
               {isCreatingOrder
                 ? "Creating pending order..."
-                : orderResult?.ok
+                : hasPendingOrder
                   ? "Pending order created"
                   : "Create pending order"}
             </button>
 
-            <button type="button" disabled style={styles.disabledButton}>
-              Stripe checkout not connected yet
+            <button
+              type="button"
+              onClick={startStripeCheckout}
+              disabled={!hasPendingOrder || isStartingStripeCheckout}
+              style={{
+                ...styles.stripeButton,
+                opacity: !hasPendingOrder || isStartingStripeCheckout ? 0.72 : 1,
+                cursor:
+                  !hasPendingOrder || isStartingStripeCheckout
+                    ? "not-allowed"
+                    : "pointer",
+              }}
+            >
+              {isStartingStripeCheckout
+                ? "Opening Stripe checkout..."
+                : "Continue to Stripe checkout"}
             </button>
           </div>
         </form>
@@ -1280,6 +1386,18 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 12px 24px rgba(22,131,248,0.16)",
   },
 
+  stripeButton: {
+    width: "100%",
+    minHeight: 50,
+    padding: "12px 16px",
+    borderRadius: 999,
+    background: "#635bff",
+    color: "#ffffff",
+    border: "1px solid #635bff",
+    fontWeight: 950,
+    boxShadow: "0 12px 24px rgba(99,91,255,0.22)",
+  },
+
   secondaryActionButton: {
     width: "100%",
     minHeight: 48,
@@ -1289,18 +1407,6 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid",
     fontWeight: 950,
     cursor: "pointer",
-  },
-
-  disabledButton: {
-    width: "100%",
-    minHeight: 48,
-    padding: "11px 15px",
-    borderRadius: 999,
-    background: "#e2e8f0",
-    color: "#64748b",
-    border: "1px solid #cbd5e1",
-    fontWeight: 950,
-    cursor: "not-allowed",
   },
 
   primaryButton: {
