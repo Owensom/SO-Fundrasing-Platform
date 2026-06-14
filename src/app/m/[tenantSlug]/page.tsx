@@ -912,28 +912,28 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
                       Merchandise
                     </span>
 
-                    <span style={styles.statusPill}>Display only</span>
+                    <span className="statusPill" style={styles.statusPill}>
+                      Display only
+                    </span>
                   </div>
 
-                  <div style={styles.productBadgeRow}>
-                    {linkedEventDisplay ? (
-                      <span style={styles.eventBadge}>
-                        Event-linked
-                      </span>
-                    ) : null}
+                  {(linkedEventDisplay ||
+                    fulfilmentOptionCount > 0 ||
+                    customerDetailCount > 0) ? (
+                    <div className="productBadgeRow" style={styles.productBadgeRow}>
+                      {linkedEventDisplay ? (
+                        <span style={styles.eventBadge}>Event</span>
+                      ) : null}
 
-                    {fulfilmentOptionCount > 0 ? (
-                      <span style={styles.fulfilmentBadge}>
-                        Fulfilment info
-                      </span>
-                    ) : null}
+                      {fulfilmentOptionCount > 0 ? (
+                        <span style={styles.fulfilmentBadge}>Fulfilment</span>
+                      ) : null}
 
-                    {customerDetailCount > 0 ? (
-                      <span style={styles.detailBadge}>
-                        Details later
-                      </span>
-                    ) : null}
-                  </div>
+                      {customerDetailCount > 0 ? (
+                        <span style={styles.detailBadge}>Details later</span>
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   <h2 style={styles.productTitle}>{product.title}</h2>
 
@@ -1204,6 +1204,15 @@ const responsiveStyles = `
 
   .public-merchandise-shop-page .productImageWrap {
     height: 210px !important;
+  }
+
+  .public-merchandise-shop-page .statusPill {
+    display: none !important;
+  }
+
+  .public-merchandise-shop-page .productBadgeRow {
+    margin-top: -2px !important;
+    gap: 5px !important;
   }
 
   .public-merchandise-shop-page .primaryButton,
@@ -1722,7 +1731,7 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     flex: 1,
-    gap: 11,
+    gap: 9,
     padding: 15,
     minWidth: 0,
   },
@@ -1739,10 +1748,10 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     gap: 5,
-    padding: "8px 12px",
+    padding: "7px 10px",
     borderRadius: 999,
     border: "1px solid",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 950,
     whiteSpace: "nowrap",
   },
@@ -1750,59 +1759,63 @@ const styles: Record<string, CSSProperties> = {
   statusPill: {
     display: "inline-flex",
     alignItems: "center",
-    padding: "7px 10px",
+    padding: "6px 9px",
     borderRadius: 999,
-    background: "#f1f5f9",
-    color: "#475569",
+    background: "#f8fafc",
+    color: "#64748b",
     border: "1px solid #e2e8f0",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 950,
     whiteSpace: "nowrap",
   },
 
   productBadgeRow: {
     display: "flex",
-    gap: 7,
+    gap: 5,
     flexWrap: "wrap",
     alignItems: "center",
+    marginTop: -1,
   },
 
   eventBadge: {
     display: "inline-flex",
     alignItems: "center",
-    padding: "7px 10px",
+    padding: "4px 7px",
     borderRadius: 999,
-    background: "#fef3c7",
+    background: "#fffbeb",
     color: "#92400e",
     border: "1px solid #fde68a",
-    fontSize: 11,
-    fontWeight: 950,
+    fontSize: 10,
+    lineHeight: 1.1,
+    fontWeight: 900,
     whiteSpace: "nowrap",
   },
 
   fulfilmentBadge: {
     display: "inline-flex",
     alignItems: "center",
-    padding: "7px 10px",
+    padding: "4px 7px",
     borderRadius: 999,
-    background: "#dcfce7",
+    background: "#f0fdf4",
     color: "#166534",
-    border: "1px solid #86efac",
-    fontSize: 11,
-    fontWeight: 950,
+    border: "1px solid #bbf7d0",
+    fontSize: 10,
+    lineHeight: 1.1,
+    fontWeight: 900,
     whiteSpace: "nowrap",
   },
 
   detailBadge: {
     display: "inline-flex",
     alignItems: "center",
-    padding: "7px 10px",
+    padding: "4px 7px",
     borderRadius: 999,
     background: "#eff6ff",
     color: "#1d4ed8",
     border: "1px solid #bfdbfe",
-    fontSize: 11,
-    fontWeight: 950,
+    fontSize: 10,
+    lineHeight: 1.1,
+    fontWeight: 900,
     whiteSpace: "nowrap",
   },
 
