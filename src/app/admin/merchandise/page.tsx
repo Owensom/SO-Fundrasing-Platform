@@ -42,6 +42,22 @@ type MerchandiseProduct = {
   status: MerchandiseProductStatus;
   created_at: string;
   updated_at: string;
+
+  linked_event_id: string | null;
+  linked_event_title: string | null;
+  linked_event_status: string | null;
+  event_linking_enabled: boolean | null;
+  fulfilment_collect_stand_enabled: boolean | null;
+  fulfilment_collect_table_enabled: boolean | null;
+  fulfilment_deliver_table_enabled: boolean | null;
+  fulfilment_deliver_seat_enabled: boolean | null;
+  fulfilment_post_enabled: boolean | null;
+  fulfilment_arrange_with_organiser_enabled: boolean | null;
+  fulfilment_notes: string | null;
+  require_booking_reference: boolean | null;
+  require_table_number: boolean | null;
+  require_seat_number: boolean | null;
+  require_guest_name: boolean | null;
 };
 
 type TenantSettingsLike = {
@@ -53,6 +69,11 @@ type TenantSettingsLike = {
 function cleanText(value: unknown, fallback = "") {
   const clean = String(value ?? "").trim();
   return clean || fallback;
+}
+
+function isEnabled(value: boolean | null | undefined, fallback = false) {
+  if (typeof value === "boolean") return value;
+  return fallback;
 }
 
 function formatMoney(cents: number, currency = "GBP") {
@@ -177,6 +198,113 @@ function getPublicShopHref(tenantSlug: string) {
   return `/m/${encodeURIComponent(tenantSlug)}`;
 }
 
+function getLinkedEventLabel(product: MerchandiseProduct) {
+  if (!isEnabled(product.event_linking_enabled)) {
+    return "Not event-linked";
+  }
+
+  return cleanText(product.linked_event_title) || "Event link enabled";
+}
+
+function getFulfilmentOptionCount(product: MerchandiseProduct) {
+  return [
+    isEnabled(product.fulfilment_collect_stand_enabled, true),
+    isEnabled(product.fulfilment_collect_table_enabled),
+    isEnabled(product.fulfilment_deliver_table_enabled),
+    isEnabled(product.fulfilment_deliver_seat_enabled),
+    isEnabled(product.fulfilment_post_enabled),
+    isEnabled(product.fulfilment_arrange_with_organiser_enabled, true),
+  ].filter(Boolean).length;
+}
+
+function getFulfilmentLabel(product: MerchandiseProduct) {
+  const count = getFulfilmentOptionCount(product);
+
+  if (count === 0) {
+    return "Needs setup";
+  }
+
+  if (count === 1) {
+    return "1 option";
+  }
+
+  return `${count} options`;
+}
+
+function getCustomerDetailCount(product: MerchandiseProduct) {
+  return [
+    isEnabled(product.require_booking_reference),
+    isEnabled(product.require_table_number),
+    isEnabled(product.require_seat_number),
+    isEnabled(product.require_guest_name),
+  ].filter(Boolean).length;
+}
+
+function getCustomerDetailLabel(product: MerchandiseProduct) {
+  const count = getCustomerDetailCount(product);
+
+  if (count === 0) {
+    return "No extra details";
+  }
+
+  if (count === 1) {
+    return "1 detail later";
+  }
+
+  return `${count} details later`;
+}
+
+function getProductReadinessTone(product: MerchandiseProduct) {
+  if (product.status === "closed") return "neutral";
+  if (product.status !== "published") return "neutral";
+
+  if (getFulfilmentOptionCount(product) === 0) {
+    return "warning";
+  }
+
+  return "good";
+}
+
+function getProductReadinessLabel(product: MerchandiseProduct) {
+  if (product.status === "closed") {
+    return "Closed";
+  }
+
+  if (product.status !== "published") {
+    return "Draft setup";
+  }
+
+  if (getFulfilmentOptionCount(product) === 0) {
+    return "Public, needs fulfilment";
+  }
+
+  return "Public display ready";
+}
+
+function readinessPillStyle(tone: "good" | "warning" | "neutral") {
+  if (tone === "good") {
+    return {
+      background: "#dcfce7",
+      color: "#166534",
+      borderColor: "#86efac",
+    };
+  }
+
+  if (tone === "warning") {
+    return {
+      background: "#fffbeb",
+      color: "#92400e",
+      borderColor: "#fde68a",
+    };
+  }
+
+  return {
+    background: "#f8fafc",
+    color: "#475569",
+    borderColor: "#e2e8f0",
+  };
+}
+
 async function requireTenantAccess() {
   const session = await auth();
 
@@ -201,25 +329,43 @@ async function listMerchandiseProducts(tenantSlug: string) {
   return query<MerchandiseProduct>(
     `
       select
-        id,
-        tenant_slug,
-        slug,
-        title,
-        description,
-        image_url,
-        image_focus_x,
-        image_focus_y,
-        price_cents,
-        currency,
-        stock_quantity,
-        sold_quantity,
-        options_json,
-        status,
-        created_at::text,
-        updated_at::text
+        merchandise_products.id,
+        merchandise_products.tenant_slug,
+        merchandise_products.slug,
+        merchandise_products.title,
+        merchandise_products.description,
+        merchandise_products.image_url,
+        merchandise_products.image_focus_x,
+        merchandise_products.image_focus_y,
+        merchandise_products.price_cents,
+        merchandise_products.currency,
+        merchandise_products.stock_quantity,
+        merchandise_products.sold_quantity,
+        merchandise_products.options_json,
+        merchandise_products.status,
+        merchandise_products.created_at::text,
+        merchandise_products.updated_at::text,
+        merchandise_products.linked_event_id::text,
+        events.title as linked_event_title,
+        events.status as linked_event_status,
+        merchandise_products.event_linking_enabled,
+        merchandise_products.fulfilment_collect_stand_enabled,
+        merchandise_products.fulfilment_collect_table_enabled,
+        merchandise_products.fulfilment_deliver_table_enabled,
+        merchandise_products.fulfilment_deliver_seat_enabled,
+        merchandise_products.fulfilment_post_enabled,
+        merchandise_products.fulfilment_arrange_with_organiser_enabled,
+        merchandise_products.fulfilment_notes,
+        merchandise_products.require_booking_reference,
+        merchandise_products.require_table_number,
+        merchandise_products.require_seat_number,
+        merchandise_products.require_guest_name
       from merchandise_products
-      where tenant_slug = $1
-      order by created_at desc
+      left join events
+        on events.id = merchandise_products.linked_event_id
+       and events.tenant_slug = merchandise_products.tenant_slug
+      where merchandise_products.tenant_slug = $1
+      order by merchandise_products.created_at desc
     `,
     [tenantSlug],
   );
@@ -255,6 +401,16 @@ export default async function AdminMerchandisePage() {
   const closedProducts = products.filter(
     (product) => product.status === "closed",
   );
+  const eventLinkedProducts = products.filter((product) =>
+    isEnabled(product.event_linking_enabled),
+  );
+  const fulfilmentReadyProducts = products.filter(
+    (product) => getFulfilmentOptionCount(product) > 0,
+  );
+  const publicDisplayReadyProducts = products.filter(
+    (product) =>
+      product.status === "published" && getFulfilmentOptionCount(product) > 0,
+  );
 
   const soldQuantity = products.reduce(
     (sum, product) => sum + Number(product.sold_quantity || 0),
@@ -286,7 +442,7 @@ export default async function AdminMerchandisePage() {
             <div style={styles.badgeRow}>
               <span style={styles.statusBadge}>Merchandise / Shop</span>
               <span style={styles.planBadge}>{getTierLabel(tier)} plan</span>
-              <span style={styles.phaseBadge}>Public display live</span>
+              <span style={styles.phaseBadge}>Fulfilment display ready</span>
             </div>
 
             <Link href="/admin" style={styles.secondaryButton}>
@@ -300,14 +456,19 @@ export default async function AdminMerchandisePage() {
 
           <p style={styles.heroDescription}>
             Create and manage merchandise products for the public shop. Published
-            products now appear on the public shop and product pages. Secure
-            checkout, order records, stock automation and fulfilment controls
-            will be added in later controlled phases.
+            products appear on the public shop and product pages, including
+            event-linked fulfilment guidance where configured. Secure checkout,
+            order records, stock automation and receipts remain disconnected.
           </p>
 
           <div className="merchandise-hero-stats" style={styles.heroStats}>
             <StatCard label="Products" value={products.length} />
             <StatCard label="Published" value={publishedProducts.length} />
+            <StatCard label="Event-linked" value={eventLinkedProducts.length} />
+            <StatCard
+              label="Display ready"
+              value={publicDisplayReadyProducts.length}
+            />
             <StatCard label="Manual sold quantity" value={soldQuantity} />
             <StatCard
               label="Manual estimate"
@@ -367,8 +528,8 @@ export default async function AdminMerchandisePage() {
                 <p style={styles.readinessIntro}>
                   Published products are visible on the public shop. This is
                   still a display-only merchandise phase: supporters can view
-                  items and contact the organiser, but they cannot buy online
-                  yet.
+                  items, see event fulfilment guidance, and contact the
+                  organiser, but they cannot buy online yet.
                 </p>
               </div>
 
@@ -401,7 +562,7 @@ export default async function AdminMerchandisePage() {
               <ReadinessItem
                 label="Admin setup"
                 value="Live"
-                detail="Product records, images, prices, stock notes and options can be managed."
+                detail="Product records, images, prices, stock notes, options, event links and fulfilment setup can be managed."
                 tone="good"
               />
 
@@ -413,9 +574,23 @@ export default async function AdminMerchandisePage() {
               />
 
               <ReadinessItem
+                label="Fulfilment display"
+                value={`${fulfilmentReadyProducts.length} configured`}
+                detail="Configured fulfilment options now show on public product pages as guidance only."
+                tone={fulfilmentReadyProducts.length ? "good" : "neutral"}
+              />
+
+              <ReadinessItem
+                label="Event linking"
+                value={`${eventLinkedProducts.length} linked`}
+                detail="Products can be linked to tenant events for later collection, table or seat delivery workflows."
+                tone={eventLinkedProducts.length ? "good" : "neutral"}
+              />
+
+              <ReadinessItem
                 label="Checkout"
                 value="Not connected"
-                detail="Stripe checkout, receipts, order records, stock decrementing and fulfilment are not live yet."
+                detail="Stripe checkout, receipts, order records, stock decrementing and fulfilment automation are not live yet."
                 tone="warning"
               />
 
@@ -423,20 +598,6 @@ export default async function AdminMerchandisePage() {
                 label="Stock"
                 value="Manual for now"
                 detail="Sold quantity is not updated automatically until checkout and order handling are built."
-                tone="neutral"
-              />
-
-              <ReadinessItem
-                label="Branding"
-                value="Subscription-gated"
-                detail="Public shop branding follows the same advanced-branding rules as the campaign hub."
-                tone="good"
-              />
-
-              <ReadinessItem
-                label="Event fulfilment"
-                value="Later phase"
-                detail="Event-linked collection, table delivery and seat delivery are planned for a later phase."
                 tone="neutral"
               />
             </div>
@@ -478,6 +639,7 @@ export default async function AdminMerchandisePage() {
                   <p style={styles.sectionIntro}>
                     Published products are public. Draft products are private.
                     The public pages are display-only until checkout is added.
+                    Fulfilment and event-linking readiness are shown per product.
                   </p>
                 </div>
               </div>
@@ -504,6 +666,24 @@ export default async function AdminMerchandisePage() {
               label="Published products"
               value={publishedProducts.length}
               text="Visible on the public shop."
+            />
+
+            <SummaryCard
+              label="Event-linked products"
+              value={eventLinkedProducts.length}
+              text="Connected to tenant events for later fulfilment workflows."
+            />
+
+            <SummaryCard
+              label="Fulfilment configured"
+              value={fulfilmentReadyProducts.length}
+              text="Products with at least one fulfilment option."
+            />
+
+            <SummaryCard
+              label="Display-ready products"
+              value={publicDisplayReadyProducts.length}
+              text="Published products with fulfilment guidance configured."
             />
 
             <SummaryCard
@@ -580,6 +760,8 @@ function ProductCard({ product }: { product: MerchandiseProduct }) {
   const sizes = getSizeOptions(product);
   const publicHref = getPublicProductHref(product);
   const canPreviewPublic = product.status === "published";
+  const readinessTone = getProductReadinessTone(product);
+  const linkedEventLabel = getLinkedEventLabel(product);
 
   return (
     <article style={styles.itemCard}>
@@ -619,6 +801,19 @@ function ProductCard({ product }: { product: MerchandiseProduct }) {
                   {formatMoney(product.price_cents, product.currency)}
                 </span>
 
+                <span
+                  style={{
+                    ...styles.readinessPill,
+                    ...readinessPillStyle(readinessTone),
+                  }}
+                >
+                  {getProductReadinessLabel(product)}
+                </span>
+
+                {isEnabled(product.event_linking_enabled) ? (
+                  <span style={styles.eventPill}>Event-linked</span>
+                ) : null}
+
                 <span style={styles.displayOnlyPill}>Display-only</span>
               </div>
 
@@ -641,6 +836,23 @@ function ProductCard({ product }: { product: MerchandiseProduct }) {
             <InfoBlock
               label="Sizes"
               value={sizes.length ? sizes.join(", ") : "Not set"}
+            />
+
+            <InfoBlock label="Event link" value={linkedEventLabel} />
+
+            <InfoBlock
+              label="Fulfilment"
+              value={getFulfilmentLabel(product)}
+            />
+
+            <InfoBlock
+              label="Later checkout details"
+              value={getCustomerDetailLabel(product)}
+            />
+
+            <InfoBlock
+              label="Organiser note"
+              value={cleanText(product.fulfilment_notes) ? "Added" : "Not set"}
             />
 
             <InfoBlock label="Created" value={formatDate(product.created_at)} />
@@ -1301,6 +1513,32 @@ const styles: Record<string, CSSProperties> = {
     background: "#eff6ff",
     color: "#1d4ed8",
     border: "1px solid #bfdbfe",
+    fontSize: 12,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  readinessPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    width: "fit-content",
+    padding: "7px 10px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 12,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  eventPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    width: "fit-content",
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#fef3c7",
+    color: "#92400e",
+    border: "1px solid #fde68a",
     fontSize: 12,
     fontWeight: 950,
     whiteSpace: "nowrap",
