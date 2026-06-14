@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import ImageFocusUploadField from "@/components/ImageFocusUploadField";
-import { queryOne } from "@/lib/db";
+import { query, queryOne } from "@/lib/db";
 import { getTenantSlugFromHeaders } from "@/lib/tenant";
 import { getTenantSettings } from "@/lib/tenant-settings";
 import {
@@ -56,6 +56,12 @@ type MerchandiseProduct = {
   require_guest_name: boolean | null;
 };
 
+type MerchandiseEventOption = {
+  id: string;
+  title: string | null;
+  status: string | null;
+};
+
 type TenantSettingsLike = {
   subscription_tier?: string | null;
   subscription_status?: string | null;
@@ -96,6 +102,13 @@ function formatDate(value: string | null | undefined) {
   }).format(date);
 }
 
+function formatEventLabel(event: MerchandiseEventOption) {
+  const title = cleanText(event.title, "Untitled event");
+  const status = cleanText(event.status, "draft");
+
+  return `${title} · ${status}`;
+}
+
 function getSizeOptions(product: MerchandiseProduct) {
   if (!Array.isArray(product.options_json)) return [];
 
@@ -126,6 +139,24 @@ function getCustomSizeOptions(product: MerchandiseProduct) {
 function isEnabled(value: boolean | null | undefined, fallback = false) {
   if (typeof value === "boolean") return value;
   return fallback;
+}
+
+function getLinkedEventLabel({
+  linkedEventId,
+  eventOptions,
+}: {
+  linkedEventId: string | null;
+  eventOptions: MerchandiseEventOption[];
+}) {
+  if (!linkedEventId) return "No linked event";
+
+  const matchingEvent = eventOptions.find((event) => event.id === linkedEventId);
+
+  if (!matchingEvent) {
+    return "Linked event saved, but not found in this tenant’s current event list";
+  }
+
+  return formatEventLabel(matchingEvent);
 }
 
 async function requireTenantAccess() {
@@ -196,6 +227,29 @@ async function getProduct({
   );
 }
 
+async function getTenantEventOptions(tenantSlug: string) {
+  return query<MerchandiseEventOption>(
+    `
+      select
+        id::text,
+        title,
+        status
+      from events
+      where tenant_slug = $1
+      order by
+        case
+          when status = 'published' then 1
+          when status = 'draft' then 2
+          when status = 'closed' then 3
+          else 4
+        end,
+        title asc
+      limit 100
+    `,
+    [tenantSlug],
+  );
+}
+
 export default async function EditMerchandiseProductPage({
   params,
   searchParams,
@@ -209,9 +263,10 @@ export default async function EditMerchandiseProductPage({
   const error = cleanText(paramsValue.error);
   const saved = cleanText(paramsValue.saved) === "1";
 
-  const [tenantSettingsRaw, product] = await Promise.all([
+  const [tenantSettingsRaw, product, eventOptions] = await Promise.all([
     getTenantSettings(tenantSlug),
     getProduct({ tenantSlug, productId: id }),
+    getTenantEventOptions(tenantSlug),
   ]);
 
   if (!product) {
@@ -273,6 +328,11 @@ export default async function EditMerchandiseProductPage({
     product.fulfilment_arrange_with_organiser_enabled,
     true,
   );
+
+  const linkedEventLabel = getLinkedEventLabel({
+    linkedEventId: product.linked_event_id,
+    eventOptions,
+  });
 
   return (
     <main className="admin-merchandise-form-page" style={styles.page}>
@@ -488,7 +548,7 @@ export default async function EditMerchandiseProductPage({
             >
               <span style={styles.readinessLabel}>Event linking</span>
               <strong style={styles.readinessValue}>
-                {eventLinkingEnabled ? "Enabled" : "Not enabled"}
+                {eventLinkingEnabled ? linkedEventLabel : "Not enabled"}
               </strong>
             </div>
 
@@ -528,7 +588,9 @@ export default async function EditMerchandiseProductPage({
               style={styles.checkbox}
             />
             <span>
-              <strong style={styles.toggleTitle}>Link this product to an event</strong>
+              <strong style={styles.toggleTitle}>
+                Link this product to an event
+              </strong>
               <small style={styles.toggleHelp}>
                 Use this when merchandise is designed for a specific event or
                 may need table, seat or booking details later.
@@ -537,17 +599,31 @@ export default async function EditMerchandiseProductPage({
           </label>
 
           <Field
-            label="Linked event ID"
-            helper="Optional for now. Paste the event UUID only when this product belongs to a specific event. A safer event picker can be added once the event list query is wired separately."
+            label="Linked event"
+            helper={
+              eventOptions.length
+                ? "Choose one of this tenant’s events. This only stores the product relationship for later checkout and fulfilment phases."
+                : "No tenant events found yet. Create an event first, then return here to link merchandise."
+            }
           >
-            <input
+            <select
               name="linked_event_id"
-              type="text"
               defaultValue={product.linked_event_id || ""}
-              placeholder="Optional event UUID"
               style={styles.input}
-            />
+            >
+              <option value="">No linked event</option>
+              {eventOptions.map((event) => (
+                <option key={event.id} value={event.id}>
+                  {formatEventLabel(event)}
+                </option>
+              ))}
+            </select>
           </Field>
+
+          <div style={styles.currentOptionsPanel}>
+            <span style={styles.currentOptionsLabel}>Current linked event</span>
+            <strong style={styles.currentOptionsValue}>{linkedEventLabel}</strong>
+          </div>
 
           <div style={styles.fulfilmentBox}>
             <span style={styles.fulfilmentTitle}>Fulfilment choices</span>
@@ -794,7 +870,8 @@ const responsiveStyles = `
 
   .admin-merchandise-form-page .form-grid,
   .admin-merchandise-form-page .product-meta-grid,
-  .admin-merchandise-form-page .size-grid {
+  .admin-merchandise-form-page .size-grid,
+  .admin-merchandise-form-page .readiness-grid {
     grid-template-columns: 1fr !important;
   }
 
