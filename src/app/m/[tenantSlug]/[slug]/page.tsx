@@ -375,7 +375,7 @@ export default async function PublicMerchandiseProductPage({
               `Support ${displayName} through this merchandise item.`}
           </p>
 
-          <div style={styles.heroPills}>
+          <div className="heroPills" style={styles.heroPills}>
             <span
               className="pricePill"
               style={{
@@ -580,6 +580,35 @@ const responsiveStyles = `
   max-width: 100%;
 }
 
+@media (max-width: 1100px) {
+  .public-merchandise-page .heroPills {
+    display: grid !important;
+    grid-template-columns: repeat(2, max-content) !important;
+    justify-content: start !important;
+    align-items: start !important;
+    gap: 10px !important;
+    width: 100% !important;
+  }
+
+  .public-merchandise-page .pricePill,
+  .public-merchandise-page .stockPill {
+    width: fit-content !important;
+    max-width: 100% !important;
+    justify-self: start !important;
+    align-self: start !important;
+    white-space: nowrap !important;
+  }
+
+  .public-merchandise-page .sizeHeroPill {
+    grid-column: 1 / -1 !important;
+    width: fit-content !important;
+    max-width: 100% !important;
+    justify-self: start !important;
+    align-self: start !important;
+    white-space: normal !important;
+  }
+}
+
 @media (max-width: 920px) {
   .public-merchandise-page .merchandise-hero,
   .public-merchandise-page .merchandise-info-grid {
@@ -616,12 +645,17 @@ const responsiveStyles = `
   .public-merchandise-page .heroPills {
     display: grid !important;
     grid-template-columns: 1fr !important;
+    justify-content: stretch !important;
+    align-items: stretch !important;
   }
 
   .public-merchandise-page .pricePill,
   .public-merchandise-page .stockPill,
   .public-merchandise-page .sizeHeroPill {
     width: 100% !important;
+    justify-content: center !important;
+    justify-self: stretch !important;
+    text-align: center !important;
   }
 
   .public-merchandise-page .merchandise-info-grid {
@@ -774,12 +808,17 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    width: "fit-content",
     minHeight: 46,
     padding: "11px 16px",
     borderRadius: 999,
     border: "1px solid",
     fontSize: 17,
     fontWeight: 950,
+    lineHeight: 1.1,
+    whiteSpace: "nowrap",
+    flexShrink: 0,
+    textAlign: "center",
     boxShadow: "0 12px 24px rgba(0,0,0,0.16)",
   },
 
@@ -787,12 +826,17 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    width: "fit-content",
     minHeight: 46,
     padding: "11px 16px",
     borderRadius: 999,
     border: "1px solid",
     fontSize: 14,
     fontWeight: 950,
+    lineHeight: 1.15,
+    whiteSpace: "nowrap",
+    flexShrink: 0,
+    textAlign: "center",
   },
 
   stockPillGood: {
@@ -817,6 +861,8 @@ const styles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    width: "fit-content",
+    maxWidth: "100%",
     minHeight: 46,
     padding: "11px 16px",
     borderRadius: 999,
@@ -825,7 +871,9 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.22)",
     fontSize: 14,
     fontWeight: 950,
+    lineHeight: 1.15,
     overflowWrap: "anywhere",
+    textAlign: "center",
   },
 
   heroCard: {
