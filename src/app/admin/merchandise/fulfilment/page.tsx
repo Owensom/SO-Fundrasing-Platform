@@ -399,56 +399,55 @@ export default async function AdminMerchandiseFulfilmentPage() {
       <style>{responsiveStyles}</style>
 
       <section className="fulfilment-hero" style={styles.hero}>
-        <div className="hero-main-row" style={styles.heroMainRow}>
-          <div className="hero-brand-row" style={styles.heroBrandRow}>
-            <div className="hero-logo-plate" style={styles.heroLogoPlate}>
-              <img
-                src={DEFAULT_MERCHANDISE_IMAGE_SRC}
-                alt=""
-                aria-hidden="true"
-                style={styles.heroLogo}
-              />
-            </div>
+        <div className="hero-brand-row" style={styles.heroBrandRow}>
+          <div className="hero-logo-plate" style={styles.heroLogoPlate}>
+            <img
+              src={DEFAULT_MERCHANDISE_IMAGE_SRC}
+              alt=""
+              aria-hidden="true"
+              style={styles.heroLogo}
+            />
+          </div>
 
-            <div style={styles.heroTitleBlock}>
-              <div style={styles.heroTopRow}>
-                <div style={styles.badgeRow}>
-                  <span style={styles.statusBadge}>
-                    Merchandise fulfilment
-                  </span>
-                  <span style={styles.planBadge}>{getTierLabel(tier)} plan</span>
-                  <span style={styles.phaseBadge}>Planning only</span>
-                </div>
+          <div style={styles.heroTitleBlock}>
+            <div className="hero-top-row" style={styles.heroTopRow}>
+              <div style={styles.badgeRow}>
+                <span style={styles.statusBadge}>Merchandise fulfilment</span>
+                <span style={styles.planBadge}>{getTierLabel(tier)} plan</span>
+                <span style={styles.phaseBadge}>Planning only</span>
+              </div>
 
+              <div className="hero-action-row" style={styles.heroActionRow}>
                 <Link
                   href="/admin/merchandise"
                   style={styles.secondaryHeroButton}
                 >
                   ← Merchandise
                 </Link>
+
+                <Link href="/admin/merchandise/new" style={styles.primaryPill}>
+                  New product →
+                </Link>
+
+                <Link
+                  href="/admin/merchandise"
+                  style={styles.secondaryHeroButton}
+                >
+                  Product catalogue →
+                </Link>
               </div>
-
-              <h1 className="fulfilment-title" style={styles.heroTitle}>
-                Fulfilment planning
-              </h1>
-
-              <p style={styles.heroDescription}>
-                Review event-linked merchandise, collection and delivery
-                options, and customer details that may be requested later. This
-                page is read-only and does not create orders, payments, receipts
-                or stock movements.
-              </p>
             </div>
-          </div>
 
-          <div className="hero-actions-panel" style={styles.heroActionsPanel}>
-            <Link href="/admin/merchandise/new" style={styles.primaryButton}>
-              New product →
-            </Link>
+            <h1 className="fulfilment-title" style={styles.heroTitle}>
+              Fulfilment planning
+            </h1>
 
-            <Link href="/admin/merchandise" style={styles.secondaryButton}>
-              Product catalogue →
-            </Link>
+            <p style={styles.heroDescription}>
+              Review event-linked merchandise, collection and delivery options,
+              and customer details that may be requested later. This page is
+              read-only and does not create orders, payments, receipts or stock
+              movements.
+            </p>
           </div>
         </div>
 
@@ -737,11 +736,18 @@ const responsiveStyles = `
 }
 
 @media (max-width: 920px) {
-  .admin-merchandise-fulfilment-page .hero-main-row,
   .admin-merchandise-fulfilment-page .hero-brand-row,
   .admin-merchandise-fulfilment-page .group-header,
   .admin-merchandise-fulfilment-page .product-main-row {
     grid-template-columns: 1fr !important;
+  }
+
+  .admin-merchandise-fulfilment-page .hero-top-row {
+    align-items: flex-start !important;
+  }
+
+  .admin-merchandise-fulfilment-page .hero-action-row {
+    justify-content: flex-start !important;
   }
 
   .admin-merchandise-fulfilment-page .hero-stats,
@@ -751,13 +757,9 @@ const responsiveStyles = `
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
-  .admin-merchandise-fulfilment-page .hero-actions-panel {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-
   .admin-merchandise-fulfilment-page .hero-logo-plate {
-    width: 132px !important;
-    height: 132px !important;
+    width: 116px !important;
+    height: 116px !important;
   }
 }
 
@@ -778,26 +780,26 @@ const responsiveStyles = `
   }
 
   .admin-merchandise-fulfilment-page .hero-logo-plate {
-    width: 110px !important;
-    height: 110px !important;
+    width: 96px !important;
+    height: 96px !important;
   }
 
   .admin-merchandise-fulfilment-page .hero-stats,
   .admin-merchandise-fulfilment-page .readiness-grid,
   .admin-merchandise-fulfilment-page .group-stats,
-  .admin-merchandise-fulfilment-page .planning-grid,
-  .admin-merchandise-fulfilment-page .hero-actions-panel {
+  .admin-merchandise-fulfilment-page .planning-grid {
     grid-template-columns: 1fr !important;
   }
 
-  .admin-merchandise-fulfilment-page .product-actions,
-  .admin-merchandise-fulfilment-page .hero-actions {
+  .admin-merchandise-fulfilment-page .hero-action-row,
+  .admin-merchandise-fulfilment-page .product-actions {
     display: grid !important;
     grid-template-columns: 1fr !important;
     width: 100% !important;
   }
 
-  .admin-merchandise-fulfilment-page a {
+  .admin-merchandise-fulfilment-page .hero-action-row a,
+  .admin-merchandise-fulfilment-page .product-actions a {
     width: 100% !important;
   }
 }
@@ -829,17 +831,9 @@ const styles: Record<string, CSSProperties> = {
     overflow: "hidden",
   },
 
-  heroMainRow: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(210px, 0.26fr)",
-    gap: 16,
-    alignItems: "start",
-    minWidth: 0,
-  },
-
   heroBrandRow: {
     display: "grid",
-    gridTemplateColumns: "132px minmax(0, 1fr)",
+    gridTemplateColumns: "116px minmax(0, 1fr)",
     gap: 16,
     alignItems: "center",
     minWidth: 0,
@@ -848,16 +842,16 @@ const styles: Record<string, CSSProperties> = {
   heroLogoPlate: {
     display: "grid",
     placeItems: "center",
-    width: 132,
-    height: 132,
-    borderRadius: 24,
+    width: 116,
+    height: 116,
+    borderRadius: 22,
     background:
       "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(248,250,252,0.94))",
     border: "1px solid rgba(255,255,255,0.20)",
     boxShadow:
-      "0 18px 38px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.86)",
+      "0 14px 30px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.86)",
     overflow: "hidden",
-    padding: 14,
+    padding: 12,
   },
 
   heroLogo: {
@@ -888,15 +882,23 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
   },
 
+  heroActionRow: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+    alignItems: "center",
+  },
+
   statusBadge: {
     display: "inline-flex",
     width: "fit-content",
-    padding: "8px 12px",
+    padding: "7px 11px",
     borderRadius: 999,
     background: "#dcfce7",
     color: "#166534",
     border: "1px solid #bbf7d0",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 950,
     whiteSpace: "nowrap",
   },
@@ -904,12 +906,12 @@ const styles: Record<string, CSSProperties> = {
   planBadge: {
     display: "inline-flex",
     width: "fit-content",
-    padding: "8px 12px",
+    padding: "7px 11px",
     borderRadius: 999,
     background: "rgba(255,255,255,0.08)",
     color: "#dbeafe",
     border: "1px solid rgba(191,219,254,0.36)",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 950,
     whiteSpace: "nowrap",
   },
@@ -917,12 +919,12 @@ const styles: Record<string, CSSProperties> = {
   phaseBadge: {
     display: "inline-flex",
     width: "fit-content",
-    padding: "8px 12px",
+    padding: "7px 11px",
     borderRadius: 999,
     background: "rgba(251,191,36,0.12)",
     color: "#fde68a",
     border: "1px solid rgba(251,191,36,0.54)",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 950,
     whiteSpace: "nowrap",
   },
@@ -930,7 +932,7 @@ const styles: Record<string, CSSProperties> = {
   heroTitle: {
     margin: 0,
     color: "#ffffff",
-    fontSize: "clamp(42px, 6vw, 64px)",
+    fontSize: "clamp(40px, 5.8vw, 60px)",
     lineHeight: 0.94,
     letterSpacing: "-0.078em",
     overflowWrap: "anywhere",
@@ -941,7 +943,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#dbeafe",
     lineHeight: 1.5,
     fontWeight: 720,
-    maxWidth: 820,
+    maxWidth: 880,
     overflowWrap: "anywhere",
   },
 
@@ -979,12 +981,23 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
-  heroActionsPanel: {
-    display: "grid",
-    gridTemplateColumns: "1fr",
-    gap: 10,
-    alignSelf: "stretch",
-    minWidth: 0,
+  primaryPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    minHeight: 38,
+    padding: "9px 13px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    border: "1px solid #1683f8",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+    textAlign: "center",
+    whiteSpace: "nowrap",
+    boxShadow: "0 10px 20px rgba(22,131,248,0.18)",
   },
 
   primaryButton: {
@@ -1024,7 +1037,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     width: "fit-content",
-    minHeight: 40,
+    minHeight: 38,
     padding: "9px 13px",
     borderRadius: 999,
     background: "#ffffff",
