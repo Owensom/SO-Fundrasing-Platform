@@ -475,15 +475,15 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
     ? {
         ...styles.hero,
         background: `
-          radial-gradient(circle at 98% 104%, ${primaryColour}58, transparent 28%),
-          radial-gradient(circle at 8% 12%, ${accentColour}28, transparent 25%),
-          linear-gradient(126deg, #060816 0%, #0f172a 52%, #111827 100%)
+          radial-gradient(circle at 98% 104%, ${primaryColour}42, transparent 28%),
+          radial-gradient(circle at 8% 12%, ${accentColour}22, transparent 25%),
+          linear-gradient(126deg, #060816 0%, #0f172a 58%, #111827 100%)
         `,
       }
     : {
         ...styles.hero,
         background:
-          "radial-gradient(circle at bottom right, rgba(37,99,235,0.24), transparent 40%), radial-gradient(circle at top left, rgba(250,204,21,0.10), transparent 32%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #172554 100%)",
+          "radial-gradient(circle at bottom right, rgba(37,99,235,0.18), transparent 40%), radial-gradient(circle at top left, rgba(250,204,21,0.08), transparent 32%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #172554 100%)",
       };
 
   const brandedPrimaryActionStyle: CSSProperties = canUseAdvancedBranding
@@ -517,6 +517,15 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
         color: "#ffffff",
         boxShadow: "0 18px 34px rgba(22,131,248,0.20)",
       };
+
+  const heroActionPrimaryStyle: CSSProperties = canUseAdvancedBranding
+    ? {
+        ...styles.heroActionPrimary,
+        background: `linear-gradient(135deg, ${primaryColour} 0%, ${accentColour} 135%)`,
+        borderColor: `${primaryColour}88`,
+        color: primaryTextColour,
+      }
+    : styles.heroActionPrimary;
 
   return (
     <main className="public-merchandise-shop-page" style={brandedPageStyle}>
@@ -605,27 +614,11 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
 
       <section className="shopHero" style={brandedHeroStyle}>
         <div style={styles.heroGlow} />
-        <div
-          style={{
-            ...styles.heroLineOne,
-            borderColor: canUseAdvancedBranding
-              ? `${accentColour}24`
-              : "rgba(250,204,21,0.16)",
-          }}
-        />
-        <div
-          style={{
-            ...styles.heroLineTwo,
-            borderColor: canUseAdvancedBranding
-              ? `${primaryColour}1E`
-              : "rgba(37,99,235,0.16)",
-          }}
-        />
 
-        <div className="heroMainGrid" style={styles.heroMainGrid}>
-          <div style={styles.heroCopy}>
+        <div className="heroTopBar" style={styles.heroTopBar}>
+          <div style={styles.heroBadgeGroup}>
             <Link href={`/c/${tenantSlug}`} style={styles.backLink}>
-              ← Back to all campaigns
+              ← Campaigns
             </Link>
 
             <div
@@ -642,139 +635,66 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
             >
               Merchandise / Shop
             </div>
-
-            <h2 style={styles.heroTitle}>{displayName} shop</h2>
-
-            <p style={styles.subtitle}>
-              Browse published merchandise items. Online checkout is not
-              connected yet, so supporters can view products, see fulfilment
-              guidance and contact the organiser.
-            </p>
-
-            <div className="heroStats" style={styles.heroStats}>
-              <div style={styles.heroStat}>
-                <span style={styles.heroStatLabel}>Published items</span>
-                <strong style={styles.heroStatValue}>{products.length}</strong>
-              </div>
-
-              <div style={styles.heroStat}>
-                <span style={styles.heroStatLabel}>Event-linked</span>
-                <strong style={styles.heroStatValue}>{eventLinkedCount}</strong>
-              </div>
-
-              <div style={styles.heroStat}>
-                <span style={styles.heroStatLabel}>Fulfilment info</span>
-                <strong style={styles.heroStatValue}>
-                  {fulfilmentReadyCount}
-                </strong>
-              </div>
-
-              <div style={styles.heroStat}>
-                <span style={styles.heroStatLabel}>Checkout</span>
-                <strong style={styles.heroStatValue}>Coming soon</strong>
-              </div>
-            </div>
           </div>
 
-          <aside style={styles.supportPanel}>
-            <div style={styles.supportPanelHeader}>
-              <span style={styles.supportPanelKicker}>Shop status</span>
-              <h2 style={styles.supportPanelTitle}>Browsing is live</h2>
-            </div>
+          <div style={styles.heroActionStrip}>
+            <a href="#shop-items" style={heroActionPrimaryStyle}>
+              View items ↓
+            </a>
 
-            <p style={styles.supportPanelText}>
-              Products are visible publicly. Secure merchandise checkout, stock
-              handling, receipts and fulfilment automation will be added later.
-            </p>
-
-            <div style={styles.supportOptionList}>
-              <a href="#shop-items" style={styles.supportOptionLink}>
-                <div
-                  style={{
-                    ...styles.supportIcon,
-                    background: canUseAdvancedBranding
-                      ? `linear-gradient(135deg, ${primaryColour}, ${accentColour})`
-                      : "linear-gradient(135deg, #1683F8, #2563eb)",
-                    borderColor: canUseAdvancedBranding
-                      ? `${primaryColour}55`
-                      : "rgba(147,197,253,0.45)",
-                    color: canUseAdvancedBranding ? primaryTextColour : "#ffffff",
-                  }}
-                >
-                  ↓
-                </div>
-
-                <div style={styles.supportOptionCopy}>
-                  <strong>View shop items</strong>
-                  <span>Browse published merchandise and fulfilment notes.</span>
-                </div>
-
-                <span style={styles.supportChevron}>›</span>
+            {contactEmail ? (
+              <a
+                href={`mailto:${contactEmail}?subject=${encodeURIComponent(
+                  `Merchandise enquiry for ${displayName}`,
+                )}`}
+                style={styles.heroActionSecondary}
+              >
+                Ask organiser →
               </a>
+            ) : (
+              <Link
+                href={`/c/${tenantSlug}/contact`}
+                style={styles.heroActionSecondary}
+              >
+                Ask organiser →
+              </Link>
+            )}
+          </div>
+        </div>
 
-              {contactEmail ? (
-                <a
-                  href={`mailto:${contactEmail}?subject=${encodeURIComponent(
-                    `Merchandise enquiry for ${displayName}`,
-                  )}`}
-                  style={styles.supportOptionLink}
-                >
-                  <div
-                    style={{
-                      ...styles.supportIcon,
-                      background: canUseAdvancedBranding
-                        ? `linear-gradient(135deg, ${accentColour}, ${primaryColour})`
-                        : "linear-gradient(135deg, #FACC15, #1683F8)",
-                      borderColor: canUseAdvancedBranding
-                        ? `${accentColour}66`
-                        : "rgba(250,204,21,0.50)",
-                      color: canUseAdvancedBranding
-                        ? accentTextColour
-                        : "#0f172a",
-                    }}
-                  >
-                    ✉
-                  </div>
+        <div className="heroMainGrid" style={styles.heroMainGrid}>
+          <div style={styles.heroCopy}>
+            <h2 className="shopHeroTitle" style={styles.heroTitle}>
+              {displayName} shop
+            </h2>
 
-                  <div style={styles.supportOptionCopy}>
-                    <strong>Contact {contactName || "organiser"}</strong>
-                    <span>Ask a question before checkout is added.</span>
-                  </div>
+            <p style={styles.subtitle}>
+              Browse published merchandise, check fulfilment guidance and
+              contact the organiser. Online checkout is coming soon.
+            </p>
+          </div>
 
-                  <span style={styles.supportChevron}>›</span>
-                </a>
-              ) : (
-                <Link
-                  href={`/c/${tenantSlug}/contact`}
-                  style={styles.supportOptionLink}
-                >
-                  <div
-                    style={{
-                      ...styles.supportIcon,
-                      background: canUseAdvancedBranding
-                        ? `linear-gradient(135deg, ${accentColour}, ${primaryColour})`
-                        : "linear-gradient(135deg, #FACC15, #1683F8)",
-                      borderColor: canUseAdvancedBranding
-                        ? `${accentColour}66`
-                        : "rgba(250,204,21,0.50)",
-                      color: canUseAdvancedBranding
-                        ? accentTextColour
-                        : "#0f172a",
-                    }}
-                  >
-                    ✉
-                  </div>
-
-                  <div style={styles.supportOptionCopy}>
-                    <strong>Contact organiser</strong>
-                    <span>Ask a question before checkout is added.</span>
-                  </div>
-
-                  <span style={styles.supportChevron}>›</span>
-                </Link>
-              )}
+          <div className="heroStats" style={styles.heroStats}>
+            <div style={styles.heroStat}>
+              <span style={styles.heroStatLabel}>Published items</span>
+              <strong style={styles.heroStatValue}>{products.length}</strong>
             </div>
-          </aside>
+
+            <div style={styles.heroStat}>
+              <span style={styles.heroStatLabel}>Event-linked</span>
+              <strong style={styles.heroStatValue}>{eventLinkedCount}</strong>
+            </div>
+
+            <div style={styles.heroStat}>
+              <span style={styles.heroStatLabel}>Fulfilment info</span>
+              <strong style={styles.heroStatValue}>{fulfilmentReadyCount}</strong>
+            </div>
+
+            <div style={styles.heroStat}>
+              <span style={styles.heroStatLabel}>Checkout</span>
+              <strong style={styles.heroStatValue}>Coming soon</strong>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -917,10 +837,13 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
                     </span>
                   </div>
 
-                  {(linkedEventDisplay ||
-                    fulfilmentOptionCount > 0 ||
-                    customerDetailCount > 0) ? (
-                    <div className="productBadgeRow" style={styles.productBadgeRow}>
+                  {linkedEventDisplay ||
+                  fulfilmentOptionCount > 0 ||
+                  customerDetailCount > 0 ? (
+                    <div
+                      className="productBadgeRow"
+                      style={styles.productBadgeRow}
+                    >
                       {linkedEventDisplay ? (
                         <span style={styles.eventBadge}>Event</span>
                       ) : null}
@@ -1139,6 +1062,14 @@ const responsiveStyles = `
     grid-template-columns: 1fr !important;
   }
 
+  .public-merchandise-shop-page .heroTopBar {
+    grid-template-columns: 1fr !important;
+  }
+
+  .public-merchandise-shop-page .heroActionStrip {
+    justify-content: stretch !important;
+  }
+
   .public-merchandise-shop-page .productGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
@@ -1182,24 +1113,25 @@ const responsiveStyles = `
     padding: 12px !important;
   }
 
-  .public-merchandise-shop-page .heroTitle {
-    font-size: clamp(42px, 12vw, 58px) !important;
-    line-height: 0.94 !important;
+  .public-merchandise-shop-page .shopHeroTitle {
+    font-size: clamp(38px, 11vw, 54px) !important;
+    line-height: 0.96 !important;
   }
 
-  .public-merchandise-shop-page .heroStats,
+  .public-merchandise-shop-page .heroStats {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
   .public-merchandise-shop-page .productGrid,
   .public-merchandise-shop-page .productActions,
   .public-merchandise-shop-page .emptyActions {
     grid-template-columns: 1fr !important;
   }
 
-  .public-merchandise-shop-page .supportPanel {
-    padding: 14px !important;
-  }
-
-  .public-merchandise-shop-page .supportOptionLink {
-    grid-template-columns: 44px minmax(0, 1fr) 18px !important;
+  .public-merchandise-shop-page .heroActionStrip {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    width: 100% !important;
   }
 
   .public-merchandise-shop-page .productImageWrap {
@@ -1388,12 +1320,12 @@ const styles: Record<string, CSSProperties> = {
   hero: {
     position: "relative",
     display: "grid",
-    gap: 16,
-    padding: 24,
-    borderRadius: 30,
+    gap: 14,
+    padding: 20,
+    borderRadius: 28,
     color: "#ffffff",
     marginBottom: 16,
-    boxShadow: "0 28px 66px rgba(15,23,42,0.24)",
+    boxShadow: "0 24px 58px rgba(15,23,42,0.20)",
     overflow: "hidden",
     border: "1px solid rgba(255,255,255,0.16)",
   },
@@ -1403,45 +1335,40 @@ const styles: Record<string, CSSProperties> = {
     inset: 0,
     pointerEvents: "none",
     background:
-      "radial-gradient(circle at 20% 18%, rgba(255,255,255,0.08), transparent 30%)",
+      "radial-gradient(circle at 20% 18%, rgba(255,255,255,0.07), transparent 30%)",
   },
 
-  heroLineOne: {
-    position: "absolute",
-    left: -90,
-    bottom: -130,
-    width: 330,
-    height: 330,
-    border: "1px solid",
-    borderRadius: "999px",
-    pointerEvents: "none",
+  heroTopBar: {
+    position: "relative",
+    zIndex: 1,
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 12,
+    alignItems: "center",
+    minWidth: 0,
   },
 
-  heroLineTwo: {
-    position: "absolute",
-    left: -140,
-    bottom: -180,
-    width: 440,
-    height: 440,
-    border: "1px solid",
-    borderRadius: "999px",
-    pointerEvents: "none",
+  heroBadgeGroup: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    alignItems: "center",
+    minWidth: 0,
   },
 
   heroMainGrid: {
     position: "relative",
     zIndex: 1,
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.08fr) minmax(280px, 0.82fr)",
-    gap: 20,
-    alignItems: "stretch",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(360px, 0.48fr)",
+    gap: 16,
+    alignItems: "end",
     minWidth: 0,
   },
 
   heroCopy: {
     display: "grid",
-    alignContent: "center",
-    gap: 14,
+    gap: 10,
     minWidth: 0,
   },
 
@@ -1450,8 +1377,8 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     width: "fit-content",
-    minHeight: 42,
-    padding: "10px 14px",
+    minHeight: 38,
+    padding: "9px 13px",
     borderRadius: 999,
     background: "rgba(255,255,255,0.08)",
     color: "#ffffff",
@@ -1464,6 +1391,8 @@ const styles: Record<string, CSSProperties> = {
   eyebrow: {
     display: "inline-flex",
     width: "fit-content",
+    minHeight: 38,
+    alignItems: "center",
     padding: "8px 13px",
     borderRadius: 999,
     border: "1px solid",
@@ -1477,8 +1406,8 @@ const styles: Record<string, CSSProperties> = {
   heroTitle: {
     margin: 0,
     maxWidth: 760,
-    fontSize: "clamp(42px, 6vw, 66px)",
-    lineHeight: 0.92,
+    fontSize: "clamp(38px, 5.5vw, 60px)",
+    lineHeight: 0.94,
     letterSpacing: "-0.078em",
     overflowWrap: "anywhere",
     textShadow: "0 18px 45px rgba(0,0,0,0.28)",
@@ -1488,31 +1417,32 @@ const styles: Record<string, CSSProperties> = {
     margin: 0,
     maxWidth: 760,
     color: "#e5edf8",
-    fontSize: 17,
-    lineHeight: 1.5,
+    fontSize: 16,
+    lineHeight: 1.45,
     fontWeight: 760,
     overflowWrap: "anywhere",
   },
 
   heroStats: {
     display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 190px))",
-    gap: 10,
-    marginTop: 4,
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 9,
+    minWidth: 0,
   },
 
   heroStat: {
     display: "grid",
     gap: 4,
-    padding: 13,
-    borderRadius: 18,
+    padding: 12,
+    borderRadius: 16,
     background: "rgba(255,255,255,0.10)",
     border: "1px solid rgba(255,255,255,0.16)",
   },
 
   heroStatLabel: {
     color: "#bfdbfe",
-    fontSize: 11,
+    fontSize: 10,
+    lineHeight: 1.1,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.06em",
@@ -1520,101 +1450,51 @@ const styles: Record<string, CSSProperties> = {
 
   heroStatValue: {
     color: "#ffffff",
-    fontSize: 20,
+    fontSize: 19,
     lineHeight: 1.1,
     fontWeight: 950,
-  },
-
-  supportPanel: {
-    display: "grid",
-    gap: 12,
-    alignContent: "center",
-    padding: 19,
-    borderRadius: 26,
-    background: "rgba(15,23,42,0.30)",
-    border: "1px solid rgba(255,255,255,0.18)",
-    boxShadow:
-      "inset 0 1px 0 rgba(255,255,255,0.12), 0 20px 48px rgba(0,0,0,0.16)",
-    backdropFilter: "blur(14px)",
-    minWidth: 0,
-  },
-
-  supportPanelHeader: {
-    display: "grid",
-    gap: 3,
-  },
-
-  supportPanelKicker: {
-    color: "#cbd5e1",
-    fontSize: 11,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-
-  supportPanelTitle: {
-    margin: 0,
-    color: "#ffffff",
-    fontSize: 24,
-    lineHeight: 1.05,
-    letterSpacing: "-0.045em",
-  },
-
-  supportPanelText: {
-    margin: 0,
-    color: "#dbeafe",
-    lineHeight: 1.5,
-    fontSize: 14,
-    fontWeight: 760,
     overflowWrap: "anywhere",
   },
 
-  supportOptionList: {
-    display: "grid",
-    gap: 10,
-  },
-
-  supportOptionLink: {
-    display: "grid",
-    gridTemplateColumns: "48px minmax(0, 1fr) 18px",
-    gap: 12,
-    alignItems: "center",
-    padding: 13,
-    borderRadius: 18,
-    background:
-      "linear-gradient(135deg, rgba(255,255,255,0.13), rgba(255,255,255,0.06))",
-    border: "1px solid rgba(255,255,255,0.20)",
-    color: "#e5edf8",
-    textDecoration: "none",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10)",
-  },
-
-  supportIcon: {
+  heroActionStrip: {
     display: "flex",
+    gap: 9,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    minWidth: 0,
+  },
+
+  heroActionPrimary: {
+    display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    width: 44,
-    height: 44,
-    borderRadius: 16,
-    border: "1px solid",
-    fontSize: 18,
-    fontWeight: 950,
-    boxShadow: "0 10px 22px rgba(0,0,0,0.16)",
-  },
-
-  supportOptionCopy: {
-    display: "grid",
-    gap: 2,
-    minWidth: 0,
-    lineHeight: 1.35,
+    minHeight: 40,
+    padding: "9px 14px",
+    borderRadius: 999,
+    background: "linear-gradient(135deg, #1683F8 0%, #2563eb 100%)",
+    color: "#ffffff",
+    border: "1px solid #1683F8",
+    textDecoration: "none",
     fontSize: 13,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
   },
 
-  supportChevron: {
-    color: "rgba(255,255,255,0.72)",
-    fontSize: 25,
-    lineHeight: 1,
-    fontWeight: 700,
+  heroActionSecondary: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 40,
+    padding: "9px 14px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid rgba(255,255,255,0.84)",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
   },
 
   shopHeader: {
