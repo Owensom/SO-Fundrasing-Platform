@@ -96,6 +96,26 @@ function parseFocus(value: unknown) {
   return Math.max(0, Math.min(100, Math.round(number)));
 }
 
+function parseCheckbox(formData: FormData, name: string) {
+  return formData.get(name) === "1";
+}
+
+function parseNullableUuid(value: unknown) {
+  const clean = cleanText(value);
+
+  if (!clean) return null;
+
+  if (
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      clean,
+    )
+  ) {
+    return clean;
+  }
+
+  return null;
+}
+
 function slugify(value: string) {
   return (
     cleanText(value)
@@ -314,6 +334,45 @@ export async function updateMerchandiseProduct(formData: FormData) {
   const imageFocusY = parseFocus(formData.get("image_focus_y"));
   const options = buildSizeOptions(formData);
 
+  const eventLinkingEnabled = parseCheckbox(formData, "event_linking_enabled");
+  const linkedEventId = eventLinkingEnabled
+    ? parseNullableUuid(formData.get("linked_event_id"))
+    : null;
+
+  const fulfilmentCollectStandEnabled = parseCheckbox(
+    formData,
+    "fulfilment_collect_stand_enabled",
+  );
+  const fulfilmentCollectTableEnabled = parseCheckbox(
+    formData,
+    "fulfilment_collect_table_enabled",
+  );
+  const fulfilmentDeliverTableEnabled = parseCheckbox(
+    formData,
+    "fulfilment_deliver_table_enabled",
+  );
+  const fulfilmentDeliverSeatEnabled = parseCheckbox(
+    formData,
+    "fulfilment_deliver_seat_enabled",
+  );
+  const fulfilmentPostEnabled = parseCheckbox(
+    formData,
+    "fulfilment_post_enabled",
+  );
+  const fulfilmentArrangeWithOrganiserEnabled = parseCheckbox(
+    formData,
+    "fulfilment_arrange_with_organiser_enabled",
+  );
+
+  const requireBookingReference = parseCheckbox(
+    formData,
+    "require_booking_reference",
+  );
+  const requireTableNumber = parseCheckbox(formData, "require_table_number");
+  const requireSeatNumber = parseCheckbox(formData, "require_seat_number");
+  const requireGuestName = parseCheckbox(formData, "require_guest_name");
+  const fulfilmentNotes = cleanText(formData.get("fulfilment_notes"));
+
   if (!title) {
     redirect(
       `/admin/merchandise/${encodeURIComponent(
@@ -342,7 +401,21 @@ export async function updateMerchandiseProduct(formData: FormData) {
         currency = $10,
         stock_quantity = $11,
         status = $12,
-        options_json = $13::jsonb
+        options_json = $13::jsonb,
+        linked_event_id = $14::uuid,
+        event_linking_enabled = $15,
+        fulfilment_collect_stand_enabled = $16,
+        fulfilment_collect_table_enabled = $17,
+        fulfilment_deliver_table_enabled = $18,
+        fulfilment_deliver_seat_enabled = $19,
+        fulfilment_post_enabled = $20,
+        fulfilment_arrange_with_organiser_enabled = $21,
+        fulfilment_notes = nullif($22, ''),
+        require_booking_reference = $23,
+        require_table_number = $24,
+        require_seat_number = $25,
+        require_guest_name = $26,
+        updated_at = now()
       where tenant_slug = $1
         and id = $2
     `,
@@ -360,6 +433,19 @@ export async function updateMerchandiseProduct(formData: FormData) {
       stockQuantity,
       status,
       JSON.stringify(options),
+      linkedEventId,
+      eventLinkingEnabled,
+      fulfilmentCollectStandEnabled,
+      fulfilmentCollectTableEnabled,
+      fulfilmentDeliverTableEnabled,
+      fulfilmentDeliverSeatEnabled,
+      fulfilmentPostEnabled,
+      fulfilmentArrangeWithOrganiserEnabled,
+      fulfilmentNotes,
+      requireBookingReference,
+      requireTableNumber,
+      requireSeatNumber,
+      requireGuestName,
     ],
   );
 
