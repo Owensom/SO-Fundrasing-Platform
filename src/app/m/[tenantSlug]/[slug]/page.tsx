@@ -12,6 +12,8 @@ import {
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+const DEFAULT_MERCHANDISE_IMAGE_SRC = "/brand/so-default-merchandise.png";
+
 type MerchandiseOption = {
   type?: string | null;
   label?: string | null;
@@ -250,7 +252,9 @@ export async function generateMetadata({
     cleanText(product.description) ||
     `Support ${displayName} through merchandise.`;
 
-  const imageUrl = canUseProductImages ? cleanText(product.image_url) : "";
+  const imageUrl = canUseProductImages
+    ? cleanText(product.image_url, DEFAULT_MERCHANDISE_IMAGE_SRC)
+    : DEFAULT_MERCHANDISE_IMAGE_SRC;
 
   return {
     title: `${product.title} | ${displayName}`,
@@ -418,7 +422,13 @@ export default async function PublicMerchandiseProductPage({
                 }}
               />
             ) : (
-              <div style={styles.imageFallback}>SHOP</div>
+              <div style={styles.imageFallback}>
+                <img
+                  src={DEFAULT_MERCHANDISE_IMAGE_SRC}
+                  alt="Merchandise"
+                  style={styles.defaultMerchandiseImage}
+                />
+              </div>
             )}
           </div>
         </aside>
@@ -848,15 +858,19 @@ const styles: Record<string, CSSProperties> = {
   imageFallback: {
     display: "grid",
     placeItems: "center",
-    width: 126,
-    height: 126,
-    borderRadius: 34,
-    background: "#ffffff",
-    color: "#0f172a",
-    border: "1px solid rgba(255,255,255,0.62)",
-    fontSize: 20,
-    fontWeight: 950,
-    letterSpacing: "0.08em",
+    width: "100%",
+    minHeight: 360,
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(248,250,252,0.96))",
+    padding: 26,
+    boxSizing: "border-box",
+  },
+
+  defaultMerchandiseImage: {
+    display: "block",
+    width: "min(86%, 330px)",
+    height: "min(86%, 300px)",
+    objectFit: "contain",
   },
 
   infoGrid: {
