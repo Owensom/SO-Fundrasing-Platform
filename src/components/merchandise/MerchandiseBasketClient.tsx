@@ -295,7 +295,9 @@ export default function MerchandiseBasketClient({
     ? validationResult.basket?.lines || []
     : [];
 
-  const basketIsReady = Boolean(validationResult?.ok && validatedLines.length > 0);
+  const basketIsReady = Boolean(
+    validationResult?.ok && validatedLines.length > 0,
+  );
 
   function resetCheckoutState() {
     setValidationResult(null);
@@ -356,7 +358,10 @@ export default function MerchandiseBasketClient({
     setCheckoutMessage(null);
   }
 
-  function getDetailsError(lines: ValidatedBasketLine[]) {
+  function getDetailsError(
+    lines: ValidatedBasketLine[],
+    detailsByLine: Record<string, LineFulfilmentDetails>,
+  ) {
     const customerName = cleanText(buyerDetails.customerName);
     const customerEmail = cleanText(buyerDetails.customerEmail);
 
@@ -370,7 +375,7 @@ export default function MerchandiseBasketClient({
 
     for (const line of lines) {
       const key = getLineKey(line);
-      const details = lineDetails[key];
+      const details = detailsByLine[key];
 
       if (!details?.fulfilmentMethod) {
         return `Please choose collection or delivery for ${line.title}.`;
@@ -423,20 +428,30 @@ export default function MerchandiseBasketClient({
     setValidationResult(json);
 
     if (json.ok && json.basket?.lines) {
-      setLineDetails((current) => {
-        const initial = getInitialLineDetails(json.basket?.lines || []);
+      const nextLineDetails = {
+        ...getInitialLineDetails(json.basket.lines),
+        ...lineDetails,
+      };
 
-        return {
-          ...initial,
-          ...current,
-        };
-      });
+      setLineDetails(nextLineDetails);
+
+      return {
+        result: json,
+        lines: json.basket.lines,
+        nextLineDetails,
+      };
     }
 
-    return json;
+    return {
+      result: json,
+      lines: [] as ValidatedBasketLine[],
+      nextLineDetails: lineDetails,
+    };
   }
 
-  async function createPendingOrder() {
+  async function createPendingOrder(
+    nextLineDetails: Record<string, LineFulfilmentDetails>,
+  ) {
     const response = await fetch("/api/merchandise/orders/create", {
       method: "POST",
       headers: {
@@ -446,7 +461,7 @@ export default function MerchandiseBasketClient({
         tenantSlug,
         items: getValidationPayloadItems(items),
         buyerDetails,
-        lineDetails,
+        lineDetails: nextLineDetails,
       }),
     });
 
@@ -493,17 +508,20 @@ export default function MerchandiseBasketClient({
     try {
       const validation = await validateBasketForCheckout();
 
-      if (!validation.ok || !validation.basket?.lines?.length) {
+      if (!validation.result.ok || validation.lines.length === 0) {
         setCheckoutMessage({
           tone: "bad",
           text:
-            validation.error ||
+            validation.result.error ||
             "Your basket could not be checked. Please review it and try again.",
         });
         return;
       }
 
-      const detailsError = getDetailsError(validation.basket.lines);
+      const detailsError = getDetailsError(
+        validation.lines,
+        validation.nextLineDetails,
+      );
 
       if (detailsError) {
         setCheckoutMessage({
@@ -513,7 +531,7 @@ export default function MerchandiseBasketClient({
         return;
       }
 
-      const pendingOrder = await createPendingOrder();
+      const pendingOrder = await createPendingOrder(validation.nextLineDetails);
 
       if (!pendingOrder.ok || !pendingOrder.order) {
         setCheckoutMessage({
@@ -897,10 +915,16 @@ export default function MerchandiseBasketClient({
               <p style={{ ...styles.kicker, color: primaryColour }}>
                 Checkout details
               </p>
-              <h2 style={styles.detailsTitle}>Checking basket</h2>
+              <h2 style={styles.detailsTitle}>
+                {validationResult && !validationResult.ok
+                  ? "Basket needs attention"
+                  : "Checking basket"}
+              </h2>
               <p style={styles.detailsIntro}>
-                We are checking current price, stock and options before showing
-                checkout details.
+                {validationResult && !validationResult.ok
+                  ? validationResult.error ||
+                    "Something in your basket needs attention before checkout."
+                  : "We are checking current price, stock and options before showing checkout details."}
               </p>
             </section>
           )}
@@ -973,17 +997,11 @@ export default function MerchandiseBasketClient({
 
           <button
             type="submit"
-            disabled={!basketIsReady || isCheckingBasket || isStartingCheckout}
+            disabled={isStartingCheckout}
             style={{
               ...styles.stripeButton,
-              opacity:
-                !basketIsReady || isCheckingBasket || isStartingCheckout
-                  ? 0.72
-                  : 1,
-              cursor:
-                !basketIsReady || isCheckingBasket || isStartingCheckout
-                  ? "not-allowed"
-                  : "pointer",
+              opacity: isStartingCheckout ? 0.72 : 1,
+              cursor: isStartingCheckout ? "not-allowed" : "pointer",
             }}
           >
             {isStartingCheckout
