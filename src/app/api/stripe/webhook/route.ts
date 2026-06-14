@@ -8,6 +8,7 @@ import {
   sendReceiptEmail,
   sendSquaresReceiptEmail,
 } from "@/lib/email";
+import { sendMerchandiseReceiptEmail } from "@/lib/merchandise-email";
 import {
   getAuctionWinningBidPaymentByBidId,
   markAuctionWinningBidPaid,
@@ -135,6 +136,15 @@ type MerchandiseOrderDetails = {
   status: string;
   customer_name: string | null;
   customer_email: string | null;
+  customer_phone: string | null;
+  fulfilment_method: string | null;
+  linked_event_id: string | null;
+  linked_event_title: string | null;
+  booking_reference: string | null;
+  table_number: string | null;
+  seat_number: string | null;
+  guest_name: string | null;
+  customer_note: string | null;
   subtotal_cents: number;
   platform_fee_cents: number;
   stripe_fee_cents: number;
@@ -156,6 +166,10 @@ type MerchandiseOrderItemDetails = {
   unit_price_cents: number;
   line_total_cents: number;
   currency: string;
+  linked_event_id: string | null;
+  linked_event_title: string | null;
+  fulfilment_method: string | null;
+  fulfilment_note: string | null;
 };
 
 type HigherOrLowerGameSession = {
@@ -520,6 +534,7 @@ function higherOrLowerPlayerEntryLabel(entry: {
 }) {
   return `${cleanText(entry.player_name) || "Player"} #${entry.entry_number}`;
 }
+
 async function getPaymentIntentDetails(paymentIntentId: string | null) {
   if (!paymentIntentId) {
     return {
@@ -570,7 +585,6 @@ async function getPaymentIntentDetails(paymentIntentId: string | null) {
     };
   }
 }
-
 async function getCheckoutFinancials({
   session,
   metadata,
@@ -914,21 +928,33 @@ async function getMerchandiseOrderDetails(input: {
   const rows = await query<MerchandiseOrderDetails>(
     `
       select
-        id::text as id,
-        tenant_slug,
-        order_reference,
-        status,
-        customer_name,
-        customer_email,
-        subtotal_cents,
-        platform_fee_cents,
-        stripe_fee_cents,
-        total_cents,
-        currency,
-        stripe_checkout_session_id,
-        stripe_payment_intent_id
+        merchandise_orders.id::text as id,
+        merchandise_orders.tenant_slug,
+        merchandise_orders.order_reference,
+        merchandise_orders.status,
+        merchandise_orders.customer_name,
+        merchandise_orders.customer_email,
+        merchandise_orders.customer_phone,
+        merchandise_orders.fulfilment_method,
+        merchandise_orders.linked_event_id::text,
+        events.title as linked_event_title,
+        merchandise_orders.booking_reference,
+        merchandise_orders.table_number,
+        merchandise_orders.seat_number,
+        merchandise_orders.guest_name,
+        merchandise_orders.customer_note,
+        merchandise_orders.subtotal_cents,
+        merchandise_orders.platform_fee_cents,
+        merchandise_orders.stripe_fee_cents,
+        merchandise_orders.total_cents,
+        merchandise_orders.currency,
+        merchandise_orders.stripe_checkout_session_id,
+        merchandise_orders.stripe_payment_intent_id
       from merchandise_orders
-      where id = $1::uuid
+      left join events
+        on events.id = merchandise_orders.linked_event_id
+       and events.tenant_slug = merchandise_orders.tenant_slug
+      where merchandise_orders.id = $1::uuid
       limit 1
     `,
     [input.orderId],
@@ -955,21 +981,28 @@ async function listMerchandiseOrderItems(input: {
   return query<MerchandiseOrderItemDetails>(
     `
       select
-        id::text as id,
-        tenant_slug,
-        order_id::text as order_id,
-        product_id,
-        product_title,
-        product_slug,
-        option_label,
-        quantity,
-        unit_price_cents,
-        line_total_cents,
-        currency
+        merchandise_order_items.id::text as id,
+        merchandise_order_items.tenant_slug,
+        merchandise_order_items.order_id::text as order_id,
+        merchandise_order_items.product_id,
+        merchandise_order_items.product_title,
+        merchandise_order_items.product_slug,
+        merchandise_order_items.option_label,
+        merchandise_order_items.quantity,
+        merchandise_order_items.unit_price_cents,
+        merchandise_order_items.line_total_cents,
+        merchandise_order_items.currency,
+        merchandise_order_items.linked_event_id::text,
+        events.title as linked_event_title,
+        merchandise_order_items.fulfilment_method,
+        merchandise_order_items.fulfilment_note
       from merchandise_order_items
-      where tenant_slug = $1
-        and order_id = $2::uuid
-      order by created_at asc
+      left join events
+        on events.id = merchandise_order_items.linked_event_id
+       and events.tenant_slug = merchandise_order_items.tenant_slug
+      where merchandise_order_items.tenant_slug = $1
+        and merchandise_order_items.order_id = $2::uuid
+      order by merchandise_order_items.created_at asc
     `,
     [input.tenantSlug, input.orderId],
   );
@@ -1030,6 +1063,7 @@ async function incrementMerchandiseSoldQuantities(input: {
     );
   }
 }
+
 async function getHigherOrLowerSession(input: {
   tenantSlug: string;
   eventId: string;
@@ -1446,7 +1480,6 @@ async function recordPlatformPayment(input: {
     ],
   );
 }
-
 export async function POST(request: NextRequest) {
   try {
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -1548,7 +1581,8 @@ export async function POST(request: NextRequest) {
       session.customer_details?.email || session.customer_email || null;
 
     const name = session.customer_details?.name || null;
-        if (type === "donation") {
+
+    if (type === "donation") {
       const donationId = String(
         metadata.donation_id ||
           metadata.donationId ||
@@ -2039,10 +2073,13 @@ export async function POST(request: NextRequest) {
 
       const tenantSlug = merchandiseOrder.tenant_slug;
 
-      const merchandiseItems = await listMerchandiseOrderItems({
-        tenantSlug,
-        orderId: merchandiseOrder.id,
-      });
+      const [merchandiseItems, emailBranding] = await Promise.all([
+        listMerchandiseOrderItems({
+          tenantSlug,
+          orderId: merchandiseOrder.id,
+        }),
+        getTenantEmailBranding(tenantSlug),
+      ]);
 
       if (merchandiseItems.length === 0) {
         console.error("Stripe merchandise webhook found empty order", {
@@ -2085,6 +2122,44 @@ export async function POST(request: NextRequest) {
         financials,
       });
 
+      const merchandiseReceiptEmail =
+        email || merchandiseOrder.customer_email || null;
+
+      if (merchandiseReceiptEmail) {
+        try {
+          await sendMerchandiseReceiptEmail({
+            to: merchandiseReceiptEmail,
+            name: name || merchandiseOrder.customer_name,
+            orderReference: merchandiseOrder.order_reference,
+            amountCents: grossAmountCents || merchandiseOrder.total_cents,
+            currency: session.currency || merchandiseOrder.currency || "GBP",
+            items: merchandiseItems.map((item) => ({
+              productTitle: item.product_title,
+              optionLabel: item.option_label,
+              quantity: Number(item.quantity || 0),
+              unitPriceCents: Number(item.unit_price_cents || 0),
+              lineTotalCents: Number(item.line_total_cents || 0),
+              currency: item.currency,
+              linkedEventTitle:
+                item.linked_event_title || merchandiseOrder.linked_event_title,
+              fulfilmentMethod:
+                item.fulfilment_method || merchandiseOrder.fulfilment_method,
+              fulfilmentNote: item.fulfilment_note,
+            })),
+            fulfilmentMethod: merchandiseOrder.fulfilment_method,
+            linkedEventTitle: merchandiseOrder.linked_event_title,
+            bookingReference: merchandiseOrder.booking_reference,
+            tableNumber: merchandiseOrder.table_number,
+            seatNumber: merchandiseOrder.seat_number,
+            guestName: merchandiseOrder.guest_name,
+            customerNote: merchandiseOrder.customer_note,
+            branding: emailBranding,
+          });
+        } catch (emailError) {
+          console.error("Merchandise receipt email failed:", emailError);
+        }
+      }
+
       return NextResponse.json({
         ok: true,
         event: event.type,
@@ -2094,6 +2169,7 @@ export async function POST(request: NextRequest) {
         merchandiseOrderReference: merchandiseOrder.order_reference,
         tenantSlug,
         itemsUpdated: merchandiseItems.length,
+        merchandiseReceiptEmailSent: Boolean(merchandiseReceiptEmail),
         stripeConnectRouted,
         stripeConnectAccountId,
         stripeTransferId,
