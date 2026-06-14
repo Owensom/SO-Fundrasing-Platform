@@ -128,6 +128,36 @@ type DonationDetails = {
   gift_aid_claimed: boolean;
 };
 
+type MerchandiseOrderDetails = {
+  id: string;
+  tenant_slug: string;
+  order_reference: string;
+  status: string;
+  customer_name: string | null;
+  customer_email: string | null;
+  subtotal_cents: number;
+  platform_fee_cents: number;
+  stripe_fee_cents: number;
+  total_cents: number;
+  currency: string;
+  stripe_checkout_session_id: string | null;
+  stripe_payment_intent_id: string | null;
+};
+
+type MerchandiseOrderItemDetails = {
+  id: string;
+  tenant_slug: string;
+  order_id: string;
+  product_id: string;
+  product_title: string;
+  product_slug: string;
+  option_label: string | null;
+  quantity: number;
+  unit_price_cents: number;
+  line_total_cents: number;
+  currency: string;
+};
+
 type HigherOrLowerGameSession = {
   id: string;
 };
@@ -337,6 +367,7 @@ function getConnectedAccountIdFromEvent(event: Stripe.Event) {
 
   return "";
 }
+
 function isStripeConnectAccountEvent(eventType: string) {
   return (
     eventType === "account.updated" ||
@@ -388,7 +419,8 @@ function normalisePaymentType(value: unknown) {
     rawType === "squares" ||
     rawType === "raffle" ||
     rawType === "auction_winning_bid" ||
-    rawType === "donation"
+    rawType === "donation" ||
+    rawType === "merchandise"
   ) {
     return rawType;
   }
@@ -488,7 +520,6 @@ function higherOrLowerPlayerEntryLabel(entry: {
 }) {
   return `${cleanText(entry.player_name) || "Player"} #${entry.entry_number}`;
 }
-
 async function getPaymentIntentDetails(paymentIntentId: string | null) {
   if (!paymentIntentId) {
     return {
@@ -787,6 +818,7 @@ async function getVerifiedSquaresReservation(input: {
 
   return reservation;
 }
+
 async function getSquaresGameDetails(input: {
   gameId: string;
   tenantSlug: string;
@@ -875,6 +907,129 @@ async function markDonationPaid(input: {
   );
 }
 
+async function getMerchandiseOrderDetails(input: {
+  orderId: string;
+  metadataTenantSlug: string;
+}): Promise<MerchandiseOrderDetails | null> {
+  const rows = await query<MerchandiseOrderDetails>(
+    `
+      select
+        id::text as id,
+        tenant_slug,
+        order_reference,
+        status,
+        customer_name,
+        customer_email,
+        subtotal_cents,
+        platform_fee_cents,
+        stripe_fee_cents,
+        total_cents,
+        currency,
+        stripe_checkout_session_id,
+        stripe_payment_intent_id
+      from merchandise_orders
+      where id = $1::uuid
+      limit 1
+    `,
+    [input.orderId],
+  );
+
+  const order = rows[0] || null;
+
+  if (!order) return null;
+
+  if (
+    input.metadataTenantSlug &&
+    input.metadataTenantSlug !== order.tenant_slug
+  ) {
+    return null;
+  }
+
+  return order;
+}
+
+async function listMerchandiseOrderItems(input: {
+  tenantSlug: string;
+  orderId: string;
+}) {
+  return query<MerchandiseOrderItemDetails>(
+    `
+      select
+        id::text as id,
+        tenant_slug,
+        order_id::text as order_id,
+        product_id,
+        product_title,
+        product_slug,
+        option_label,
+        quantity,
+        unit_price_cents,
+        line_total_cents,
+        currency
+      from merchandise_order_items
+      where tenant_slug = $1
+        and order_id = $2::uuid
+      order by created_at asc
+    `,
+    [input.tenantSlug, input.orderId],
+  );
+}
+
+async function markMerchandiseOrderPaid(input: {
+  tenantSlug: string;
+  orderId: string;
+  stripeCheckoutSessionId: string;
+  stripePaymentIntentId: string | null;
+  grossAmountCents: number;
+  platformFeeCents: number;
+  currency: string | null;
+}) {
+  await query(
+    `
+      update merchandise_orders
+      set
+        status = 'paid',
+        stripe_checkout_session_id = $3,
+        stripe_payment_intent_id = $4,
+        paid_at = now(),
+        total_cents = $5,
+        platform_fee_cents = $6,
+        currency = coalesce($7, currency),
+        updated_at = now()
+      where tenant_slug = $1
+        and id = $2::uuid
+        and status <> 'paid'
+    `,
+    [
+      input.tenantSlug,
+      input.orderId,
+      input.stripeCheckoutSessionId,
+      input.stripePaymentIntentId,
+      input.grossAmountCents,
+      input.platformFeeCents,
+      input.currency,
+    ],
+  );
+}
+
+async function incrementMerchandiseSoldQuantities(input: {
+  tenantSlug: string;
+  items: MerchandiseOrderItemDetails[];
+}) {
+  for (const item of input.items) {
+    await query(
+      `
+        update merchandise_products
+        set
+          sold_quantity = coalesce(sold_quantity, 0) + $3,
+          updated_at = now()
+        where tenant_slug = $1
+          and id = $2
+      `,
+      [input.tenantSlug, item.product_id, Number(item.quantity || 0)],
+    );
+  }
+}
 async function getHigherOrLowerSession(input: {
   tenantSlug: string;
   eventId: string;
@@ -1291,6 +1446,7 @@ async function recordPlatformPayment(input: {
     ],
   );
 }
+
 export async function POST(request: NextRequest) {
   try {
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -1392,8 +1548,7 @@ export async function POST(request: NextRequest) {
       session.customer_details?.email || session.customer_email || null;
 
     const name = session.customer_details?.name || null;
-
-    if (type === "donation") {
+        if (type === "donation") {
       const donationId = String(
         metadata.donation_id ||
           metadata.donationId ||
@@ -1816,7 +1971,140 @@ export async function POST(request: NextRequest) {
         netAmountCents,
       });
     }
-        const reservationToken = String(
+
+    if (type === "merchandise") {
+      const merchandiseOrderId = String(
+        metadata.merchandise_order_id ||
+          metadata.merchandiseOrderId ||
+          session.client_reference_id ||
+          "",
+      ).trim();
+
+      const merchandiseOrderReference = String(
+        metadata.merchandise_order_reference ||
+          metadata.merchandiseOrderReference ||
+          "",
+      ).trim();
+
+      if (!merchandiseOrderId) {
+        console.error("Stripe merchandise webhook missing order id", {
+          checkoutSessionId: session.id,
+          metadata,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Missing merchandise order id",
+        });
+      }
+
+      const merchandiseOrder = await getMerchandiseOrderDetails({
+        orderId: merchandiseOrderId,
+        metadataTenantSlug,
+      });
+
+      if (!merchandiseOrder) {
+        console.error("Stripe merchandise webhook failed order verification", {
+          checkoutSessionId: session.id,
+          merchandiseOrderId,
+          merchandiseOrderReference,
+          metadataTenantSlug,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Merchandise order verification failed",
+        });
+      }
+
+      if (
+        merchandiseOrderReference &&
+        merchandiseOrder.order_reference !== merchandiseOrderReference
+      ) {
+        console.error("Stripe merchandise webhook failed reference check", {
+          checkoutSessionId: session.id,
+          merchandiseOrderId,
+          metadataOrderReference: merchandiseOrderReference,
+          actualOrderReference: merchandiseOrder.order_reference,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Merchandise order reference verification failed",
+        });
+      }
+
+      const tenantSlug = merchandiseOrder.tenant_slug;
+
+      const merchandiseItems = await listMerchandiseOrderItems({
+        tenantSlug,
+        orderId: merchandiseOrder.id,
+      });
+
+      if (merchandiseItems.length === 0) {
+        console.error("Stripe merchandise webhook found empty order", {
+          checkoutSessionId: session.id,
+          merchandiseOrderId: merchandiseOrder.id,
+          tenantSlug,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "Merchandise order has no items",
+        });
+      }
+
+      await markMerchandiseOrderPaid({
+        tenantSlug,
+        orderId: merchandiseOrder.id,
+        stripeCheckoutSessionId: session.id,
+        stripePaymentIntentId: paymentIntentId,
+        grossAmountCents,
+        platformFeeCents,
+        currency: session.currency || merchandiseOrder.currency || "GBP",
+      });
+
+      await incrementMerchandiseSoldQuantities({
+        tenantSlug,
+        items: merchandiseItems,
+      });
+
+      await recordPlatformPayment({
+        session,
+        paymentIntentId,
+        raffleId: null,
+        tenantSlug,
+        reservationToken: merchandiseOrder.order_reference,
+        paymentType: "merchandise",
+        squaresGameId: null,
+        email: email || merchandiseOrder.customer_email || null,
+        financials,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        event: event.type,
+        type,
+        checkoutSessionId: session.id,
+        merchandiseOrderId: merchandiseOrder.id,
+        merchandiseOrderReference: merchandiseOrder.order_reference,
+        tenantSlug,
+        itemsUpdated: merchandiseItems.length,
+        stripeConnectRouted,
+        stripeConnectAccountId,
+        stripeTransferId,
+        stripeDestinationAccountId,
+        applicationFeeAmountCents,
+        platformFeeCents,
+        netAmountCents,
+      });
+    }
+
+    const reservationToken = String(
       metadata.reservation_token ||
         metadata.reservationToken ||
         metadata.reservation_id ||
