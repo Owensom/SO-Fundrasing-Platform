@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties, FormEvent } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type BasketItem = {
   productId: string;
@@ -59,6 +59,10 @@ function writeBasket(tenantSlug: string, items: BasketItem[]) {
   window.localStorage.setItem(getBasketKey(tenantSlug), JSON.stringify(items));
 }
 
+function getBasketCount(items: BasketItem[]) {
+  return items.reduce((total, item) => total + Number(item.quantity || 0), 0);
+}
+
 export default function MerchandiseAddToBasketPanel({
   tenantSlug,
   productId,
@@ -76,6 +80,11 @@ export default function MerchandiseAddToBasketPanel({
   const [quantity, setQuantity] = useState("1");
   const [optionLabel, setOptionLabel] = useState(sizeOptions[0] || "");
   const [message, setMessage] = useState("");
+  const [basketCount, setBasketCount] = useState(0);
+
+  useEffect(() => {
+    setBasketCount(getBasketCount(readBasket(tenantSlug)));
+  }, [tenantSlug]);
 
   function handleAddToBasket(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -121,6 +130,7 @@ export default function MerchandiseAddToBasketPanel({
     }
 
     writeBasket(tenantSlug, existing);
+    setBasketCount(getBasketCount(existing));
 
     setMessage(
       `${safeQuantity} × ${productTitle}${
@@ -139,7 +149,8 @@ export default function MerchandiseAddToBasketPanel({
         <h2 style={styles.title}>Add to basket</h2>
 
         <p style={styles.text}>
-          Add this item now, then continue browsing before checkout is connected.
+          Add this item, keep browsing, then review your basket before checkout
+          is connected.
         </p>
       </div>
 
@@ -148,6 +159,14 @@ export default function MerchandiseAddToBasketPanel({
         <strong style={styles.summaryValue}>{priceDisplay}</strong>
         <span style={styles.stockText}>{stockLabel}</span>
       </div>
+
+      {basketCount > 0 ? (
+        <a href={`/m/${tenantSlug}/basket`} style={styles.basketStatus}>
+          <strong>{basketCount}</strong>
+          <span>{basketCount === 1 ? "item" : "items"} in basket</span>
+          <em>View basket →</em>
+        </a>
+      ) : null}
 
       <div className="basket-field-grid" style={styles.fieldGrid}>
         <label style={styles.field}>
@@ -186,22 +205,29 @@ export default function MerchandiseAddToBasketPanel({
         ) : null}
       </div>
 
-      <button
-        type="submit"
-        style={{
-          ...styles.submitButton,
-          background: primaryColour,
-          borderColor: primaryColour,
-          color: primaryTextColour,
-        }}
-      >
-        Add to basket
-      </button>
+      <div style={styles.buttonGrid}>
+        <button
+          type="submit"
+          style={{
+            ...styles.submitButton,
+            background: primaryColour,
+            borderColor: primaryColour,
+            color: primaryTextColour,
+          }}
+        >
+          Add to basket
+        </button>
+
+        <a href={`/m/${tenantSlug}/basket`} style={styles.viewBasketButton}>
+          View basket →
+        </a>
+      </div>
 
       {message ? <p style={styles.message}>{message}</p> : null}
 
       <p style={styles.bottomNote}>
-        Basket review and Stripe checkout will be connected in the next phase.
+        Basket review is active. Stripe checkout will be connected in the next
+        controlled phase.
       </p>
     </form>
   );
@@ -226,7 +252,8 @@ const responsiveStyles = `
 }
 
 @media (max-width: 680px) {
-  .merchandise-add-basket .basket-field-grid {
+  .merchandise-add-basket .basket-field-grid,
+  .merchandise-add-basket .basket-button-grid {
     grid-template-columns: 1fr !important;
   }
 }
@@ -292,6 +319,22 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 820,
   },
 
+  basketStatus: {
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0, 1fr) auto",
+    gap: 8,
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 18,
+    background: "#f0fdf4",
+    color: "#166534",
+    border: "1px solid #bbf7d0",
+    textDecoration: "none",
+    fontSize: 13,
+    lineHeight: 1.25,
+    fontWeight: 850,
+  },
+
   fieldGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
@@ -321,6 +364,12 @@ const styles: Record<string, CSSProperties> = {
     outline: "none",
   },
 
+  buttonGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: 9,
+  },
+
   submitButton: {
     width: "100%",
     minHeight: 48,
@@ -330,6 +379,22 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 950,
     cursor: "pointer",
     boxShadow: "0 12px 24px rgba(22,131,248,0.16)",
+  },
+
+  viewBasketButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    minHeight: 48,
+    padding: "11px 15px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid #cbd5e1",
+    textDecoration: "none",
+    fontWeight: 950,
+    textAlign: "center",
   },
 
   message: {
