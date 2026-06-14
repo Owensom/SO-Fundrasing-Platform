@@ -305,49 +305,47 @@ export default async function AdminMerchandiseOrdersPage() {
       <style>{responsiveStyles}</style>
 
       <section className="orders-hero" style={styles.hero}>
-        <div style={styles.heroImageWrap}>
-          <img
-            src={DEFAULT_MERCHANDISE_IMAGE_SRC}
-            alt=""
-            aria-hidden="true"
-            style={styles.heroImage}
-          />
-        </div>
-
-        <div style={styles.heroContent}>
-          <div style={styles.heroTopRow}>
-            <div style={styles.badgeRow}>
-              <span style={styles.statusBadge}>Merchandise orders</span>
-              <span style={styles.planBadge}>{getTierLabel(tier)} plan</span>
-              <span style={styles.phaseBadge}>Read-only</span>
+        <div className="hero-main-row" style={styles.heroMainRow}>
+          <div className="hero-brand-row" style={styles.heroBrandRow}>
+            <div className="hero-logo-plate" style={styles.heroLogoPlate}>
+              <img
+                src={DEFAULT_MERCHANDISE_IMAGE_SRC}
+                alt=""
+                aria-hidden="true"
+                style={styles.heroLogo}
+              />
             </div>
 
-            <Link href="/admin/merchandise" style={styles.secondaryHeroButton}>
-              ← Back to merchandise
-            </Link>
+            <div style={styles.heroTitleBlock}>
+              <div style={styles.heroTopRow}>
+                <div style={styles.badgeRow}>
+                  <span style={styles.statusBadge}>Merchandise orders</span>
+                  <span style={styles.planBadge}>{getTierLabel(tier)} plan</span>
+                  <span style={styles.phaseBadge}>Read-only</span>
+                </div>
+
+                <Link href="/admin/merchandise" style={styles.secondaryHeroButton}>
+                  ← Merchandise
+                </Link>
+              </div>
+
+              <h1 className="orders-title" style={styles.heroTitle}>
+                Orders
+              </h1>
+
+              <p style={styles.heroDescription}>
+                Review merchandise order records once checkout is introduced.
+                This page is read-only and does not create checkouts, update
+                payments, send emails or adjust stock.
+              </p>
+            </div>
           </div>
 
-          <h1 className="orders-title" style={styles.heroTitle}>
-            Orders
-          </h1>
-
-          <p style={styles.heroDescription}>
-            Review merchandise order records once checkout is introduced. This
-            page is read-only and does not create checkouts, update payments,
-            send emails or adjust stock.
-          </p>
-
-          <div className="hero-stats" style={styles.heroStats}>
-            <StatCard label="Orders" value={orders.length} />
-            <StatCard label="Checkout started" value={checkoutStartedOrders.length} />
-            <StatCard label="Paid" value={paidOrders.length} />
-            <StatCard label="Fulfilled" value={fulfilledOrders.length} />
-            <StatCard label="Total recorded" value={formatMoney(grossTotalCents)} />
-            <StatCard label="Paid recorded" value={formatMoney(paidTotalCents)} />
-          </div>
-
-          <div style={styles.heroActions}>
-            <Link href="/admin/merchandise/fulfilment" style={styles.primaryButton}>
+          <div style={styles.heroActionsPanel}>
+            <Link
+              href="/admin/merchandise/fulfilment"
+              style={styles.primaryButton}
+            >
               Fulfilment planning →
             </Link>
 
@@ -355,6 +353,24 @@ export default async function AdminMerchandiseOrdersPage() {
               Product catalogue →
             </Link>
           </div>
+        </div>
+
+        <div className="hero-stats" style={styles.heroStats}>
+          <StatCard label="Orders" value={orders.length} />
+          <StatCard
+            label="Checkout started"
+            value={checkoutStartedOrders.length}
+          />
+          <StatCard label="Paid" value={paidOrders.length} />
+          <StatCard label="Fulfilled" value={fulfilledOrders.length} />
+          <StatCard
+            label="Total recorded"
+            value={formatMoney(grossTotalCents)}
+          />
+          <StatCard
+            label="Paid recorded"
+            value={formatMoney(paidTotalCents)}
+          />
         </div>
       </section>
 
@@ -638,7 +654,8 @@ const responsiveStyles = `
 }
 
 @media (max-width: 920px) {
-  .admin-merchandise-orders-page .orders-hero,
+  .admin-merchandise-orders-page .hero-main-row,
+  .admin-merchandise-orders-page .hero-brand-row,
   .admin-merchandise-orders-page .order-main-row {
     grid-template-columns: 1fr !important;
   }
@@ -647,6 +664,15 @@ const responsiveStyles = `
   .admin-merchandise-orders-page .readiness-grid,
   .admin-merchandise-orders-page .order-info-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .admin-merchandise-orders-page .hero-actions-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .admin-merchandise-orders-page .hero-logo-plate {
+    width: 132px !important;
+    height: 132px !important;
   }
 }
 
@@ -666,13 +692,18 @@ const responsiveStyles = `
     line-height: 0.98 !important;
   }
 
+  .admin-merchandise-orders-page .hero-logo-plate {
+    width: 110px !important;
+    height: 110px !important;
+  }
+
   .admin-merchandise-orders-page .hero-stats,
   .admin-merchandise-orders-page .readiness-grid,
-  .admin-merchandise-orders-page .order-info-grid {
+  .admin-merchandise-orders-page .order-info-grid,
+  .admin-merchandise-orders-page .hero-actions-panel {
     grid-template-columns: 1fr !important;
   }
 
-  .admin-merchandise-orders-page .hero-actions,
   .admin-merchandise-orders-page .empty-actions {
     display: grid !important;
     grid-template-columns: 1fr !important;
@@ -700,47 +731,66 @@ const styles: Record<string, CSSProperties> = {
 
   hero: {
     display: "grid",
-    gridTemplateColumns: "minmax(240px, 0.62fr) minmax(0, 1.38fr)",
-    gap: 22,
-    padding: 24,
-    borderRadius: 30,
+    gap: 16,
+    padding: 20,
+    borderRadius: 28,
     background:
-      "radial-gradient(circle at bottom right, rgba(250,204,21,0.15), transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 56%, #172554 100%)",
+      "radial-gradient(circle at 96% 0%, rgba(250,204,21,0.18), transparent 30%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #172554 100%)",
     color: "#ffffff",
     marginBottom: 18,
-    boxShadow: "0 26px 64px rgba(15,23,42,0.20)",
+    boxShadow: "0 24px 60px rgba(15,23,42,0.18)",
     overflow: "hidden",
   },
 
-  heroImageWrap: {
-    minHeight: 250,
-    borderRadius: 24,
-    background:
-      "linear-gradient(135deg, #ffffff 0%, #f8fafc 58%, #eff6ff 100%)",
+  heroMainRow: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(210px, 0.26fr)",
+    gap: 16,
+    alignItems: "start",
+    minWidth: 0,
+  },
+
+  heroBrandRow: {
+    display: "grid",
+    gridTemplateColumns: "132px minmax(0, 1fr)",
+    gap: 16,
+    alignItems: "center",
+    minWidth: 0,
+  },
+
+  heroLogoPlate: {
     display: "grid",
     placeItems: "center",
-    padding: 24,
+    width: 132,
+    height: 132,
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(248,250,252,0.94))",
+    border: "1px solid rgba(255,255,255,0.20)",
+    boxShadow:
+      "0 18px 38px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.86)",
     overflow: "hidden",
+    padding: 14,
   },
 
-  heroImage: {
+  heroLogo: {
     display: "block",
-    width: "min(88%, 230px)",
-    height: "min(88%, 210px)",
+    width: "100%",
+    height: "100%",
     objectFit: "contain",
   },
 
-  heroContent: {
+  heroTitleBlock: {
     display: "grid",
-    gap: 14,
-    alignContent: "start",
+    gap: 10,
+    minWidth: 0,
   },
 
   heroTopRow: {
     display: "flex",
     gap: 12,
     justifyContent: "space-between",
-    alignItems: "flex-start",
+    alignItems: "center",
     flexWrap: "wrap",
   },
 
@@ -793,7 +843,7 @@ const styles: Record<string, CSSProperties> = {
   heroTitle: {
     margin: 0,
     color: "#ffffff",
-    fontSize: "clamp(54px, 7vw, 82px)",
+    fontSize: "clamp(42px, 6vw, 64px)",
     lineHeight: 0.94,
     letterSpacing: "-0.078em",
     overflowWrap: "anywhere",
@@ -802,47 +852,52 @@ const styles: Record<string, CSSProperties> = {
   heroDescription: {
     margin: 0,
     color: "#dbeafe",
-    lineHeight: 1.55,
-    fontWeight: 740,
+    lineHeight: 1.5,
+    fontWeight: 720,
     maxWidth: 820,
+    overflowWrap: "anywhere",
   },
 
   heroStats: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 10,
+    gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
+    gap: 9,
   },
 
   statCard: {
-    padding: 13,
-    borderRadius: 18,
-    background: "rgba(255,255,255,0.10)",
-    border: "1px solid rgba(255,255,255,0.16)",
+    padding: 12,
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.09)",
+    border: "1px solid rgba(255,255,255,0.15)",
+    minWidth: 0,
   },
 
   statLabel: {
     display: "block",
     color: "#fde68a",
     fontSize: 11,
-    fontWeight: 950,
+    lineHeight: 1.1,
+    fontWeight: 900,
     textTransform: "uppercase",
-    letterSpacing: "0.06em",
+    letterSpacing: "0.04em",
   },
 
   statValue: {
     display: "block",
-    marginTop: 4,
+    marginTop: 5,
     color: "#ffffff",
-    fontSize: 24,
+    fontSize: 21,
     lineHeight: 1,
     fontWeight: 950,
     overflowWrap: "anywhere",
   },
 
-  heroActions: {
-    display: "flex",
+  heroActionsPanel: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
     gap: 10,
-    flexWrap: "wrap",
+    alignSelf: "stretch",
+    minWidth: 0,
   },
 
   primaryButton: {
@@ -882,12 +937,13 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     width: "fit-content",
-    minHeight: 42,
-    padding: "10px 14px",
+    minHeight: 40,
+    padding: "9px 13px",
     borderRadius: 999,
     background: "#ffffff",
     color: "#0f172a",
     textDecoration: "none",
+    fontSize: 13,
     fontWeight: 950,
     whiteSpace: "nowrap",
   },
