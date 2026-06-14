@@ -57,6 +57,22 @@ type BasketValidationResult = {
   };
 };
 
+type PendingOrderResult = {
+  ok?: boolean;
+  error?: string;
+  errors?: string[];
+  message?: string;
+  order?: {
+    id: string;
+    orderReference: string;
+    status: string;
+    subtotalCents: number;
+    totalCents: number;
+    currency: string;
+    itemCount: number;
+  };
+};
+
 type BuyerDetails = {
   customerName: string;
   customerEmail: string;
@@ -162,8 +178,12 @@ export default function MerchandiseBasketClient({
 }: MerchandiseBasketClientProps) {
   const [items, setItems] = useState<BasketItem[]>([]);
   const [isValidating, setIsValidating] = useState(false);
+  const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [validationResult, setValidationResult] =
     useState<BasketValidationResult | null>(null);
+  const [orderResult, setOrderResult] = useState<PendingOrderResult | null>(
+    null,
+  );
 
   const [buyerDetails, setBuyerDetails] = useState<BuyerDetails>({
     customerName: "",
@@ -212,11 +232,16 @@ export default function MerchandiseBasketClient({
 
   const hasValidatedBasket = validationResult?.ok && validatedLines.length > 0;
 
+  function resetOrderState() {
+    setOrderResult(null);
+    setDetailsMessage(null);
+  }
+
   function updateItems(nextItems: BasketItem[]) {
     setItems(nextItems);
     setValidationResult(null);
     setLineDetails({});
-    setDetailsMessage(null);
+    resetOrderState();
     writeBasket(tenantSlug, nextItems);
   }
 
@@ -243,7 +268,7 @@ export default function MerchandiseBasketClient({
       ...current,
       [field]: value,
     }));
-    setDetailsMessage(null);
+    resetOrderState();
   }
 
   function updateLineField(
@@ -264,13 +289,14 @@ export default function MerchandiseBasketClient({
         [field]: value,
       },
     }));
-    setDetailsMessage(null);
+    resetOrderState();
   }
 
   async function validateBasket() {
     setIsValidating(true);
     setValidationResult(null);
     setLineDetails({});
+    setOrderResult(null);
     setDetailsMessage(null);
 
     try {
@@ -302,26 +328,20 @@ export default function MerchandiseBasketClient({
     }
   }
 
-  function checkDetailsReady(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
+  function getDetailsError() {
     const customerName = cleanText(buyerDetails.customerName);
     const customerEmail = cleanText(buyerDetails.customerEmail);
 
+    if (!hasValidatedBasket) {
+      return "Please validate your basket first.";
+    }
+
     if (!customerName) {
-      setDetailsMessage({
-        tone: "bad",
-        text: "Please enter your name.",
-      });
-      return;
+      return "Please enter your name.";
     }
 
     if (!customerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
-      setDetailsMessage({
-        tone: "bad",
-        text: "Please enter a valid email address.",
-      });
-      return;
+      return "Please enter a valid email address.";
     }
 
     for (const line of validatedLines) {
@@ -329,65 +349,119 @@ export default function MerchandiseBasketClient({
       const details = lineDetails[key];
 
       if (!details?.fulfilmentMethod) {
-        setDetailsMessage({
-          tone: "bad",
-          text: `Please choose fulfilment for ${line.title}.`,
-        });
-        return;
+        return `Please choose fulfilment for ${line.title}.`;
       }
 
       if (
         line.fulfilmentMethods.length > 0 &&
         !line.fulfilmentMethods.includes(details.fulfilmentMethod)
       ) {
-        setDetailsMessage({
-          tone: "bad",
-          text: `Please choose a valid fulfilment option for ${line.title}.`,
-        });
-        return;
+        return `Please choose a valid fulfilment option for ${line.title}.`;
       }
 
       if (
         line.requiredDetails.bookingReference &&
         !cleanText(details.bookingReference)
       ) {
-        setDetailsMessage({
-          tone: "bad",
-          text: `Please enter the booking reference for ${line.title}.`,
-        });
-        return;
+        return `Please enter the booking reference for ${line.title}.`;
       }
 
       if (line.requiredDetails.tableNumber && !cleanText(details.tableNumber)) {
-        setDetailsMessage({
-          tone: "bad",
-          text: `Please enter the table number for ${line.title}.`,
-        });
-        return;
+        return `Please enter the table number for ${line.title}.`;
       }
 
       if (line.requiredDetails.seatNumber && !cleanText(details.seatNumber)) {
-        setDetailsMessage({
-          tone: "bad",
-          text: `Please enter the seat number for ${line.title}.`,
-        });
-        return;
+        return `Please enter the seat number for ${line.title}.`;
       }
 
       if (line.requiredDetails.guestName && !cleanText(details.guestName)) {
-        setDetailsMessage({
-          tone: "bad",
-          text: `Please enter the guest name for ${line.title}.`,
-        });
-        return;
+        return `Please enter the guest name for ${line.title}.`;
       }
+    }
+
+    return "";
+  }
+
+  function checkDetailsReady(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const error = getDetailsError();
+
+    if (error) {
+      setDetailsMessage({
+        tone: "bad",
+        text: error,
+      });
+      return;
     }
 
     setDetailsMessage({
       tone: "good",
       text:
-        "Buyer and fulfilment details are ready. The next phase will create a pending merchandise order before Stripe checkout.",
+        "Buyer and fulfilment details are ready. You can now create a pending merchandise order.",
     });
+  }
+
+  async function createPendingOrder() {
+    const error = getDetailsError();
+
+    if (error) {
+      setDetailsMessage({
+        tone: "bad",
+        text: error,
+      });
+      return;
+    }
+
+    setIsCreatingOrder(true);
+    setOrderResult(null);
+
+    try {
+      const response = await fetch("/api/merchandise/orders/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          tenantSlug,
+          items: getValidationPayloadItems(items),
+          buyerDetails,
+          lineDetails,
+        }),
+      });
+
+      const json = (await response.json()) as PendingOrderResult;
+      setOrderResult(json);
+
+      if (json.ok) {
+        setDetailsMessage({
+          tone: "good",
+          text:
+            "Pending order created. Stripe checkout will be connected in the next controlled phase.",
+        });
+      } else {
+        setDetailsMessage({
+          tone: "bad",
+          text:
+            json.error ||
+            "The pending merchandise order could not be created.",
+        });
+      }
+    } catch {
+      setOrderResult({
+        ok: false,
+        error:
+          "We could not create the pending order. Please refresh the page and try again.",
+      });
+
+      setDetailsMessage({
+        tone: "bad",
+        text:
+          "We could not create the pending order. Please refresh the page and try again.",
+      });
+    } finally {
+      setIsCreatingOrder(false);
+    }
   }
 
   if (items.length === 0) {
@@ -587,13 +661,13 @@ export default function MerchandiseBasketClient({
           <button
             type="button"
             onClick={validateBasket}
-            disabled={isValidating}
+            disabled={isValidating || Boolean(orderResult?.ok)}
             style={{
               ...styles.validateButton,
               background: primaryColour,
               borderColor: primaryColour,
               color: primaryTextColour,
-              opacity: isValidating ? 0.72 : 1,
+              opacity: isValidating || orderResult?.ok ? 0.72 : 1,
             }}
           >
             {isValidating ? "Validating basket..." : "Validate basket"}
@@ -632,8 +706,8 @@ export default function MerchandiseBasketClient({
               <h2 style={styles.detailsTitle}>Add checkout details</h2>
 
               <p style={styles.detailsIntro}>
-                These details will be used in the next phase to create a pending
-                merchandise order before Stripe checkout.
+                These details are used to create a pending merchandise order
+                before Stripe checkout is connected.
               </p>
             </div>
           </div>
@@ -842,21 +916,68 @@ export default function MerchandiseBasketClient({
             </div>
           ) : null}
 
+          {orderResult ? (
+            <div
+              style={{
+                ...styles.orderResultPanel,
+                ...(orderResult.ok
+                  ? styles.orderResultGood
+                  : styles.orderResultBad),
+              }}
+            >
+              <strong style={styles.orderResultTitle}>
+                {orderResult.ok ? "Pending order created" : "Order not created"}
+              </strong>
+
+              <span style={styles.orderResultText}>
+                {orderResult.ok
+                  ? orderResult.message ||
+                    "Pending merchandise order created."
+                  : orderResult.error ||
+                    "The pending merchandise order could not be created."}
+              </span>
+
+              {orderResult.ok && orderResult.order ? (
+                <span style={styles.orderReference}>
+                  Reference: {orderResult.order.orderReference}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+
           <div style={styles.detailsActions}>
             <button
               type="submit"
               style={{
-                ...styles.validateButton,
-                background: primaryColour,
+                ...styles.secondaryActionButton,
                 borderColor: primaryColour,
-                color: primaryTextColour,
+                color: primaryColour,
               }}
             >
               Check checkout details
             </button>
 
+            <button
+              type="button"
+              onClick={createPendingOrder}
+              disabled={isCreatingOrder || Boolean(orderResult?.ok)}
+              style={{
+                ...styles.validateButton,
+                background: primaryColour,
+                borderColor: primaryColour,
+                color: primaryTextColour,
+                opacity: isCreatingOrder || orderResult?.ok ? 0.72 : 1,
+              }}
+            >
+              {isCreatingOrder
+                ? "Creating pending order..."
+                : orderResult?.ok
+                  ? "Pending order created"
+                  : "Create pending order"}
+            </button>
+
             <button type="button" disabled style={styles.disabledButton}>
-              Create order not connected yet
+              Stripe checkout not connected yet
             </button>
           </div>
         </form>
@@ -1159,6 +1280,17 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 12px 24px rgba(22,131,248,0.16)",
   },
 
+  secondaryActionButton: {
+    width: "100%",
+    minHeight: 48,
+    padding: "11px 15px",
+    borderRadius: 999,
+    background: "#ffffff",
+    border: "1px solid",
+    fontWeight: 950,
+    cursor: "pointer",
+  },
+
   disabledButton: {
     width: "100%",
     minHeight: 48,
@@ -1323,6 +1455,51 @@ const styles: Record<string, CSSProperties> = {
     background: "#fef2f2",
     color: "#991b1b",
     borderColor: "#fecaca",
+  },
+
+  orderResultPanel: {
+    display: "grid",
+    gap: 5,
+    padding: 13,
+    borderRadius: 18,
+    border: "1px solid",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 850,
+  },
+
+  orderResultGood: {
+    background: "#f0fdf4",
+    color: "#166534",
+    borderColor: "#bbf7d0",
+  },
+
+  orderResultBad: {
+    background: "#fef2f2",
+    color: "#991b1b",
+    borderColor: "#fecaca",
+  },
+
+  orderResultTitle: {
+    color: "inherit",
+    fontSize: 14,
+    fontWeight: 950,
+  },
+
+  orderResultText: {
+    color: "inherit",
+  },
+
+  orderReference: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid #bbf7d0",
+    fontSize: 12,
+    fontWeight: 950,
   },
 
   detailsActions: {
