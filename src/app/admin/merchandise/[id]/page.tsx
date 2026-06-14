@@ -333,7 +333,7 @@ export default async function EditMerchandiseProductPage({
         <section style={styles.card}>
           <p style={styles.kicker}>Pricing and stock</p>
 
-          <div className="form-grid" style={styles.formGrid}>
+          <div className="pricing-grid" style={styles.pricingGrid}>
             <Field label="Price" helper="Enter pounds, for example 15 or 15.00.">
               <input
                 name="price"
@@ -350,7 +350,7 @@ export default async function EditMerchandiseProductPage({
                 type="text"
                 defaultValue={product.currency || "GBP"}
                 maxLength={3}
-                style={styles.input}
+                style={styles.currencyInput}
               />
             </Field>
 
@@ -498,6 +498,16 @@ const responsiveStyles = `
   }
 }
 
+@media (max-width: 780px) {
+  .admin-merchandise-form-page .pricing-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .admin-merchandise-form-page .currency-field {
+    max-width: 100% !important;
+  }
+}
+
 @media (max-width: 720px) {
   .admin-merchandise-form-page {
     padding: 18px 12px 44px !important;
@@ -641,6 +651,13 @@ const styles: Record<string, CSSProperties> = {
     gap: 14,
   },
 
+  pricingGrid: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(112px, 150px)",
+    gap: 14,
+    alignItems: "start",
+  },
+
   sizeGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
@@ -720,6 +737,22 @@ const styles: Record<string, CSSProperties> = {
     padding: "11px 13px",
     fontSize: 15,
     fontWeight: 750,
+    boxSizing: "border-box",
+  },
+
+  currencyInput: {
+    width: "100%",
+    minHeight: 48,
+    borderRadius: 16,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    padding: "11px 13px",
+    fontSize: 15,
+    fontWeight: 850,
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+    textAlign: "center",
     boxSizing: "border-box",
   },
 
