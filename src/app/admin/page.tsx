@@ -568,7 +568,7 @@ export default async function AdminDashboardPage() {
           href="/admin/orders"
           badgeText="ORDERS"
           title="Orders"
-          description="Review raffle sales, squares sales, event orders and auction bids."
+          description="Review raffle sales, squares sales, event orders, auction bids, donations and merchandise purchases."
           stats="Unified activity dashboard"
           tone="blue"
           compact
@@ -661,11 +661,10 @@ export default async function AdminDashboardPage() {
 
         <DashboardCard
           href="/admin/merchandise"
-          badgeText="SHOP"
+          image="/brand/so-default-merchandise.png"
           title="Merchandise"
-          description="Set up branded merchandise products before public shop and checkout are connected."
-          stats={`${merchandiseProducts.length} products · ${publishedMerchandiseProducts.length} published`}
-          tone="gold"
+          description="Manage branded merchandise products, public shop display, basket checkout and paid merchandise orders."
+          stats={`${merchandiseProducts.length} products · ${publishedMerchandiseProducts.length} published · ${merchandiseSold} sold`}
           locked={!merchandiseCapability.allowed}
           lockText="Professional required"
         />
