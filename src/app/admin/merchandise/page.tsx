@@ -169,7 +169,7 @@ function getStockLabel(product: MerchandiseProduct) {
   const remaining = getStockRemaining(product);
 
   if (remaining === null) {
-    return "Manual / not limited";
+    return "Not limited";
   }
 
   if (remaining === 1) {
@@ -248,10 +248,10 @@ function getCustomerDetailLabel(product: MerchandiseProduct) {
   }
 
   if (count === 1) {
-    return "1 detail later";
+    return "1 checkout detail";
   }
 
-  return `${count} details later`;
+  return `${count} checkout details`;
 }
 
 function getProductReadinessTone(product: MerchandiseProduct) {
@@ -278,7 +278,7 @@ function getProductReadinessLabel(product: MerchandiseProduct) {
     return "Public, needs fulfilment";
   }
 
-  return "Public display ready";
+  return "Checkout ready";
 }
 
 function readinessPillStyle(tone: "good" | "warning" | "neutral") {
@@ -407,7 +407,7 @@ export default async function AdminMerchandisePage() {
   const fulfilmentReadyProducts = products.filter(
     (product) => getFulfilmentOptionCount(product) > 0,
   );
-  const publicDisplayReadyProducts = products.filter(
+  const checkoutReadyProducts = products.filter(
     (product) =>
       product.status === "published" && getFulfilmentOptionCount(product) > 0,
   );
@@ -444,7 +444,7 @@ export default async function AdminMerchandisePage() {
                 <div style={styles.badgeRow}>
                   <span style={styles.statusBadge}>Merchandise / Shop</span>
                   <span style={styles.planBadge}>{getTierLabel(tier)} plan</span>
-                  <span style={styles.phaseBadge}>Display + planning ready</span>
+                  <span style={styles.phaseBadge}>Checkout live</span>
                 </div>
 
                 <Link href="/admin" style={styles.secondaryButton}>
@@ -457,9 +457,10 @@ export default async function AdminMerchandisePage() {
               </h1>
 
               <p style={styles.heroDescription}>
-                Manage products, event links, fulfilment planning and future
-                order readiness. Public browsing is live; checkout, stock
-                automation and receipts remain disconnected.
+                Manage products, event links, fulfilment settings and paid
+                merchandise orders. Public browsing and Stripe checkout are
+                live; payments update order status and sold quantities after
+                webhook confirmation.
               </p>
             </div>
           </div>
@@ -485,12 +486,12 @@ export default async function AdminMerchandisePage() {
           <StatCard label="Published" value={publishedProducts.length} />
           <StatCard label="Event-linked" value={eventLinkedProducts.length} />
           <StatCard
-            label="Display ready"
-            value={publicDisplayReadyProducts.length}
+            label="Checkout ready"
+            value={checkoutReadyProducts.length}
           />
-          <StatCard label="Manual sold" value={soldQuantity} />
+          <StatCard label="Sold quantity" value={soldQuantity} />
           <StatCard
-            label="Manual estimate"
+            label="Recorded sales"
             value={formatMoney(estimatedRevenueCents)}
           />
         </div>
@@ -529,10 +530,10 @@ export default async function AdminMerchandisePage() {
                 <h2 style={styles.readinessTitle}>Merchandise workspace</h2>
 
                 <p style={styles.readinessIntro}>
-                  Published products are visible on the public shop. This is
-                  still a display-only merchandise phase: supporters can view
-                  items, see event fulfilment guidance, and contact the
-                  organiser, but they cannot buy online yet.
+                  Published products are visible on the public shop and can be
+                  bought through secure Stripe checkout. Paid orders appear in
+                  Orders, and sold quantities update after the payment webhook
+                  confirms success.
                 </p>
               </div>
             </div>
@@ -545,18 +546,20 @@ export default async function AdminMerchandisePage() {
               </Link>
 
               <Link href="/admin/merchandise/orders" style={styles.actionCard}>
-                <span style={styles.actionKicker}>Read-only</span>
+                <span style={styles.actionKicker}>Live</span>
                 <strong style={styles.actionTitle}>Orders</strong>
-                <span style={styles.actionText}>View order records later.</span>
+                <span style={styles.actionText}>
+                  View checkout-started and paid orders.
+                </span>
               </Link>
 
               <Link
                 href="/admin/merchandise/fulfilment"
                 style={styles.actionCard}
               >
-                <span style={styles.actionKicker}>Planning</span>
+                <span style={styles.actionKicker}>Manual</span>
                 <strong style={styles.actionTitle}>Fulfilment</strong>
-                <span style={styles.actionText}>Review event collection.</span>
+                <span style={styles.actionText}>Plan collection and delivery.</span>
               </Link>
 
               <Link
@@ -583,42 +586,42 @@ export default async function AdminMerchandisePage() {
               <ReadinessItem
                 label="Admin setup"
                 value="Live"
-                detail="Product records, images, prices, stock notes, options, event links and fulfilment setup can be managed."
+                detail="Product records, images, prices, stock limits, options, event links and fulfilment setup can be managed."
                 tone="good"
               />
 
               <ReadinessItem
                 label="Public shop"
-                value="Live display"
+                value="Live"
                 detail="Published products appear on the tenant shop and product pages."
                 tone="good"
               />
 
               <ReadinessItem
-                label="Fulfilment display"
-                value={`${fulfilmentReadyProducts.length} configured`}
-                detail="Configured fulfilment options now show on public product pages as guidance only."
-                tone={fulfilmentReadyProducts.length ? "good" : "neutral"}
-              />
-
-              <ReadinessItem
-                label="Event linking"
-                value={`${eventLinkedProducts.length} linked`}
-                detail="Products can be linked to tenant events for later collection, table or seat delivery workflows."
-                tone={eventLinkedProducts.length ? "good" : "neutral"}
-              />
-
-              <ReadinessItem
                 label="Checkout"
-                value="Not connected"
-                detail="Stripe checkout, receipts, order records, stock decrementing and fulfilment automation are not live yet."
-                tone="warning"
+                value="Connected"
+                detail="Basket checkout validates products, creates an order and opens Stripe checkout."
+                tone="good"
               />
 
               <ReadinessItem
-                label="Orders"
-                value="Read-only ready"
-                detail="Order tables and the read-only orders page are ready, but no checkout creates records yet."
+                label="Payments"
+                value="Webhook live"
+                detail="Successful Stripe payments mark merchandise orders as paid and store the payment intent."
+                tone="good"
+              />
+
+              <ReadinessItem
+                label="Stock sold count"
+                value="Connected"
+                detail="Sold quantity increases only after Stripe confirms successful payment."
+                tone="good"
+              />
+
+              <ReadinessItem
+                label="Receipts"
+                value="Planned"
+                detail="Merchandise-specific customer receipt emails are not wired in yet."
                 tone="neutral"
               />
             </div>
@@ -639,8 +642,9 @@ export default async function AdminMerchandisePage() {
 
               <p style={styles.emptyText}>
                 Create your first merchandise product. Draft products stay
-                admin-only. Published products appear on the public shop, but
-                online checkout is not connected yet.
+                admin-only. Published products appear on the public shop and can
+                be bought through secure checkout when merchandise is available
+                on the tenant plan.
               </p>
 
               <Link href="/admin/merchandise/new" style={styles.emptyButton}>
@@ -658,9 +662,9 @@ export default async function AdminMerchandisePage() {
                   <div style={styles.sectionEyebrow}>Products</div>
                   <h2 style={styles.sectionTitle}>Product catalogue</h2>
                   <p style={styles.sectionIntro}>
-                    Published products are public. Draft products are private.
-                    The public pages are display-only until checkout is added.
-                    Fulfilment and event-linking readiness are shown per product.
+                    Published products are public and available through the
+                    merchandise basket. Fulfilment and event-linking readiness
+                    are shown per product.
                   </p>
                 </div>
               </div>
@@ -692,7 +696,7 @@ export default async function AdminMerchandisePage() {
             <SummaryCard
               label="Event-linked products"
               value={eventLinkedProducts.length}
-              text="Connected to tenant events for later fulfilment workflows."
+              text="Connected to tenant events for collection or delivery workflows."
             />
 
             <SummaryCard
@@ -702,8 +706,8 @@ export default async function AdminMerchandisePage() {
             />
 
             <SummaryCard
-              label="Display-ready products"
-              value={publicDisplayReadyProducts.length}
+              label="Checkout-ready products"
+              value={checkoutReadyProducts.length}
               text="Published products with fulfilment guidance configured."
             />
 
@@ -835,7 +839,7 @@ function ProductCard({ product }: { product: MerchandiseProduct }) {
                   <span style={styles.eventPill}>Event-linked</span>
                 ) : null}
 
-                <span style={styles.displayOnlyPill}>Display-only</span>
+                <span style={styles.checkoutPill}>Checkout enabled</span>
               </div>
 
               <h3 style={styles.itemTitle}>{product.title}</h3>
@@ -852,7 +856,7 @@ function ProductCard({ product }: { product: MerchandiseProduct }) {
           >
             <InfoBlock label="Stock" value={getStockLabel(product)} />
 
-            <InfoBlock label="Manual sold" value={product.sold_quantity} />
+            <InfoBlock label="Sold quantity" value={product.sold_quantity} />
 
             <InfoBlock
               label="Sizes"
@@ -867,7 +871,7 @@ function ProductCard({ product }: { product: MerchandiseProduct }) {
             />
 
             <InfoBlock
-              label="Later checkout details"
+              label="Checkout details"
               value={getCustomerDetailLabel(product)}
             />
 
@@ -1166,9 +1170,9 @@ const styles: Record<string, CSSProperties> = {
     width: "fit-content",
     padding: "8px 12px",
     borderRadius: 999,
-    background: "rgba(251,191,36,0.12)",
-    color: "#fde68a",
-    border: "1px solid rgba(251,191,36,0.54)",
+    background: "rgba(34,197,94,0.14)",
+    color: "#bbf7d0",
+    border: "1px solid rgba(134,239,172,0.54)",
     fontSize: 13,
     fontWeight: 950,
     whiteSpace: "nowrap",
@@ -1625,15 +1629,15 @@ const styles: Record<string, CSSProperties> = {
     whiteSpace: "nowrap",
   },
 
-  displayOnlyPill: {
+  checkoutPill: {
     display: "inline-flex",
     alignItems: "center",
     width: "fit-content",
     padding: "7px 10px",
     borderRadius: 999,
-    background: "#f8fafc",
-    color: "#475569",
-    border: "1px solid #e2e8f0",
+    background: "#ecfdf5",
+    color: "#166534",
+    border: "1px solid #bbf7d0",
     fontSize: 12,
     fontWeight: 950,
     whiteSpace: "nowrap",
