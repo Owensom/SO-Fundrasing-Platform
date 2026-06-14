@@ -1,0 +1,1220 @@
+import type { CSSProperties, ReactNode } from "react";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
+import { query } from "@/lib/db";
+import { getTenantSlugFromHeaders } from "@/lib/tenant";
+import { getTenantSettings } from "@/lib/tenant-settings";
+import {
+  checkSubscriptionCapability,
+  getMerchandiseUpgradeMessage,
+  getTierLabel,
+  normaliseSubscriptionTier,
+} from "@/lib/subscription-capabilities";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const DEFAULT_MERCHANDISE_IMAGE_SRC = "/brand/so-default-merchandise.png";
+
+type TenantSettingsLike = {
+  subscription_tier?: string | null;
+  subscription_status?: string | null;
+  platform_owner_bypass?: boolean | null;
+};
+
+type MerchandiseOrder = {
+  id: string;
+  tenant_slug: string;
+  order_reference: string;
+  status: string;
+  customer_name: string | null;
+  customer_email: string | null;
+  customer_phone: string | null;
+  fulfilment_method: string | null;
+  linked_event_id: string | null;
+  linked_event_title: string | null;
+  booking_reference: string | null;
+  table_number: string | null;
+  seat_number: string | null;
+  guest_name: string | null;
+  customer_note: string | null;
+  subtotal_cents: number;
+  platform_fee_cents: number;
+  stripe_fee_cents: number;
+  total_cents: number;
+  currency: string;
+  stripe_checkout_session_id: string | null;
+  stripe_payment_intent_id: string | null;
+  paid_at: string | null;
+  fulfilled_at: string | null;
+  fulfilment_status: string;
+  internal_note: string | null;
+  created_at: string;
+  updated_at: string;
+  item_count: number;
+  total_quantity: number;
+  product_titles: string | null;
+};
+
+function cleanText(value: unknown, fallback = "") {
+  const clean = String(value ?? "").trim();
+  return clean || fallback;
+}
+
+function formatMoney(cents: number, currency = "GBP") {
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: cleanText(currency, "GBP"),
+    }).format(Number(cents || 0) / 100);
+  } catch {
+    return `£${(Number(cents || 0) / 100).toFixed(2)}`;
+  }
+}
+
+function formatDate(value: string | null | undefined) {
+  if (!value) return "Not set";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Not set";
+  }
+
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function orderStatusLabel(status: string) {
+  if (status === "checkout_started") return "Checkout started";
+  if (status === "paid") return "Paid";
+  if (status === "payment_failed") return "Payment failed";
+  if (status === "cancelled") return "Cancelled";
+  if (status === "refunded") return "Refunded";
+  if (status === "fulfilled") return "Fulfilled";
+  if (status === "part_fulfilled") return "Part fulfilled";
+  return "Draft";
+}
+
+function fulfilmentStatusLabel(status: string) {
+  if (status === "ready_for_collection") return "Ready for collection";
+  if (status === "collected") return "Collected";
+  if (status === "ready_for_delivery") return "Ready for delivery";
+  if (status === "delivered") return "Delivered";
+  if (status === "posted") return "Posted";
+  if (status === "arranged") return "Arranged";
+  if (status === "cancelled") return "Cancelled";
+  return "Not started";
+}
+
+function fulfilmentMethodLabel(method: string | null) {
+  if (method === "collect_stand") return "Collect from stand";
+  if (method === "collect_table") return "Collect from table";
+  if (method === "deliver_table") return "Deliver to table";
+  if (method === "deliver_seat") return "Deliver to seat";
+  if (method === "post_after_event") return "Post after event";
+  if (method === "arrange_with_organiser") return "Arrange with organiser";
+  return "Not selected";
+}
+
+function statusTone(status: string): "good" | "warning" | "neutral" | "danger" {
+  if (status === "paid" || status === "fulfilled") return "good";
+  if (status === "checkout_started" || status === "part_fulfilled") {
+    return "warning";
+  }
+  if (status === "payment_failed" || status === "cancelled") return "danger";
+  return "neutral";
+}
+
+function statusPillStyle(tone: "good" | "warning" | "neutral" | "danger") {
+  if (tone === "good") {
+    return {
+      background: "#dcfce7",
+      color: "#166534",
+      borderColor: "#86efac",
+    };
+  }
+
+  if (tone === "warning") {
+    return {
+      background: "#fffbeb",
+      color: "#92400e",
+      borderColor: "#fde68a",
+    };
+  }
+
+  if (tone === "danger") {
+    return {
+      background: "#fef2f2",
+      color: "#991b1b",
+      borderColor: "#fecaca",
+    };
+  }
+
+  return {
+    background: "#f8fafc",
+    color: "#475569",
+    borderColor: "#e2e8f0",
+  };
+}
+
+async function requireTenantAccess() {
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect("/admin/login");
+  }
+
+  const tenantSlug = await getTenantSlugFromHeaders();
+
+  const sessionTenantSlugs = Array.isArray(session.user.tenantSlugs)
+    ? session.user.tenantSlugs.map((value) => String(value))
+    : [];
+
+  if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
+    redirect("/admin/login?error=tenant_access_denied");
+  }
+
+  return tenantSlug;
+}
+
+async function listMerchandiseOrders(tenantSlug: string) {
+  return query<MerchandiseOrder>(
+    `
+      select
+        merchandise_orders.id::text,
+        merchandise_orders.tenant_slug,
+        merchandise_orders.order_reference,
+        merchandise_orders.status,
+        merchandise_orders.customer_name,
+        merchandise_orders.customer_email,
+        merchandise_orders.customer_phone,
+        merchandise_orders.fulfilment_method,
+        merchandise_orders.linked_event_id::text,
+        events.title as linked_event_title,
+        merchandise_orders.booking_reference,
+        merchandise_orders.table_number,
+        merchandise_orders.seat_number,
+        merchandise_orders.guest_name,
+        merchandise_orders.customer_note,
+        merchandise_orders.subtotal_cents,
+        merchandise_orders.platform_fee_cents,
+        merchandise_orders.stripe_fee_cents,
+        merchandise_orders.total_cents,
+        merchandise_orders.currency,
+        merchandise_orders.stripe_checkout_session_id,
+        merchandise_orders.stripe_payment_intent_id,
+        merchandise_orders.paid_at::text,
+        merchandise_orders.fulfilled_at::text,
+        merchandise_orders.fulfilment_status,
+        merchandise_orders.internal_note,
+        merchandise_orders.created_at::text,
+        merchandise_orders.updated_at::text,
+        coalesce(count(merchandise_order_items.id), 0)::int as item_count,
+        coalesce(sum(merchandise_order_items.quantity), 0)::int as total_quantity,
+        string_agg(
+          merchandise_order_items.product_title,
+          ', '
+          order by merchandise_order_items.created_at asc
+        ) as product_titles
+      from merchandise_orders
+      left join events
+        on events.id = merchandise_orders.linked_event_id
+       and events.tenant_slug = merchandise_orders.tenant_slug
+      left join merchandise_order_items
+        on merchandise_order_items.order_id = merchandise_orders.id
+       and merchandise_order_items.tenant_slug = merchandise_orders.tenant_slug
+      where merchandise_orders.tenant_slug = $1
+      group by
+        merchandise_orders.id,
+        events.title
+      order by merchandise_orders.created_at desc
+    `,
+    [tenantSlug],
+  );
+}
+
+export default async function AdminMerchandiseOrdersPage() {
+  const tenantSlug = await requireTenantAccess();
+
+  const [tenantSettingsRaw, orders] = await Promise.all([
+    getTenantSettings(tenantSlug),
+    listMerchandiseOrders(tenantSlug),
+  ]);
+
+  const tenantSettings = tenantSettingsRaw as TenantSettingsLike | null;
+  const tier = normaliseSubscriptionTier(tenantSettings?.subscription_tier);
+
+  const subscriptionTenant = {
+    subscription_tier: tier,
+    subscription_status:
+      cleanText(tenantSettings?.subscription_status, "active") || "active",
+    platform_owner_bypass: Boolean(tenantSettings?.platform_owner_bypass),
+  };
+
+  const merchandiseCapability = checkSubscriptionCapability(
+    subscriptionTenant,
+    "merchandise",
+  );
+
+  const paidOrders = orders.filter((order) => order.status === "paid");
+  const checkoutStartedOrders = orders.filter(
+    (order) => order.status === "checkout_started",
+  );
+  const fulfilledOrders = orders.filter(
+    (order) => order.status === "fulfilled",
+  );
+
+  const grossTotalCents = orders.reduce(
+    (sum, order) => sum + Number(order.total_cents || 0),
+    0,
+  );
+
+  const paidTotalCents = paidOrders.reduce(
+    (sum, order) => sum + Number(order.total_cents || 0),
+    0,
+  );
+
+  if (!merchandiseCapability.allowed) {
+    return (
+      <main className="admin-merchandise-orders-page" style={styles.page}>
+        <style>{responsiveStyles}</style>
+
+        <section style={styles.lockedPanel}>
+          <p style={styles.kicker}>Upgrade required</p>
+
+          <h1 style={styles.lockedTitle}>Merchandise is not available</h1>
+
+          <p style={styles.lockedText}>
+            {merchandiseCapability.reason || getMerchandiseUpgradeMessage()}
+          </p>
+
+          <Link href="/admin/settings/billing" style={styles.primaryButton}>
+            View billing →
+          </Link>
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <main className="admin-merchandise-orders-page" style={styles.page}>
+      <style>{responsiveStyles}</style>
+
+      <section className="orders-hero" style={styles.hero}>
+        <div style={styles.heroImageWrap}>
+          <img
+            src={DEFAULT_MERCHANDISE_IMAGE_SRC}
+            alt=""
+            aria-hidden="true"
+            style={styles.heroImage}
+          />
+        </div>
+
+        <div style={styles.heroContent}>
+          <div style={styles.heroTopRow}>
+            <div style={styles.badgeRow}>
+              <span style={styles.statusBadge}>Merchandise orders</span>
+              <span style={styles.planBadge}>{getTierLabel(tier)} plan</span>
+              <span style={styles.phaseBadge}>Read-only</span>
+            </div>
+
+            <Link href="/admin/merchandise" style={styles.secondaryHeroButton}>
+              ← Back to merchandise
+            </Link>
+          </div>
+
+          <h1 className="orders-title" style={styles.heroTitle}>
+            Orders
+          </h1>
+
+          <p style={styles.heroDescription}>
+            Review merchandise order records once checkout is introduced. This
+            page is read-only and does not create checkouts, update payments,
+            send emails or adjust stock.
+          </p>
+
+          <div className="hero-stats" style={styles.heroStats}>
+            <StatCard label="Orders" value={orders.length} />
+            <StatCard label="Checkout started" value={checkoutStartedOrders.length} />
+            <StatCard label="Paid" value={paidOrders.length} />
+            <StatCard label="Fulfilled" value={fulfilledOrders.length} />
+            <StatCard label="Total recorded" value={formatMoney(grossTotalCents)} />
+            <StatCard label="Paid recorded" value={formatMoney(paidTotalCents)} />
+          </div>
+
+          <div style={styles.heroActions}>
+            <Link href="/admin/merchandise/fulfilment" style={styles.primaryButton}>
+              Fulfilment planning →
+            </Link>
+
+            <Link href="/admin/merchandise" style={styles.secondaryButton}>
+              Product catalogue →
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <section className="readiness-grid" style={styles.readinessGrid}>
+        <ReadinessCard
+          label="Checkout"
+          value="Not connected"
+          detail="This page only reads order tables. It does not add public checkout buttons or create Stripe sessions."
+          tone="warning"
+        />
+
+        <ReadinessCard
+          label="Order schema"
+          value="Ready"
+          detail="Merchandise orders and order items can now be inspected safely before checkout is built."
+          tone="good"
+        />
+
+        <ReadinessCard
+          label="Stock automation"
+          value="Not connected"
+          detail="Stock and sold quantity are not changed by this page."
+          tone="neutral"
+        />
+
+        <ReadinessCard
+          label="Receipts"
+          value="Not connected"
+          detail="No customer or organiser emails are sent from this page."
+          tone="neutral"
+        />
+      </section>
+
+      {orders.length === 0 ? (
+        <section style={styles.emptyState}>
+          <div style={styles.emptyIcon}>
+            <img
+              src={DEFAULT_MERCHANDISE_IMAGE_SRC}
+              alt=""
+              aria-hidden="true"
+              style={styles.emptyIconImage}
+            />
+          </div>
+
+          <h2 style={styles.emptyTitle}>No merchandise orders yet</h2>
+
+          <p style={styles.emptyText}>
+            That is expected at this stage. The order schema exists, but public
+            merchandise checkout has not been connected yet.
+          </p>
+
+          <div className="empty-actions" style={styles.emptyActions}>
+            <Link href="/admin/merchandise" style={styles.primaryButton}>
+              Product catalogue →
+            </Link>
+
+            <Link
+              href="/admin/merchandise/fulfilment"
+              style={styles.secondaryButton}
+            >
+              Fulfilment planning →
+            </Link>
+          </div>
+        </section>
+      ) : (
+        <section className="orders-list-section" style={styles.ordersSection}>
+          <div style={styles.sectionHeader}>
+            <div>
+              <p style={styles.kicker}>Order records</p>
+              <h2 style={styles.sectionTitle}>Merchandise orders</h2>
+              <p style={styles.sectionText}>
+                Read-only order records grouped by most recent first.
+              </p>
+            </div>
+          </div>
+
+          <div style={styles.ordersList}>
+            {orders.map((order) => (
+              <OrderCard key={order.id} order={order} />
+            ))}
+          </div>
+        </section>
+      )}
+    </main>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <article style={styles.statCard}>
+      <span style={styles.statLabel}>{label}</span>
+      <strong style={styles.statValue}>{value}</strong>
+    </article>
+  );
+}
+
+function ReadinessCard({
+  label,
+  value,
+  detail,
+  tone,
+}: {
+  label: string;
+  value: ReactNode;
+  detail: string;
+  tone: "good" | "warning" | "neutral";
+}) {
+  return (
+    <article
+      style={{
+        ...styles.readinessCard,
+        ...(tone === "good"
+          ? styles.readinessGood
+          : tone === "warning"
+            ? styles.readinessWarning
+            : styles.readinessNeutral),
+      }}
+    >
+      <span style={styles.readinessLabel}>{label}</span>
+      <strong style={styles.readinessValue}>{value}</strong>
+      <p style={styles.readinessText}>{detail}</p>
+    </article>
+  );
+}
+
+function OrderCard({ order }: { order: MerchandiseOrder }) {
+  const tone = statusTone(order.status);
+
+  return (
+    <article
+      style={{
+        ...styles.orderCard,
+        ...(tone === "good"
+          ? styles.orderGood
+          : tone === "warning"
+            ? styles.orderWarning
+            : tone === "danger"
+              ? styles.orderDanger
+              : styles.orderNeutral),
+      }}
+    >
+      <div className="order-main-row" style={styles.orderMainRow}>
+        <div style={styles.orderTitleBlock}>
+          <div style={styles.orderPillRow}>
+            <span
+              style={{
+                ...styles.statusPill,
+                ...statusPillStyle(tone),
+              }}
+            >
+              {orderStatusLabel(order.status)}
+            </span>
+
+            <span style={styles.fulfilmentPill}>
+              {fulfilmentStatusLabel(order.fulfilment_status)}
+            </span>
+          </div>
+
+          <h3 style={styles.orderTitle}>{order.order_reference}</h3>
+
+          <p style={styles.orderSubtitle}>
+            {cleanText(order.customer_name, "No customer name")} ·{" "}
+            {cleanText(order.customer_email, "No email")} ·{" "}
+            {formatDate(order.created_at)}
+          </p>
+        </div>
+
+        <div style={styles.orderTotalBlock}>
+          <span style={styles.orderTotalLabel}>Total</span>
+          <strong style={styles.orderTotalValue}>
+            {formatMoney(order.total_cents, order.currency)}
+          </strong>
+        </div>
+      </div>
+
+      <div className="order-info-grid" style={styles.orderInfoGrid}>
+        <InfoBlock
+          label="Items"
+          value={`${order.item_count} line item${
+            order.item_count === 1 ? "" : "s"
+          } · ${order.total_quantity} total`}
+        />
+
+        <InfoBlock
+          label="Products"
+          value={cleanText(order.product_titles, "No items recorded")}
+        />
+
+        <InfoBlock
+          label="Event"
+          value={cleanText(order.linked_event_title, "No linked event")}
+        />
+
+        <InfoBlock
+          label="Fulfilment method"
+          value={fulfilmentMethodLabel(order.fulfilment_method)}
+        />
+
+        <InfoBlock
+          label="Booking reference"
+          value={cleanText(order.booking_reference, "Not provided")}
+        />
+
+        <InfoBlock
+          label="Table / seat"
+          value={[
+            cleanText(order.table_number),
+            cleanText(order.seat_number),
+          ]
+            .filter(Boolean)
+            .join(" / ") || "Not provided"}
+        />
+
+        <InfoBlock
+          label="Guest name"
+          value={cleanText(order.guest_name, "Not provided")}
+        />
+
+        <InfoBlock
+          label="Customer note"
+          value={cleanText(order.customer_note, "No customer note")}
+        />
+
+        <InfoBlock
+          label="Stripe checkout"
+          value={
+            cleanText(order.stripe_checkout_session_id)
+              ? "Session stored"
+              : "Not started"
+          }
+        />
+
+        <InfoBlock
+          label="Payment intent"
+          value={
+            cleanText(order.stripe_payment_intent_id)
+              ? "Payment intent stored"
+              : "Not stored"
+          }
+        />
+
+        <InfoBlock label="Paid at" value={formatDate(order.paid_at)} />
+
+        <InfoBlock label="Fulfilled at" value={formatDate(order.fulfilled_at)} />
+      </div>
+    </article>
+  );
+}
+
+function InfoBlock({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div style={styles.infoBlock}>
+      <span style={styles.infoLabel}>{label}</span>
+      <strong style={styles.infoValue}>{value}</strong>
+    </div>
+  );
+}
+
+const responsiveStyles = `
+.admin-merchandise-orders-page,
+.admin-merchandise-orders-page * {
+  box-sizing: border-box;
+}
+
+.admin-merchandise-orders-page {
+  overflow-x: hidden;
+}
+
+.admin-merchandise-orders-page section,
+.admin-merchandise-orders-page article,
+.admin-merchandise-orders-page div,
+.admin-merchandise-orders-page a,
+.admin-merchandise-orders-page p,
+.admin-merchandise-orders-page h1,
+.admin-merchandise-orders-page h2,
+.admin-merchandise-orders-page h3,
+.admin-merchandise-orders-page strong,
+.admin-merchandise-orders-page span {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 920px) {
+  .admin-merchandise-orders-page .orders-hero,
+  .admin-merchandise-orders-page .order-main-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  .admin-merchandise-orders-page .hero-stats,
+  .admin-merchandise-orders-page .readiness-grid,
+  .admin-merchandise-orders-page .order-info-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-merchandise-orders-page {
+    padding: 18px 12px 44px !important;
+  }
+
+  .admin-merchandise-orders-page .orders-hero,
+  .admin-merchandise-orders-page .orders-list-section {
+    padding: 18px !important;
+    border-radius: 24px !important;
+  }
+
+  .admin-merchandise-orders-page .orders-title {
+    font-size: clamp(42px, 14vw, 58px) !important;
+    line-height: 0.98 !important;
+  }
+
+  .admin-merchandise-orders-page .hero-stats,
+  .admin-merchandise-orders-page .readiness-grid,
+  .admin-merchandise-orders-page .order-info-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .admin-merchandise-orders-page .hero-actions,
+  .admin-merchandise-orders-page .empty-actions {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    width: 100% !important;
+  }
+
+  .admin-merchandise-orders-page a {
+    width: 100% !important;
+  }
+}
+`;
+
+const styles: Record<string, CSSProperties> = {
+  page: {
+    width: "100%",
+    maxWidth: 1180,
+    margin: "0 auto",
+    padding: "28px 16px 64px",
+    minHeight: "100vh",
+    background:
+      "radial-gradient(circle at top left, rgba(251,191,36,0.10), transparent 34%), radial-gradient(circle at top right, rgba(22,131,248,0.08), transparent 32%), #f8fafc",
+    color: "#0f172a",
+    overflowX: "hidden",
+  },
+
+  hero: {
+    display: "grid",
+    gridTemplateColumns: "minmax(240px, 0.62fr) minmax(0, 1.38fr)",
+    gap: 22,
+    padding: 24,
+    borderRadius: 30,
+    background:
+      "radial-gradient(circle at bottom right, rgba(250,204,21,0.15), transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 56%, #172554 100%)",
+    color: "#ffffff",
+    marginBottom: 18,
+    boxShadow: "0 26px 64px rgba(15,23,42,0.20)",
+    overflow: "hidden",
+  },
+
+  heroImageWrap: {
+    minHeight: 250,
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #f8fafc 58%, #eff6ff 100%)",
+    display: "grid",
+    placeItems: "center",
+    padding: 24,
+    overflow: "hidden",
+  },
+
+  heroImage: {
+    display: "block",
+    width: "min(88%, 230px)",
+    height: "min(88%, 210px)",
+    objectFit: "contain",
+  },
+
+  heroContent: {
+    display: "grid",
+    gap: 14,
+    alignContent: "start",
+  },
+
+  heroTopRow: {
+    display: "flex",
+    gap: 12,
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+
+  badgeRow: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
+
+  statusBadge: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #bbf7d0",
+    fontSize: 13,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  planBadge: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.08)",
+    color: "#dbeafe",
+    border: "1px solid rgba(191,219,254,0.36)",
+    fontSize: 13,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  phaseBadge: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "rgba(251,191,36,0.12)",
+    color: "#fde68a",
+    border: "1px solid rgba(251,191,36,0.54)",
+    fontSize: 13,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  heroTitle: {
+    margin: 0,
+    color: "#ffffff",
+    fontSize: "clamp(54px, 7vw, 82px)",
+    lineHeight: 0.94,
+    letterSpacing: "-0.078em",
+    overflowWrap: "anywhere",
+  },
+
+  heroDescription: {
+    margin: 0,
+    color: "#dbeafe",
+    lineHeight: 1.55,
+    fontWeight: 740,
+    maxWidth: 820,
+  },
+
+  heroStats: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  statCard: {
+    padding: 13,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.10)",
+    border: "1px solid rgba(255,255,255,0.16)",
+  },
+
+  statLabel: {
+    display: "block",
+    color: "#fde68a",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  statValue: {
+    display: "block",
+    marginTop: 4,
+    color: "#ffffff",
+    fontSize: 24,
+    lineHeight: 1,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
+  heroActions: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+
+  primaryButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    minHeight: 44,
+    padding: "10px 15px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    border: "1px solid #1683f8",
+    textDecoration: "none",
+    fontWeight: 950,
+    textAlign: "center",
+  },
+
+  secondaryButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    minHeight: 44,
+    padding: "10px 15px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid #cbd5e1",
+    textDecoration: "none",
+    fontWeight: 950,
+    textAlign: "center",
+  },
+
+  secondaryHeroButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    minHeight: 42,
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    textDecoration: "none",
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  readinessGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: 12,
+    marginBottom: 18,
+  },
+
+  readinessCard: {
+    display: "grid",
+    gap: 6,
+    padding: 15,
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 8px 22px rgba(15,23,42,0.04)",
+  },
+
+  readinessGood: {
+    background: "linear-gradient(135deg, #ecfdf5 0%, #ffffff 80%)",
+    borderColor: "#bbf7d0",
+  },
+
+  readinessWarning: {
+    background: "linear-gradient(135deg, #fff7ed 0%, #ffffff 80%)",
+    borderColor: "#fed7aa",
+  },
+
+  readinessNeutral: {
+    background: "linear-gradient(135deg, #f8fafc 0%, #ffffff 80%)",
+    borderColor: "#e2e8f0",
+  },
+
+  readinessLabel: {
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  readinessValue: {
+    color: "#0f172a",
+    fontSize: 18,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
+  readinessText: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 12,
+    lineHeight: 1.4,
+    fontWeight: 730,
+  },
+
+  ordersSection: {
+    display: "grid",
+    gap: 14,
+    padding: 20,
+    borderRadius: 26,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
+  },
+
+  sectionHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    flexWrap: "wrap",
+  },
+
+  kicker: {
+    margin: 0,
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  sectionTitle: {
+    margin: "5px 0 0",
+    color: "#0f172a",
+    fontSize: 30,
+    lineHeight: 1.05,
+    letterSpacing: "-0.055em",
+    overflowWrap: "anywhere",
+  },
+
+  sectionText: {
+    margin: "7px 0 0",
+    color: "#64748b",
+    lineHeight: 1.45,
+    fontWeight: 740,
+  },
+
+  ordersList: {
+    display: "grid",
+    gap: 12,
+  },
+
+  orderCard: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    borderRadius: 22,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+
+  orderGood: {
+    background: "linear-gradient(135deg, #f0fdf4 0%, #ffffff 84%)",
+    borderColor: "#bbf7d0",
+  },
+
+  orderWarning: {
+    background: "linear-gradient(135deg, #fffbeb 0%, #ffffff 84%)",
+    borderColor: "#fde68a",
+  },
+
+  orderDanger: {
+    background: "linear-gradient(135deg, #fef2f2 0%, #ffffff 84%)",
+    borderColor: "#fecaca",
+  },
+
+  orderNeutral: {
+    background: "linear-gradient(135deg, #f8fafc 0%, #ffffff 84%)",
+    borderColor: "#e2e8f0",
+  },
+
+  orderMainRow: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 12,
+    alignItems: "start",
+  },
+
+  orderTitleBlock: {
+    display: "grid",
+    gap: 7,
+  },
+
+  orderPillRow: {
+    display: "flex",
+    gap: 7,
+    flexWrap: "wrap",
+  },
+
+  statusPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    width: "fit-content",
+    padding: "6px 9px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 11,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  fulfilmentPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    width: "fit-content",
+    padding: "6px 9px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#475569",
+    border: "1px solid #e2e8f0",
+    fontSize: 11,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  orderTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 24,
+    lineHeight: 1.08,
+    letterSpacing: "-0.045em",
+    overflowWrap: "anywhere",
+  },
+
+  orderSubtitle: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.35,
+    fontWeight: 800,
+    overflowWrap: "anywhere",
+  },
+
+  orderTotalBlock: {
+    display: "grid",
+    gap: 4,
+    justifyItems: "end",
+    padding: 12,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    minWidth: 150,
+  },
+
+  orderTotalLabel: {
+    color: "#64748b",
+    fontSize: 10,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  orderTotalValue: {
+    color: "#0f172a",
+    fontSize: 22,
+    lineHeight: 1,
+    fontWeight: 950,
+  },
+
+  orderInfoGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: 9,
+  },
+
+  infoBlock: {
+    display: "grid",
+    gap: 4,
+    padding: 11,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+
+  infoLabel: {
+    color: "#64748b",
+    fontSize: 10,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  infoValue: {
+    color: "#0f172a",
+    fontSize: 13,
+    lineHeight: 1.35,
+    fontWeight: 850,
+    overflowWrap: "anywhere",
+  },
+
+  emptyState: {
+    display: "grid",
+    gap: 10,
+    justifyItems: "center",
+    padding: 28,
+    borderRadius: 28,
+    background: "#ffffff",
+    border: "1px dashed #cbd5e1",
+    textAlign: "center",
+  },
+
+  emptyIcon: {
+    display: "grid",
+    placeItems: "center",
+    width: 76,
+    height: 76,
+    borderRadius: 22,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    overflow: "hidden",
+  },
+
+  emptyIconImage: {
+    display: "block",
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+    padding: 6,
+    boxSizing: "border-box",
+  },
+
+  emptyTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 30,
+    letterSpacing: "-0.05em",
+  },
+
+  emptyText: {
+    margin: 0,
+    color: "#64748b",
+    lineHeight: 1.5,
+    fontWeight: 740,
+    maxWidth: 620,
+  },
+
+  emptyActions: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    justifyContent: "center",
+  },
+
+  lockedPanel: {
+    display: "grid",
+    gap: 10,
+    padding: 24,
+    borderRadius: 28,
+    background: "#ffffff",
+    border: "1px solid #fed7aa",
+  },
+
+  lockedTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 32,
+    letterSpacing: "-0.05em",
+  },
+
+  lockedText: {
+    margin: 0,
+    color: "#7c2d12",
+    lineHeight: 1.55,
+    fontWeight: 750,
+  },
+};
