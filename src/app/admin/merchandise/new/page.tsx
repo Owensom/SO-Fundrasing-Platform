@@ -182,23 +182,25 @@ export default async function NewMerchandiseProductPage({
                 type="text"
                 defaultValue="GBP"
                 maxLength={3}
-                style={styles.input}
+                style={styles.currencyInput}
               />
             </Field>
 
-            <Field
-              label="Stock quantity"
-              helper="Leave blank if stock is not tracked yet."
-            >
-              <input
-                name="stock_quantity"
-                type="number"
-                min="0"
-                step="1"
-                placeholder="Optional"
-                style={styles.input}
-              />
-            </Field>
+            <div className="stock-field-wrap" style={styles.stockFieldWrap}>
+              <Field
+                label="Stock quantity"
+                helper="Leave blank if stock is not tracked yet."
+              >
+                <input
+                  name="stock_quantity"
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="Optional"
+                  style={styles.input}
+                />
+              </Field>
+            </div>
           </div>
         </section>
 
@@ -315,8 +317,16 @@ const responsiveStyles = `
 }
 
 @media (max-width: 860px) {
+  .admin-merchandise-form-page .size-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
   .admin-merchandise-form-page .pricing-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-template-columns: minmax(0, 1fr) minmax(112px, 150px) !important;
+  }
+
+  .admin-merchandise-form-page .stock-field-wrap {
+    grid-column: 1 / -1 !important;
   }
 }
 
@@ -339,6 +349,10 @@ const responsiveStyles = `
   .admin-merchandise-form-page .pricing-grid,
   .admin-merchandise-form-page .size-grid {
     grid-template-columns: 1fr !important;
+  }
+
+  .admin-merchandise-form-page .stock-field-wrap {
+    grid-column: auto !important;
   }
 
   .admin-merchandise-form-page a,
@@ -465,9 +479,13 @@ const styles: Record<string, CSSProperties> = {
 
   pricingGrid: {
     display: "grid",
-    gridTemplateColumns: "1fr 150px 1fr",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(112px, 150px)",
     gap: 14,
     alignItems: "start",
+  },
+
+  stockFieldWrap: {
+    gridColumn: "1 / -1",
   },
 
   sizeGrid: {
@@ -524,6 +542,22 @@ const styles: Record<string, CSSProperties> = {
     padding: "11px 13px",
     fontSize: 15,
     fontWeight: 750,
+    boxSizing: "border-box",
+  },
+
+  currencyInput: {
+    width: "100%",
+    minHeight: 48,
+    borderRadius: 16,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    padding: "11px 13px",
+    fontSize: 15,
+    fontWeight: 850,
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+    textAlign: "center",
     boxSizing: "border-box",
   },
 
