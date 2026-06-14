@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import MerchandiseCheckoutValidationForm from "@/components/merchandise/MerchandiseCheckoutValidationForm";
 import { queryOne } from "@/lib/db";
 import { getTenantSettings } from "@/lib/tenant-settings";
 import {
@@ -71,6 +72,7 @@ type TenantPublicSettings = {
 };
 
 type FulfilmentOption = {
+  value: string;
   label: string;
   description: string;
 };
@@ -218,43 +220,55 @@ function getFulfilmentOptions(product: MerchandiseProduct) {
 
   if (isEnabled(product.fulfilment_collect_stand_enabled, true)) {
     options.push({
+      value: "collect_stand",
       label: "Collect from merchandise stand",
-      description: "Collection may be available from the organiser’s merchandise point.",
+      description:
+        "Collection may be available from the organiser’s merchandise point.",
     });
   }
 
   if (isEnabled(product.fulfilment_collect_table_enabled)) {
     options.push({
+      value: "collect_table",
       label: "Collect from table",
-      description: "The organiser may arrange table-based collection at the event.",
+      description:
+        "The organiser may arrange table-based collection at the event.",
     });
   }
 
   if (isEnabled(product.fulfilment_deliver_table_enabled)) {
     options.push({
+      value: "deliver_table",
       label: "Deliver to table",
-      description: "Table delivery may be available where event table details are used.",
+      description:
+        "Table delivery may be available where event table details are used.",
     });
   }
 
   if (isEnabled(product.fulfilment_deliver_seat_enabled)) {
     options.push({
+      value: "deliver_seat",
       label: "Deliver to seat",
-      description: "Seat delivery may be available where seat details are used.",
+      description:
+        "Seat delivery may be available where seat details are used.",
     });
   }
 
   if (isEnabled(product.fulfilment_post_enabled)) {
     options.push({
+      value: "post_after_event",
       label: "Post after event",
-      description: "The organiser may arrange postal fulfilment after the event.",
+      description:
+        "The organiser may arrange postal fulfilment after the event.",
     });
   }
 
   if (isEnabled(product.fulfilment_arrange_with_organiser_enabled, true)) {
     options.push({
+      value: "arrange_with_organiser",
       label: "Arrange with organiser",
-      description: "The organiser can confirm the best fulfilment route directly.",
+      description:
+        "The organiser can confirm the best fulfilment route directly.",
     });
   }
 
@@ -573,8 +587,9 @@ export default async function PublicMerchandiseProductPage({
           <h2 style={styles.sectionTitle}>Support {displayName}</h2>
 
           <p style={styles.sectionText}>
-            This merchandise page is currently for public display only. Online
-            purchasing and checkout will be added in a later controlled phase.
+            This merchandise page is currently using a checkout validation
+            preview only. No payment will be taken and no order will be created
+            yet.
           </p>
 
           <div className="detailGrid" style={styles.detailGrid}>
@@ -633,15 +648,15 @@ export default async function PublicMerchandiseProductPage({
               </h2>
 
               <p style={styles.fulfilmentIntro}>
-                These details are for guidance only while online merchandise
-                checkout is not connected. The organiser will confirm final
-                collection, delivery or fulfilment arrangements.
+                These details are for guidance while merchandise checkout is
+                being connected. The organiser will confirm final collection,
+                delivery or fulfilment arrangements.
               </p>
             </div>
 
             <div className="fulfilment-option-grid" style={styles.fulfilmentGrid}>
               {fulfilmentOptions.map((option) => (
-                <div key={option.label} style={styles.fulfilmentItem}>
+                <div key={option.value} style={styles.fulfilmentItem}>
                   <span style={styles.fulfilmentIcon}>✓</span>
 
                   <div>
@@ -682,47 +697,49 @@ export default async function PublicMerchandiseProductPage({
         </article>
 
         <aside className="actionPanel" style={styles.actionPanel}>
-          <p style={{ ...styles.kicker, color: primaryColour }}>
-            Buying online
-          </p>
+          <MerchandiseCheckoutValidationForm
+            tenantSlug={tenantSlug}
+            productSlug={slug}
+            productTitle={product.title}
+            priceDisplay={formatMoney(product.price_cents, product.currency)}
+            sizeOptions={sizeOptions}
+            fulfilmentChoices={fulfilmentOptions}
+            requireBookingReference={isEnabled(product.require_booking_reference)}
+            requireTableNumber={isEnabled(product.require_table_number)}
+            requireSeatNumber={isEnabled(product.require_seat_number)}
+            requireGuestName={isEnabled(product.require_guest_name)}
+            primaryColour={primaryColour}
+            primaryTextColour={primaryTextColour}
+          />
 
-          <h2 style={styles.actionTitle}>Checkout coming soon</h2>
-
-          <p style={styles.actionText}>
-            This product is ready for public display. Secure online purchasing,
-            stock handling and receipts will be connected in a later phase.
-          </p>
-
-          <div style={styles.disabledCheckout}>
-            Online checkout not connected yet
-          </div>
-
-          <Link
-            href={`/m/${tenantSlug}`}
-            style={{
-              ...styles.primaryLink,
-              background: primaryColour,
-              borderColor: primaryColour,
-              color: primaryTextColour,
-            }}
-          >
-            View shop →
-          </Link>
-
-          <Link href={`/c/${tenantSlug}`} style={styles.secondaryLink}>
-            Public campaign hub →
-          </Link>
-
-          {contactEmail ? (
-            <a
-              href={`mailto:${contactEmail}?subject=${encodeURIComponent(
-                `Merchandise enquiry: ${product.title}`,
-              )}`}
-              style={styles.secondaryLink}
+          <div style={styles.actionLinksPanel}>
+            <Link
+              href={`/m/${tenantSlug}`}
+              style={{
+                ...styles.primaryLink,
+                background: primaryColour,
+                borderColor: primaryColour,
+                color: primaryTextColour,
+              }}
             >
-              Contact {contactName || "organiser"} →
-            </a>
-          ) : null}
+              View shop →
+            </Link>
+
+            <Link href={`/c/${tenantSlug}`} style={styles.secondaryLink}>
+              Public campaign hub →
+            </Link>
+
+            {contactEmail ? (
+              <a
+                href={`mailto:${contactEmail}?subject=${encodeURIComponent(
+                  `Merchandise enquiry: ${product.title}`,
+                )}`}
+                style={styles.secondaryLink}
+              >
+                Contact {contactName || "organiser"} →
+              </a>
+            ) : null}
+          </div>
         </aside>
       </section>
 
@@ -1123,7 +1140,7 @@ const styles: Record<string, CSSProperties> = {
 
   infoGrid: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(280px, 0.45fr)",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(320px, 0.5fr)",
     gap: 16,
     width: "100%",
     maxWidth: 1180,
@@ -1142,14 +1159,21 @@ const styles: Record<string, CSSProperties> = {
 
   actionPanel: {
     display: "grid",
-    gap: 12,
+    gap: 13,
     alignContent: "start",
-    padding: 22,
+    padding: 18,
     borderRadius: 28,
     background:
       "linear-gradient(135deg, rgba(255,255,255,1), rgba(239,246,255,0.9))",
     border: "1px solid #bfdbfe",
     boxShadow: "0 10px 30px rgba(22,131,248,0.08)",
+  },
+
+  actionLinksPanel: {
+    display: "grid",
+    gap: 9,
+    paddingTop: 4,
+    borderTop: "1px solid #dbeafe",
   },
 
   kicker: {
@@ -1369,35 +1393,6 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.5,
     fontWeight: 730,
     overflowWrap: "anywhere",
-  },
-
-  actionTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 28,
-    lineHeight: 1.08,
-    letterSpacing: "-0.05em",
-  },
-
-  actionText: {
-    margin: 0,
-    color: "#475569",
-    lineHeight: 1.55,
-    fontWeight: 740,
-  },
-
-  disabledCheckout: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 48,
-    padding: "11px 14px",
-    borderRadius: 999,
-    background: "#e2e8f0",
-    color: "#475569",
-    border: "1px solid #cbd5e1",
-    fontWeight: 950,
-    textAlign: "center",
   },
 
   primaryLink: {
