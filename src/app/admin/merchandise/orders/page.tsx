@@ -268,6 +268,13 @@ export default async function AdminMerchandiseOrdersPage() {
     (order) => order.status === "fulfilled",
   );
 
+  const paidOrFulfilmentOrders = orders.filter(
+    (order) =>
+      order.status === "paid" ||
+      order.status === "fulfilled" ||
+      order.status === "part_fulfilled",
+  );
+
   const grossTotalCents = orders.reduce(
     (sum, order) => sum + Number(order.total_cents || 0),
     0,
@@ -321,7 +328,7 @@ export default async function AdminMerchandiseOrdersPage() {
                 <div style={styles.badgeRow}>
                   <span style={styles.statusBadge}>Merchandise orders</span>
                   <span style={styles.planBadge}>{getTierLabel(tier)} plan</span>
-                  <span style={styles.phaseBadge}>Read-only</span>
+                  <span style={styles.phaseBadge}>Checkout live</span>
                 </div>
 
                 <Link href="/admin/merchandise" style={styles.secondaryHeroButton}>
@@ -334,9 +341,9 @@ export default async function AdminMerchandiseOrdersPage() {
               </h1>
 
               <p style={styles.heroDescription}>
-                Review merchandise order records once checkout is introduced.
-                This page is read-only and does not create checkouts, update
-                payments, send emails or adjust stock.
+                Review merchandise orders from the live basket and Stripe
+                checkout flow. Paid orders are marked by the Stripe webhook, and
+                sold quantities are updated after successful payment.
               </p>
             </div>
           </div>
@@ -362,11 +369,8 @@ export default async function AdminMerchandiseOrdersPage() {
             value={checkoutStartedOrders.length}
           />
           <StatCard label="Paid" value={paidOrders.length} />
+          <StatCard label="Ready to fulfil" value={paidOrFulfilmentOrders.length} />
           <StatCard label="Fulfilled" value={fulfilledOrders.length} />
-          <StatCard
-            label="Total recorded"
-            value={formatMoney(grossTotalCents)}
-          />
           <StatCard
             label="Paid recorded"
             value={formatMoney(paidTotalCents)}
@@ -377,29 +381,29 @@ export default async function AdminMerchandiseOrdersPage() {
       <section className="readiness-grid" style={styles.readinessGrid}>
         <ReadinessCard
           label="Checkout"
-          value="Not connected"
-          detail="This page only reads order tables. It does not add public checkout buttons or create Stripe sessions."
-          tone="warning"
+          value="Connected"
+          detail="Public basket checkout is live and creates Stripe sessions from validated merchandise orders."
+          tone="good"
         />
 
         <ReadinessCard
-          label="Order schema"
-          value="Ready"
-          detail="Merchandise orders and order items can now be inspected safely before checkout is built."
+          label="Payments"
+          value="Webhook live"
+          detail="Successful Stripe payments mark merchandise orders as paid and store the payment intent."
           tone="good"
         />
 
         <ReadinessCard
           label="Stock automation"
-          value="Not connected"
-          detail="Stock and sold quantity are not changed by this page."
-          tone="neutral"
+          value="Connected"
+          detail="Sold quantity is increased only after successful payment confirmation."
+          tone="good"
         />
 
         <ReadinessCard
           label="Receipts"
-          value="Not connected"
-          detail="No customer or organiser emails are sent from this page."
+          value="Planned"
+          detail="Customer merchandise receipt emails are still a later polish step."
           tone="neutral"
         />
       </section>
@@ -418,8 +422,9 @@ export default async function AdminMerchandiseOrdersPage() {
           <h2 style={styles.emptyTitle}>No merchandise orders yet</h2>
 
           <p style={styles.emptyText}>
-            That is expected at this stage. The order schema exists, but public
-            merchandise checkout has not been connected yet.
+            Merchandise checkout is connected. Orders will appear here once a
+            customer adds products to their basket and starts or completes
+            secure checkout.
           </p>
 
           <div className="empty-actions" style={styles.emptyActions}>
@@ -442,7 +447,8 @@ export default async function AdminMerchandiseOrdersPage() {
               <p style={styles.kicker}>Order records</p>
               <h2 style={styles.sectionTitle}>Merchandise orders</h2>
               <p style={styles.sectionText}>
-                Read-only order records grouped by most recent first.
+                Live order records grouped by most recent first. Paid orders are
+                ready for collection, delivery or organiser fulfilment planning.
               </p>
             </div>
           </div>
@@ -832,9 +838,9 @@ const styles: Record<string, CSSProperties> = {
     width: "fit-content",
     padding: "8px 12px",
     borderRadius: 999,
-    background: "rgba(251,191,36,0.12)",
-    color: "#fde68a",
-    border: "1px solid rgba(251,191,36,0.54)",
+    background: "rgba(34,197,94,0.14)",
+    color: "#bbf7d0",
+    border: "1px solid rgba(134,239,172,0.54)",
     fontSize: 13,
     fontWeight: 950,
     whiteSpace: "nowrap",
