@@ -37,6 +37,22 @@ type MerchandiseProduct = {
   status: string;
   created_at: string;
   updated_at: string;
+
+  linked_event_id: string | null;
+  linked_event_title: string | null;
+  linked_event_status: string | null;
+  event_linking_enabled: boolean | null;
+  fulfilment_collect_stand_enabled: boolean | null;
+  fulfilment_collect_table_enabled: boolean | null;
+  fulfilment_deliver_table_enabled: boolean | null;
+  fulfilment_deliver_seat_enabled: boolean | null;
+  fulfilment_post_enabled: boolean | null;
+  fulfilment_arrange_with_organiser_enabled: boolean | null;
+  fulfilment_notes: string | null;
+  require_booking_reference: boolean | null;
+  require_table_number: boolean | null;
+  require_seat_number: boolean | null;
+  require_guest_name: boolean | null;
 };
 
 type TenantPublicSettings = {
@@ -52,6 +68,11 @@ type TenantPublicSettings = {
   subscription_tier?: string | null;
   subscription_status?: string | null;
   platform_owner_bypass?: boolean | null;
+};
+
+type FulfilmentOption = {
+  label: string;
+  description: string;
 };
 
 function cleanText(value: unknown, fallback = "") {
@@ -92,6 +113,11 @@ function normaliseFocus(value: unknown) {
   if (!Number.isFinite(number)) return 50;
 
   return Math.max(0, Math.min(100, Math.round(number)));
+}
+
+function isEnabled(value: boolean | null | undefined, fallback = false) {
+  if (typeof value === "boolean") return value;
+  return fallback;
 }
 
 function formatMoney(cents: number, currency = "GBP") {
@@ -187,6 +213,82 @@ function getImageObjectPosition(product: MerchandiseProduct) {
   )}%`;
 }
 
+function getFulfilmentOptions(product: MerchandiseProduct) {
+  const options: FulfilmentOption[] = [];
+
+  if (isEnabled(product.fulfilment_collect_stand_enabled, true)) {
+    options.push({
+      label: "Collect from merchandise stand",
+      description: "Collection may be available from the organiser’s merchandise point.",
+    });
+  }
+
+  if (isEnabled(product.fulfilment_collect_table_enabled)) {
+    options.push({
+      label: "Collect from table",
+      description: "The organiser may arrange table-based collection at the event.",
+    });
+  }
+
+  if (isEnabled(product.fulfilment_deliver_table_enabled)) {
+    options.push({
+      label: "Deliver to table",
+      description: "Table delivery may be available where event table details are used.",
+    });
+  }
+
+  if (isEnabled(product.fulfilment_deliver_seat_enabled)) {
+    options.push({
+      label: "Deliver to seat",
+      description: "Seat delivery may be available where seat details are used.",
+    });
+  }
+
+  if (isEnabled(product.fulfilment_post_enabled)) {
+    options.push({
+      label: "Post after event",
+      description: "The organiser may arrange postal fulfilment after the event.",
+    });
+  }
+
+  if (isEnabled(product.fulfilment_arrange_with_organiser_enabled, true)) {
+    options.push({
+      label: "Arrange with organiser",
+      description: "The organiser can confirm the best fulfilment route directly.",
+    });
+  }
+
+  return options;
+}
+
+function getCheckoutDetailRequirements(product: MerchandiseProduct) {
+  const details: string[] = [];
+
+  if (isEnabled(product.require_booking_reference)) {
+    details.push("booking reference");
+  }
+
+  if (isEnabled(product.require_table_number)) {
+    details.push("table number");
+  }
+
+  if (isEnabled(product.require_seat_number)) {
+    details.push("seat number");
+  }
+
+  if (isEnabled(product.require_guest_name)) {
+    details.push("guest name");
+  }
+
+  return details;
+}
+
+function getLinkedEventDisplay(product: MerchandiseProduct) {
+  if (!isEnabled(product.event_linking_enabled)) return "";
+
+  return cleanText(product.linked_event_title);
+}
+
 async function getPublishedProduct({
   tenantSlug,
   slug,
@@ -197,26 +299,44 @@ async function getPublishedProduct({
   return queryOne<MerchandiseProduct>(
     `
       select
-        id,
-        tenant_slug,
-        slug,
-        title,
-        description,
-        image_url,
-        image_focus_x,
-        image_focus_y,
-        price_cents,
-        currency,
-        stock_quantity,
-        sold_quantity,
-        options_json,
-        status,
-        created_at::text,
-        updated_at::text
+        merchandise_products.id,
+        merchandise_products.tenant_slug,
+        merchandise_products.slug,
+        merchandise_products.title,
+        merchandise_products.description,
+        merchandise_products.image_url,
+        merchandise_products.image_focus_x,
+        merchandise_products.image_focus_y,
+        merchandise_products.price_cents,
+        merchandise_products.currency,
+        merchandise_products.stock_quantity,
+        merchandise_products.sold_quantity,
+        merchandise_products.options_json,
+        merchandise_products.status,
+        merchandise_products.created_at::text,
+        merchandise_products.updated_at::text,
+        merchandise_products.linked_event_id::text,
+        events.title as linked_event_title,
+        events.status as linked_event_status,
+        merchandise_products.event_linking_enabled,
+        merchandise_products.fulfilment_collect_stand_enabled,
+        merchandise_products.fulfilment_collect_table_enabled,
+        merchandise_products.fulfilment_deliver_table_enabled,
+        merchandise_products.fulfilment_deliver_seat_enabled,
+        merchandise_products.fulfilment_post_enabled,
+        merchandise_products.fulfilment_arrange_with_organiser_enabled,
+        merchandise_products.fulfilment_notes,
+        merchandise_products.require_booking_reference,
+        merchandise_products.require_table_number,
+        merchandise_products.require_seat_number,
+        merchandise_products.require_guest_name
       from merchandise_products
-      where tenant_slug = $1
-        and slug = $2
-        and status = 'published'
+      left join events
+        on events.id = merchandise_products.linked_event_id
+       and events.tenant_slug = merchandise_products.tenant_slug
+      where merchandise_products.tenant_slug = $1
+        and merchandise_products.slug = $2
+        and merchandise_products.status = 'published'
       limit 1
     `,
     [tenantSlug, slug],
@@ -321,6 +441,10 @@ export default async function PublicMerchandiseProductPage({
   const stockTone = getStockTone(product);
   const sizeOptions = getSizeOptions(product);
   const productImageUrl = canUseProductImages ? cleanText(product.image_url) : "";
+  const linkedEventDisplay = getLinkedEventDisplay(product);
+  const fulfilmentOptions = getFulfilmentOptions(product);
+  const checkoutDetailRequirements = getCheckoutDetailRequirements(product);
+  const fulfilmentNotes = cleanText(product.fulfilment_notes);
 
   const heroBackground = canUseAdvancedBranding
     ? `radial-gradient(circle at bottom right, ${accentColour}22, transparent 38%), radial-gradient(circle at top left, ${primaryColour}22, transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #111827 100%)`
@@ -407,6 +531,12 @@ export default async function PublicMerchandiseProductPage({
                 Sizes: {sizeOptions.join(", ")}
               </span>
             ) : null}
+
+            {linkedEventDisplay ? (
+              <span className="sizeHeroPill" style={styles.sizeHeroPill}>
+                Event: {linkedEventDisplay}
+              </span>
+            ) : null}
           </div>
         </div>
 
@@ -458,6 +588,10 @@ export default async function PublicMerchandiseProductPage({
             <DetailItem label="Sizes / options" value={getSizeSummary(product)} />
 
             <DetailItem label="Organisation" value={displayName} />
+
+            {linkedEventDisplay ? (
+              <DetailItem label="Linked event" value={linkedEventDisplay} />
+            ) : null}
           </div>
 
           {sizeOptions.length ? (
@@ -480,6 +614,71 @@ export default async function PublicMerchandiseProductPage({
               </div>
             </div>
           ) : null}
+
+          <div
+            style={{
+              ...styles.fulfilmentPanel,
+              borderColor: canUseAdvancedBranding
+                ? `${accentColour}55`
+                : "#dbeafe",
+            }}
+          >
+            <div>
+              <p style={styles.fulfilmentKicker}>Fulfilment information</p>
+
+              <h2 style={styles.fulfilmentTitle}>
+                {linkedEventDisplay
+                  ? `Linked to ${linkedEventDisplay}`
+                  : "Available fulfilment options"}
+              </h2>
+
+              <p style={styles.fulfilmentIntro}>
+                These details are for guidance only while online merchandise
+                checkout is not connected. The organiser will confirm final
+                collection, delivery or fulfilment arrangements.
+              </p>
+            </div>
+
+            <div className="fulfilment-option-grid" style={styles.fulfilmentGrid}>
+              {fulfilmentOptions.map((option) => (
+                <div key={option.label} style={styles.fulfilmentItem}>
+                  <span style={styles.fulfilmentIcon}>✓</span>
+
+                  <div>
+                    <strong style={styles.fulfilmentItemTitle}>
+                      {option.label}
+                    </strong>
+
+                    <p style={styles.fulfilmentItemText}>
+                      {option.description}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {checkoutDetailRequirements.length ? (
+              <div style={styles.detailRequirementPanel}>
+                <span style={styles.detailRequirementLabel}>
+                  Details that may be requested later
+                </span>
+
+                <strong style={styles.detailRequirementValue}>
+                  {checkoutDetailRequirements.join(", ")}
+                </strong>
+              </div>
+            ) : null}
+
+            {fulfilmentNotes ? (
+              <div style={styles.fulfilmentNotesPanel}>
+                <span style={styles.detailRequirementLabel}>
+                  Organiser note
+                </span>
+
+                <p style={styles.fulfilmentNotesText}>{fulfilmentNotes}</p>
+              </div>
+            ) : null}
+          </div>
         </article>
 
         <aside className="actionPanel" style={styles.actionPanel}>
@@ -668,7 +867,8 @@ const responsiveStyles = `
     border-radius: 24px !important;
   }
 
-  .public-merchandise-page .detailGrid {
+  .public-merchandise-page .detailGrid,
+  .public-merchandise-page .fulfilment-option-grid {
     grid-template-columns: 1fr !important;
   }
 
@@ -1044,6 +1244,131 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #cbd5e1",
     fontSize: 13,
     fontWeight: 950,
+  },
+
+  fulfilmentPanel: {
+    display: "grid",
+    gap: 14,
+    padding: 16,
+    borderRadius: 22,
+    background:
+      "linear-gradient(135deg, #f8fafc 0%, #ffffff 54%, #eff6ff 100%)",
+    border: "1px solid #dbeafe",
+  },
+
+  fulfilmentKicker: {
+    margin: 0,
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  fulfilmentTitle: {
+    margin: "5px 0 0",
+    color: "#0f172a",
+    fontSize: 24,
+    lineHeight: 1.1,
+    letterSpacing: "-0.045em",
+    overflowWrap: "anywhere",
+  },
+
+  fulfilmentIntro: {
+    margin: "8px 0 0",
+    color: "#475569",
+    fontSize: 14,
+    lineHeight: 1.55,
+    fontWeight: 730,
+  },
+
+  fulfilmentGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  fulfilmentItem: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: 13,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+
+  fulfilmentIcon: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 24,
+    height: 24,
+    borderRadius: 999,
+    background: "#dcfce7",
+    color: "#166534",
+    fontSize: 13,
+    fontWeight: 950,
+    flexShrink: 0,
+  },
+
+  fulfilmentItemTitle: {
+    display: "block",
+    color: "#0f172a",
+    fontSize: 13,
+    lineHeight: 1.25,
+    fontWeight: 950,
+  },
+
+  fulfilmentItemText: {
+    margin: "4px 0 0",
+    color: "#64748b",
+    fontSize: 12,
+    lineHeight: 1.4,
+    fontWeight: 700,
+  },
+
+  detailRequirementPanel: {
+    display: "grid",
+    gap: 5,
+    padding: 13,
+    borderRadius: 18,
+    background: "#fffbeb",
+    border: "1px solid #fde68a",
+  },
+
+  detailRequirementLabel: {
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  detailRequirementValue: {
+    color: "#92400e",
+    fontSize: 14,
+    lineHeight: 1.35,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
+  fulfilmentNotesPanel: {
+    display: "grid",
+    gap: 5,
+    padding: 13,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+
+  fulfilmentNotesText: {
+    margin: 0,
+    color: "#475569",
+    fontSize: 14,
+    lineHeight: 1.5,
+    fontWeight: 730,
+    overflowWrap: "anywhere",
   },
 
   actionTitle: {
