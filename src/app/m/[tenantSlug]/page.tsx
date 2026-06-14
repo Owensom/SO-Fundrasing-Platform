@@ -42,6 +42,22 @@ type MerchandiseProduct = {
   status: string;
   created_at: string;
   updated_at: string;
+
+  linked_event_id: string | null;
+  linked_event_title: string | null;
+  linked_event_status: string | null;
+  event_linking_enabled: boolean | null;
+  fulfilment_collect_stand_enabled: boolean | null;
+  fulfilment_collect_table_enabled: boolean | null;
+  fulfilment_deliver_table_enabled: boolean | null;
+  fulfilment_deliver_seat_enabled: boolean | null;
+  fulfilment_post_enabled: boolean | null;
+  fulfilment_arrange_with_organiser_enabled: boolean | null;
+  fulfilment_notes: string | null;
+  require_booking_reference: boolean | null;
+  require_table_number: boolean | null;
+  require_seat_number: boolean | null;
+  require_guest_name: boolean | null;
 };
 
 type TenantPublicSettings = {
@@ -62,6 +78,11 @@ type TenantPublicSettings = {
 function cleanText(value: unknown, fallback = "") {
   const clean = String(value ?? "").trim();
   return clean || fallback;
+}
+
+function isEnabled(value: boolean | null | undefined, fallback = false) {
+  if (typeof value === "boolean") return value;
+  return fallback;
 }
 
 function normaliseHexColour(value: unknown, fallback: string) {
@@ -180,6 +201,111 @@ function getProductImageSrc({
   return cleanText(product.image_url);
 }
 
+function getFulfilmentOptionCount(product: MerchandiseProduct) {
+  return [
+    isEnabled(product.fulfilment_collect_stand_enabled, true),
+    isEnabled(product.fulfilment_collect_table_enabled),
+    isEnabled(product.fulfilment_deliver_table_enabled),
+    isEnabled(product.fulfilment_deliver_seat_enabled),
+    isEnabled(product.fulfilment_post_enabled),
+    isEnabled(product.fulfilment_arrange_with_organiser_enabled, true),
+  ].filter(Boolean).length;
+}
+
+function getFulfilmentSummary(product: MerchandiseProduct) {
+  const labels: string[] = [];
+
+  if (isEnabled(product.fulfilment_collect_stand_enabled, true)) {
+    labels.push("stand collection");
+  }
+
+  if (isEnabled(product.fulfilment_collect_table_enabled)) {
+    labels.push("table collection");
+  }
+
+  if (isEnabled(product.fulfilment_deliver_table_enabled)) {
+    labels.push("table delivery");
+  }
+
+  if (isEnabled(product.fulfilment_deliver_seat_enabled)) {
+    labels.push("seat delivery");
+  }
+
+  if (isEnabled(product.fulfilment_post_enabled)) {
+    labels.push("post-event post");
+  }
+
+  if (isEnabled(product.fulfilment_arrange_with_organiser_enabled, true)) {
+    labels.push("arrange with organiser");
+  }
+
+  if (labels.length === 0) {
+    return "Fulfilment to be confirmed";
+  }
+
+  if (labels.length <= 2) {
+    return labels.join(" / ");
+  }
+
+  return `${labels.slice(0, 2).join(" / ")} +${labels.length - 2} more`;
+}
+
+function getCustomerDetailCount(product: MerchandiseProduct) {
+  return [
+    isEnabled(product.require_booking_reference),
+    isEnabled(product.require_table_number),
+    isEnabled(product.require_seat_number),
+    isEnabled(product.require_guest_name),
+  ].filter(Boolean).length;
+}
+
+function getCustomerDetailSummary(product: MerchandiseProduct) {
+  const details: string[] = [];
+
+  if (isEnabled(product.require_booking_reference)) {
+    details.push("booking ref");
+  }
+
+  if (isEnabled(product.require_table_number)) {
+    details.push("table");
+  }
+
+  if (isEnabled(product.require_seat_number)) {
+    details.push("seat");
+  }
+
+  if (isEnabled(product.require_guest_name)) {
+    details.push("guest name");
+  }
+
+  if (details.length === 0) {
+    return "No extra details noted";
+  }
+
+  return `${details.join(", ")} may be needed later`;
+}
+
+function getLinkedEventDisplay(product: MerchandiseProduct) {
+  if (!isEnabled(product.event_linking_enabled)) return "";
+
+  return cleanText(product.linked_event_title);
+}
+
+function getShopFeatureSummary(products: MerchandiseProduct[]) {
+  const eventLinkedCount = products.filter((product) =>
+    isEnabled(product.event_linking_enabled),
+  ).length;
+
+  const fulfilmentReadyCount = products.filter(
+    (product) => getFulfilmentOptionCount(product) > 0,
+  ).length;
+
+  return {
+    eventLinkedCount,
+    fulfilmentReadyCount,
+  };
+}
+
 async function getTenantPublicSettings(tenantSlug: string) {
   return queryOne<TenantPublicSettings>(
     `
@@ -208,26 +334,44 @@ async function getPublishedMerchandiseProducts(tenantSlug: string) {
   return query<MerchandiseProduct>(
     `
       select
-        id,
-        tenant_slug,
-        slug,
-        title,
-        description,
-        image_url,
-        image_focus_x,
-        image_focus_y,
-        price_cents,
-        currency,
-        stock_quantity,
-        sold_quantity,
-        options_json,
-        status,
-        created_at::text,
-        updated_at::text
+        merchandise_products.id,
+        merchandise_products.tenant_slug,
+        merchandise_products.slug,
+        merchandise_products.title,
+        merchandise_products.description,
+        merchandise_products.image_url,
+        merchandise_products.image_focus_x,
+        merchandise_products.image_focus_y,
+        merchandise_products.price_cents,
+        merchandise_products.currency,
+        merchandise_products.stock_quantity,
+        merchandise_products.sold_quantity,
+        merchandise_products.options_json,
+        merchandise_products.status,
+        merchandise_products.created_at::text,
+        merchandise_products.updated_at::text,
+        merchandise_products.linked_event_id::text,
+        events.title as linked_event_title,
+        events.status as linked_event_status,
+        merchandise_products.event_linking_enabled,
+        merchandise_products.fulfilment_collect_stand_enabled,
+        merchandise_products.fulfilment_collect_table_enabled,
+        merchandise_products.fulfilment_deliver_table_enabled,
+        merchandise_products.fulfilment_deliver_seat_enabled,
+        merchandise_products.fulfilment_post_enabled,
+        merchandise_products.fulfilment_arrange_with_organiser_enabled,
+        merchandise_products.fulfilment_notes,
+        merchandise_products.require_booking_reference,
+        merchandise_products.require_table_number,
+        merchandise_products.require_seat_number,
+        merchandise_products.require_guest_name
       from merchandise_products
-      where tenant_slug = $1
-        and status = 'published'
-      order by created_at desc
+      left join events
+        on events.id = merchandise_products.linked_event_id
+       and events.tenant_slug = merchandise_products.tenant_slug
+      where merchandise_products.tenant_slug = $1
+        and merchandise_products.status = 'published'
+      order by merchandise_products.created_at desc
     `,
     [tenantSlug],
   );
@@ -313,6 +457,8 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
 
   const contactEmail = cleanText(tenantSettings?.public_contact_email);
   const contactName = cleanText(tenantSettings?.public_contact_name);
+  const { eventLinkedCount, fulfilmentReadyCount } =
+    getShopFeatureSummary(products);
 
   const brandedPageStyle: CSSProperties = canUseAdvancedBranding
     ? {
@@ -501,14 +647,26 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
 
             <p style={styles.subtitle}>
               Browse published merchandise items. Online checkout is not
-              connected yet, so supporters can view products and contact the
-              organiser.
+              connected yet, so supporters can view products, see fulfilment
+              guidance and contact the organiser.
             </p>
 
             <div className="heroStats" style={styles.heroStats}>
               <div style={styles.heroStat}>
                 <span style={styles.heroStatLabel}>Published items</span>
                 <strong style={styles.heroStatValue}>{products.length}</strong>
+              </div>
+
+              <div style={styles.heroStat}>
+                <span style={styles.heroStatLabel}>Event-linked</span>
+                <strong style={styles.heroStatValue}>{eventLinkedCount}</strong>
+              </div>
+
+              <div style={styles.heroStat}>
+                <span style={styles.heroStatLabel}>Fulfilment info</span>
+                <strong style={styles.heroStatValue}>
+                  {fulfilmentReadyCount}
+                </strong>
               </div>
 
               <div style={styles.heroStat}>
@@ -526,7 +684,7 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
 
             <p style={styles.supportPanelText}>
               Products are visible publicly. Secure merchandise checkout, stock
-              handling, receipts and fulfilment will be added later.
+              handling, receipts and fulfilment automation will be added later.
             </p>
 
             <div style={styles.supportOptionList}>
@@ -548,7 +706,7 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
 
                 <div style={styles.supportOptionCopy}>
                   <strong>View shop items</strong>
-                  <span>Browse the published merchandise below.</span>
+                  <span>Browse published merchandise and fulfilment notes.</span>
                 </div>
 
                 <span style={styles.supportChevron}>›</span>
@@ -638,8 +796,8 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
           <h2 style={styles.sectionTitle}>Shop items</h2>
 
           <p style={styles.sectionText}>
-            Products below are available for public viewing and organiser
-            enquiries.
+            Products below are available for public viewing, organiser enquiries
+            and fulfilment guidance.
           </p>
         </div>
 
@@ -708,6 +866,9 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
               product,
               canUseProductImages,
             });
+            const linkedEventDisplay = getLinkedEventDisplay(product);
+            const fulfilmentOptionCount = getFulfilmentOptionCount(product);
+            const customerDetailCount = getCustomerDetailCount(product);
 
             return (
               <article key={product.id} style={styles.productCard}>
@@ -754,6 +915,26 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
                     <span style={styles.statusPill}>Display only</span>
                   </div>
 
+                  <div style={styles.productBadgeRow}>
+                    {linkedEventDisplay ? (
+                      <span style={styles.eventBadge}>
+                        Event-linked
+                      </span>
+                    ) : null}
+
+                    {fulfilmentOptionCount > 0 ? (
+                      <span style={styles.fulfilmentBadge}>
+                        Fulfilment info
+                      </span>
+                    ) : null}
+
+                    {customerDetailCount > 0 ? (
+                      <span style={styles.detailBadge}>
+                        Details later
+                      </span>
+                    ) : null}
+                  </div>
+
                   <h2 style={styles.productTitle}>{product.title}</h2>
 
                   <p style={styles.productText}>
@@ -792,6 +973,22 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
                       label="Sizes/options"
                       value={getSizeSummary(product)}
                     />
+
+                    {linkedEventDisplay ? (
+                      <MiniMeta label="Event" value={linkedEventDisplay} />
+                    ) : null}
+
+                    <MiniMeta
+                      label="Fulfilment"
+                      value={getFulfilmentSummary(product)}
+                    />
+
+                    {customerDetailCount > 0 ? (
+                      <MiniMeta
+                        label="Details later"
+                        value={getCustomerDetailSummary(product)}
+                      />
+                    ) : null}
                   </div>
 
                   <div className="productActions" style={styles.productActions}>
@@ -1558,6 +1755,52 @@ const styles: Record<string, CSSProperties> = {
     background: "#f1f5f9",
     color: "#475569",
     border: "1px solid #e2e8f0",
+    fontSize: 11,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  productBadgeRow: {
+    display: "flex",
+    gap: 7,
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
+
+  eventBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#fef3c7",
+    color: "#92400e",
+    border: "1px solid #fde68a",
+    fontSize: 11,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  fulfilmentBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #86efac",
+    fontSize: 11,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  detailBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
     fontSize: 11,
     fontWeight: 950,
     whiteSpace: "nowrap",
