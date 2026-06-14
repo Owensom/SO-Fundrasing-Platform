@@ -461,10 +461,6 @@ export default async function PublicMerchandiseShopPage({ params }: PageProps) {
 
   const brandLogoSrc = publicLogoMarkUrl || publicLogoUrl;
   const primaryTextColour = getReadableTextColour(primaryColour);
-  const accentTextColour = getReadableTextColour(accentColour);
-
-  const contactEmail = cleanText(tenantSettings?.public_contact_email);
-  const contactName = cleanText(tenantSettings?.public_contact_name);
   const { eventLinkedCount, fulfilmentReadyCount } =
     getShopFeatureSummary(products);
 
@@ -1043,7 +1039,8 @@ const responsiveStyles = `
 @media (max-width: 980px) {
   .public-merchandise-shop-page .brandHeader,
   .public-merchandise-shop-page .heroMainGrid,
-  .public-merchandise-shop-page .contactStrip {
+  .public-merchandise-shop-page .contactStrip,
+  .public-merchandise-shop-page .shopNotice {
     grid-template-columns: 1fr !important;
   }
 
@@ -1057,6 +1054,12 @@ const responsiveStyles = `
 
   .public-merchandise-shop-page .productGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .public-merchandise-shop-page .shopNotice .noticeLink {
+    width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
   }
 }
 
@@ -1844,7 +1847,8 @@ const styles: Record<string, CSSProperties> = {
   },
 
   shopNotice: {
-    display: "flex",
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(160px, auto)",
     gap: 14,
     justifyContent: "space-between",
     alignItems: "center",
@@ -1889,8 +1893,9 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     width: "fit-content",
-    minHeight: 42,
-    padding: "10px 13px",
+    minWidth: 148,
+    minHeight: 44,
+    padding: "10px 16px",
     borderRadius: 999,
     background: "#0f172a",
     color: "#ffffff",
@@ -1898,6 +1903,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     fontWeight: 950,
     whiteSpace: "nowrap",
+    justifySelf: "end",
   },
 
   contactStrip: {
