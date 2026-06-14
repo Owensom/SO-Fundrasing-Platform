@@ -532,41 +532,45 @@ export default async function AdminMerchandisePage() {
                   organiser, but they cannot buy online yet.
                 </p>
               </div>
+            </div>
 
-              <div className="merchandise-actions" style={styles.panelActions}>
-                <Link href="/admin/merchandise/new" style={styles.primaryButton}>
-                  New product →
-                </Link>
+            <div className="merchandise-actions" style={styles.actionGrid}>
+              <Link href="/admin/merchandise/new" style={styles.actionCardPrimary}>
+                <span style={styles.actionKicker}>Create</span>
+                <strong style={styles.actionTitle}>New product</strong>
+                <span style={styles.actionText}>Add another shop item.</span>
+              </Link>
 
-                <Link
-                  href="/admin/merchandise/orders"
-                  style={styles.secondaryPanelButton}
-                >
-                  Orders →
-                </Link>
+              <Link href="/admin/merchandise/orders" style={styles.actionCard}>
+                <span style={styles.actionKicker}>Read-only</span>
+                <strong style={styles.actionTitle}>Orders</strong>
+                <span style={styles.actionText}>View order records later.</span>
+              </Link>
 
-                <Link
-                  href="/admin/merchandise/fulfilment"
-                  style={styles.secondaryPanelButton}
-                >
-                  Fulfilment planning →
-                </Link>
+              <Link
+                href="/admin/merchandise/fulfilment"
+                style={styles.actionCard}
+              >
+                <span style={styles.actionKicker}>Planning</span>
+                <strong style={styles.actionTitle}>Fulfilment</strong>
+                <span style={styles.actionText}>Review event collection.</span>
+              </Link>
 
-                <Link
-                  href={getPublicShopHref(tenantSlug)}
-                  target="_blank"
-                  style={styles.secondaryPanelButton}
-                >
-                  View public shop →
-                </Link>
+              <Link
+                href={getPublicShopHref(tenantSlug)}
+                target="_blank"
+                style={styles.actionCard}
+              >
+                <span style={styles.actionKicker}>Public</span>
+                <strong style={styles.actionTitle}>Shop page</strong>
+                <span style={styles.actionText}>Preview supporter view.</span>
+              </Link>
 
-                <Link
-                  href="/admin/launch-readiness"
-                  style={styles.secondaryPanelButton}
-                >
-                  Launch Readiness →
-                </Link>
-              </div>
+              <Link href="/admin/launch-readiness" style={styles.actionCard}>
+                <span style={styles.actionKicker}>Operations</span>
+                <strong style={styles.actionTitle}>Readiness</strong>
+                <span style={styles.actionText}>Check launch status.</span>
+              </Link>
             </div>
 
             <div
@@ -944,13 +948,9 @@ const responsiveStyles = `
   }
 
   .admin-merchandise-page .merchandise-hero-stats,
-  .admin-merchandise-page .merchandise-readiness-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-
+  .admin-merchandise-page .merchandise-readiness-grid,
   .admin-merchandise-page .merchandise-actions {
-    width: 100% !important;
-    justify-content: stretch !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
 
@@ -974,7 +974,8 @@ const responsiveStyles = `
   .admin-merchandise-page .merchandise-hero-stats,
   .admin-merchandise-page .merchandise-readiness-grid,
   .admin-merchandise-page .merchandise-summary-grid,
-  .admin-merchandise-page .merchandise-item-meta-grid {
+  .admin-merchandise-page .merchandise-item-meta-grid,
+  .admin-merchandise-page .merchandise-actions {
     grid-template-columns: 1fr !important;
   }
 
@@ -983,7 +984,6 @@ const responsiveStyles = `
     min-height: 46px !important;
   }
 
-  .admin-merchandise-page .merchandise-actions,
   .admin-merchandise-page .merchandise-item-actions {
     display: grid !important;
     grid-template-columns: 1fr !important;
@@ -1243,11 +1243,9 @@ const styles: Record<string, CSSProperties> = {
   },
 
   readinessHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 14,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
+    display: "grid",
+    gap: 8,
+    minWidth: 0,
   },
 
   readinessEyebrow: {
@@ -1274,7 +1272,69 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     lineHeight: 1.45,
     fontWeight: 750,
-    maxWidth: 760,
+    maxWidth: 860,
+  },
+
+  actionGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+    gap: 10,
+    minWidth: 0,
+  },
+
+  actionCardPrimary: {
+    display: "grid",
+    gap: 4,
+    alignContent: "start",
+    minHeight: 104,
+    padding: 14,
+    borderRadius: 20,
+    background:
+      "linear-gradient(135deg, #1683f8 0%, #2563eb 74%, #1d4ed8 100%)",
+    border: "1px solid #1683f8",
+    color: "#ffffff",
+    textDecoration: "none",
+    boxShadow: "0 14px 28px rgba(22,131,248,0.16)",
+  },
+
+  actionCard: {
+    display: "grid",
+    gap: 4,
+    alignContent: "start",
+    minHeight: 104,
+    padding: 14,
+    borderRadius: 20,
+    background: "#ffffff",
+    border: "1px solid #dbeafe",
+    color: "#0f172a",
+    textDecoration: "none",
+    boxShadow: "0 8px 20px rgba(15,23,42,0.035)",
+  },
+
+  actionKicker: {
+    fontSize: 10,
+    lineHeight: 1.1,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    opacity: 0.78,
+  },
+
+  actionTitle: {
+    fontSize: 16,
+    lineHeight: 1.1,
+    fontWeight: 950,
+    letterSpacing: "-0.035em",
+    overflowWrap: "anywhere",
+  },
+
+  actionText: {
+    color: "inherit",
+    opacity: 0.72,
+    fontSize: 12,
+    lineHeight: 1.3,
+    fontWeight: 800,
+    overflowWrap: "anywhere",
   },
 
   readinessGrid: {
@@ -1339,44 +1399,6 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.35,
     fontWeight: 750,
     overflowWrap: "anywhere",
-  },
-
-  panelActions: {
-    display: "grid",
-    gridTemplateColumns: "1fr",
-    gap: 10,
-    justifyItems: "stretch",
-    minWidth: 210,
-  },
-
-  primaryButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 44,
-    padding: "10px 15px",
-    borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
-    border: "1px solid #1683f8",
-    textDecoration: "none",
-    fontWeight: 950,
-    textAlign: "center",
-  },
-
-  secondaryPanelButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 44,
-    padding: "10px 15px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
-    border: "1px solid #cbd5e1",
-    textDecoration: "none",
-    fontWeight: 950,
-    textAlign: "center",
   },
 
   sectionCard: {
