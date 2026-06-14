@@ -193,20 +193,16 @@ export default function MerchandiseBasketClient({
   primaryTextColour,
 }: MerchandiseBasketClientProps) {
   const [items, setItems] = useState<BasketItem[]>([]);
-  const [isValidating, setIsValidating] = useState(false);
-  const [isCreatingOrder, setIsCreatingOrder] = useState(false);
-  const [isStartingStripeCheckout, setIsStartingStripeCheckout] =
-    useState(false);
+  const [isCheckingBasket, setIsCheckingBasket] = useState(false);
+  const [isStartingCheckout, setIsStartingCheckout] = useState(false);
 
   const [validationResult, setValidationResult] =
     useState<BasketValidationResult | null>(null);
 
-  const [orderResult, setOrderResult] = useState<PendingOrderResult | null>(
-    null,
-  );
-
-  const [stripeCheckoutResult, setStripeCheckoutResult] =
-    useState<StripeCheckoutResult | null>(null);
+  const [checkoutMessage, setCheckoutMessage] = useState<{
+    tone: "good" | "bad" | "neutral";
+    text: string;
+  } | null>(null);
 
   const [buyerDetails, setBuyerDetails] = useState<BuyerDetails>({
     customerName: "",
@@ -219,14 +215,60 @@ export default function MerchandiseBasketClient({
     Record<string, LineFulfilmentDetails>
   >({});
 
-  const [detailsMessage, setDetailsMessage] = useState<{
-    tone: "good" | "bad";
-    text: string;
-  } | null>(null);
-
   useEffect(() => {
     setItems(readBasket(tenantSlug));
   }, [tenantSlug]);
+
+  useEffect(() => {
+    if (items.length === 0 || validationResult || isCheckingBasket) return;
+
+    let cancelled = false;
+
+    async function validateOnLoad() {
+      setIsCheckingBasket(true);
+
+      try {
+        const response = await fetch("/api/merchandise/basket/validate", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            tenantSlug,
+            items: getValidationPayloadItems(items),
+          }),
+        });
+
+        const json = (await response.json()) as BasketValidationResult;
+
+        if (cancelled) return;
+
+        setValidationResult(json);
+
+        if (json.ok && json.basket?.lines) {
+          setLineDetails(getInitialLineDetails(json.basket.lines));
+        }
+      } catch {
+        if (cancelled) return;
+
+        setValidationResult({
+          ok: false,
+          error:
+            "We could not check your basket. Please refresh the page and try again.",
+        });
+      } finally {
+        if (!cancelled) {
+          setIsCheckingBasket(false);
+        }
+      }
+    }
+
+    validateOnLoad();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [items, tenantSlug, validationResult, isCheckingBasket]);
 
   const basketSummary = useMemo(() => {
     const quantity = items.reduce(
@@ -253,20 +295,17 @@ export default function MerchandiseBasketClient({
     ? validationResult.basket?.lines || []
     : [];
 
-  const hasValidatedBasket = validationResult?.ok && validatedLines.length > 0;
-  const hasPendingOrder = Boolean(orderResult?.ok && orderResult.order?.id);
+  const basketIsReady = Boolean(validationResult?.ok && validatedLines.length > 0);
 
-  function resetOrderState() {
-    setOrderResult(null);
-    setStripeCheckoutResult(null);
-    setDetailsMessage(null);
+  function resetCheckoutState() {
+    setValidationResult(null);
+    setLineDetails({});
+    setCheckoutMessage(null);
   }
 
   function updateItems(nextItems: BasketItem[]) {
     setItems(nextItems);
-    setValidationResult(null);
-    setLineDetails({});
-    resetOrderState();
+    resetCheckoutState();
     writeBasket(tenantSlug, nextItems);
   }
 
@@ -293,7 +332,7 @@ export default function MerchandiseBasketClient({
       ...current,
       [field]: value,
     }));
-    resetOrderState();
+    setCheckoutMessage(null);
   }
 
   function updateLineField(
@@ -314,53 +353,12 @@ export default function MerchandiseBasketClient({
         [field]: value,
       },
     }));
-    resetOrderState();
+    setCheckoutMessage(null);
   }
 
-  async function validateBasket() {
-    setIsValidating(true);
-    setValidationResult(null);
-    setLineDetails({});
-    setOrderResult(null);
-    setStripeCheckoutResult(null);
-    setDetailsMessage(null);
-
-    try {
-      const response = await fetch("/api/merchandise/basket/validate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          tenantSlug,
-          items: getValidationPayloadItems(items),
-        }),
-      });
-
-      const json = (await response.json()) as BasketValidationResult;
-      setValidationResult(json);
-
-      if (json.ok && json.basket?.lines) {
-        setLineDetails(getInitialLineDetails(json.basket.lines));
-      }
-    } catch {
-      setValidationResult({
-        ok: false,
-        error:
-          "We could not validate the basket. Please refresh the page and try again.",
-      });
-    } finally {
-      setIsValidating(false);
-    }
-  }
-
-  function getDetailsError() {
+  function getDetailsError(lines: ValidatedBasketLine[]) {
     const customerName = cleanText(buyerDetails.customerName);
     const customerEmail = cleanText(buyerDetails.customerEmail);
-
-    if (!hasValidatedBasket) {
-      return "Please validate your basket first.";
-    }
 
     if (!customerName) {
       return "Please enter your name.";
@@ -370,19 +368,19 @@ export default function MerchandiseBasketClient({
       return "Please enter a valid email address.";
     }
 
-    for (const line of validatedLines) {
+    for (const line of lines) {
       const key = getLineKey(line);
       const details = lineDetails[key];
 
       if (!details?.fulfilmentMethod) {
-        return `Please choose fulfilment for ${line.title}.`;
+        return `Please choose collection or delivery for ${line.title}.`;
       }
 
       if (
         line.fulfilmentMethods.length > 0 &&
         !line.fulfilmentMethods.includes(details.fulfilmentMethod)
       ) {
-        return `Please choose a valid fulfilment option for ${line.title}.`;
+        return `Please choose a valid collection or delivery option for ${line.title}.`;
       }
 
       if (
@@ -408,141 +406,146 @@ export default function MerchandiseBasketClient({
     return "";
   }
 
-  function checkDetailsReady(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function validateBasketForCheckout() {
+    const response = await fetch("/api/merchandise/basket/validate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        tenantSlug,
+        items: getValidationPayloadItems(items),
+      }),
+    });
 
-    const error = getDetailsError();
+    const json = (await response.json()) as BasketValidationResult;
 
-    if (error) {
-      setDetailsMessage({
-        tone: "bad",
-        text: error,
+    setValidationResult(json);
+
+    if (json.ok && json.basket?.lines) {
+      setLineDetails((current) => {
+        const initial = getInitialLineDetails(json.basket?.lines || []);
+
+        return {
+          ...initial,
+          ...current,
+        };
       });
-      return;
     }
 
-    setDetailsMessage({
-      tone: "good",
-      text:
-        "Buyer and fulfilment details are ready. You can now create a pending merchandise order.",
-    });
+    return json;
   }
 
   async function createPendingOrder() {
-    const error = getDetailsError();
+    const response = await fetch("/api/merchandise/orders/create", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        tenantSlug,
+        items: getValidationPayloadItems(items),
+        buyerDetails,
+        lineDetails,
+      }),
+    });
 
-    if (error) {
-      setDetailsMessage({
-        tone: "bad",
-        text: error,
-      });
-      return;
-    }
-
-    setIsCreatingOrder(true);
-    setOrderResult(null);
-    setStripeCheckoutResult(null);
-
-    try {
-      const response = await fetch("/api/merchandise/orders/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          tenantSlug,
-          items: getValidationPayloadItems(items),
-          buyerDetails,
-          lineDetails,
-        }),
-      });
-
-      const json = (await response.json()) as PendingOrderResult;
-      setOrderResult(json);
-
-      if (json.ok) {
-        setDetailsMessage({
-          tone: "good",
-          text:
-            "Pending order created. You can now continue to Stripe checkout.",
-        });
-      } else {
-        setDetailsMessage({
-          tone: "bad",
-          text:
-            json.error ||
-            "The pending merchandise order could not be created.",
-        });
-      }
-    } catch {
-      setOrderResult({
-        ok: false,
-        error:
-          "We could not create the pending order. Please refresh the page and try again.",
-      });
-
-      setDetailsMessage({
-        tone: "bad",
-        text:
-          "We could not create the pending order. Please refresh the page and try again.",
-      });
-    } finally {
-      setIsCreatingOrder(false);
-    }
+    return (await response.json()) as PendingOrderResult;
   }
 
-  async function startStripeCheckout() {
-    if (!orderResult?.ok || !orderResult.order?.id) {
-      setStripeCheckoutResult({
-        ok: false,
-        error: "Please create a pending order first.",
+  async function startStripeCheckout(order: PendingOrderResult["order"]) {
+    if (!order?.id) {
+      throw new Error("The order could not be prepared.");
+    }
+
+    const response = await fetch("/api/merchandise/orders/checkout", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        tenantSlug,
+        orderId: order.id,
+        orderReference: order.orderReference,
+      }),
+    });
+
+    return (await response.json()) as StripeCheckoutResult;
+  }
+
+  async function continueToSecureCheckout(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (items.length === 0) {
+      setCheckoutMessage({
+        tone: "bad",
+        text: "Your basket is empty.",
       });
       return;
     }
 
-    setIsStartingStripeCheckout(true);
-    setStripeCheckoutResult(null);
+    setIsStartingCheckout(true);
+    setCheckoutMessage({
+      tone: "neutral",
+      text: "Checking your basket and opening secure checkout...",
+    });
 
     try {
-      const response = await fetch("/api/merchandise/orders/checkout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          tenantSlug,
-          orderId: orderResult.order.id,
-          orderReference: orderResult.order.orderReference,
-        }),
-      });
+      const validation = await validateBasketForCheckout();
 
-      const json = (await response.json()) as StripeCheckoutResult;
-      setStripeCheckoutResult(json);
-
-      if (!json.ok || !json.url) {
-        setDetailsMessage({
+      if (!validation.ok || !validation.basket?.lines?.length) {
+        setCheckoutMessage({
           tone: "bad",
-          text: json.error || "Stripe checkout could not be started.",
+          text:
+            validation.error ||
+            "Your basket could not be checked. Please review it and try again.",
         });
-        setIsStartingStripeCheckout(false);
         return;
       }
 
-      window.location.href = json.url;
-    } catch {
-      setStripeCheckoutResult({
-        ok: false,
-        error:
-          "We could not start Stripe checkout. Please refresh the page and try again.",
-      });
+      const detailsError = getDetailsError(validation.basket.lines);
 
-      setDetailsMessage({
+      if (detailsError) {
+        setCheckoutMessage({
+          tone: "bad",
+          text: detailsError,
+        });
+        return;
+      }
+
+      const pendingOrder = await createPendingOrder();
+
+      if (!pendingOrder.ok || !pendingOrder.order) {
+        setCheckoutMessage({
+          tone: "bad",
+          text:
+            pendingOrder.error ||
+            "Your order could not be prepared. Please try again.",
+        });
+        return;
+      }
+
+      const checkout = await startStripeCheckout(pendingOrder.order);
+
+      if (!checkout.ok || !checkout.url) {
+        setCheckoutMessage({
+          tone: "bad",
+          text:
+            checkout.error ||
+            "Secure checkout could not be opened. Please try again.",
+        });
+        return;
+      }
+
+      window.location.href = checkout.url;
+    } catch {
+      setCheckoutMessage({
         tone: "bad",
         text:
-          "We could not start Stripe checkout. Please refresh the page and try again.",
+          "Secure checkout could not be opened. Please refresh the page and try again.",
       });
-
-      setIsStartingStripeCheckout(false);
+    } finally {
+      setIsStartingCheckout(false);
     }
   }
 
@@ -554,8 +557,7 @@ export default function MerchandiseBasketClient({
         <h2 style={styles.emptyTitle}>Your basket is empty</h2>
 
         <p style={styles.emptyText}>
-          Add merchandise items from the shop, then return here to review them
-          together before checkout is connected.
+          Add merchandise items from the shop, then return here to check out.
         </p>
 
         <a
@@ -574,7 +576,11 @@ export default function MerchandiseBasketClient({
   }
 
   return (
-    <section className="merchandise-basket-client" style={styles.wrapper}>
+    <form
+      className="merchandise-basket-client"
+      style={styles.wrapper}
+      onSubmit={continueToSecureCheckout}
+    >
       <style>{responsiveStyles}</style>
 
       <div className="basket-layout" style={styles.layout}>
@@ -582,7 +588,7 @@ export default function MerchandiseBasketClient({
           <div style={styles.panelHeader}>
             <div>
               <p style={{ ...styles.kicker, color: primaryColour }}>
-                Basket items
+                Your basket
               </p>
 
               <h2 style={styles.sectionTitle}>
@@ -674,14 +680,238 @@ export default function MerchandiseBasketClient({
               </article>
             ))}
           </div>
+
+          {basketIsReady ? (
+            <section style={styles.detailsPanel}>
+              <div>
+                <p style={{ ...styles.kicker, color: primaryColour }}>
+                  Checkout details
+                </p>
+
+                <h2 style={styles.detailsTitle}>Your details</h2>
+
+                <p style={styles.detailsIntro}>
+                  Add the details the organiser needs for collection, delivery
+                  or event-linked fulfilment.
+                </p>
+              </div>
+
+              <div className="details-grid" style={styles.detailsGrid}>
+                <label style={styles.field}>
+                  <span style={styles.fieldLabel}>Your name</span>
+                  <input
+                    type="text"
+                    value={buyerDetails.customerName}
+                    onChange={(event) =>
+                      updateBuyerField("customerName", event.target.value)
+                    }
+                    style={styles.input}
+                    autoComplete="name"
+                  />
+                </label>
+
+                <label style={styles.field}>
+                  <span style={styles.fieldLabel}>Email address</span>
+                  <input
+                    type="email"
+                    value={buyerDetails.customerEmail}
+                    onChange={(event) =>
+                      updateBuyerField("customerEmail", event.target.value)
+                    }
+                    style={styles.input}
+                    autoComplete="email"
+                  />
+                </label>
+
+                <label style={styles.field}>
+                  <span style={styles.fieldLabel}>Phone optional</span>
+                  <input
+                    type="tel"
+                    value={buyerDetails.customerPhone}
+                    onChange={(event) =>
+                      updateBuyerField("customerPhone", event.target.value)
+                    }
+                    style={styles.input}
+                    autoComplete="tel"
+                  />
+                </label>
+              </div>
+
+              <div style={styles.fulfilmentLineList}>
+                {validatedLines.map((line) => {
+                  const lineKey = getLineKey(line);
+                  const details = lineDetails[lineKey] || {
+                    fulfilmentMethod:
+                      line.fulfilmentMethods[0] || "arrange_with_organiser",
+                    bookingReference: "",
+                    tableNumber: "",
+                    seatNumber: "",
+                    guestName: "",
+                  };
+
+                  const requiresAnyDetails =
+                    line.requiredDetails.bookingReference ||
+                    line.requiredDetails.tableNumber ||
+                    line.requiredDetails.seatNumber ||
+                    line.requiredDetails.guestName;
+
+                  return (
+                    <article key={lineKey} style={styles.fulfilmentLineCard}>
+                      <div>
+                        <h3 style={styles.fulfilmentLineTitle}>{line.title}</h3>
+
+                        <p style={styles.fulfilmentLineMeta}>
+                          {line.quantity} ×{" "}
+                          {formatMoney(line.unitPriceCents, line.currency)}
+                          {line.optionLabel ? ` · ${line.optionLabel}` : ""}
+                        </p>
+                      </div>
+
+                      <label style={styles.field}>
+                        <span style={styles.fieldLabel}>
+                          Collection or delivery
+                        </span>
+                        <select
+                          value={details.fulfilmentMethod}
+                          onChange={(event) =>
+                            updateLineField(
+                              lineKey,
+                              "fulfilmentMethod",
+                              event.target.value,
+                            )
+                          }
+                          style={styles.input}
+                        >
+                          {line.fulfilmentMethods.map((method) => (
+                            <option key={method} value={method}>
+                              {formatFulfilmentMethod(method)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      {requiresAnyDetails ? (
+                        <div
+                          className="line-detail-grid"
+                          style={styles.lineDetailGrid}
+                        >
+                          {line.requiredDetails.bookingReference ? (
+                            <label style={styles.field}>
+                              <span style={styles.fieldLabel}>
+                                Booking reference
+                              </span>
+                              <input
+                                type="text"
+                                value={details.bookingReference}
+                                onChange={(event) =>
+                                  updateLineField(
+                                    lineKey,
+                                    "bookingReference",
+                                    event.target.value,
+                                  )
+                                }
+                                style={styles.input}
+                              />
+                            </label>
+                          ) : null}
+
+                          {line.requiredDetails.tableNumber ? (
+                            <label style={styles.field}>
+                              <span style={styles.fieldLabel}>Table number</span>
+                              <input
+                                type="text"
+                                value={details.tableNumber}
+                                onChange={(event) =>
+                                  updateLineField(
+                                    lineKey,
+                                    "tableNumber",
+                                    event.target.value,
+                                  )
+                                }
+                                style={styles.input}
+                              />
+                            </label>
+                          ) : null}
+
+                          {line.requiredDetails.seatNumber ? (
+                            <label style={styles.field}>
+                              <span style={styles.fieldLabel}>Seat number</span>
+                              <input
+                                type="text"
+                                value={details.seatNumber}
+                                onChange={(event) =>
+                                  updateLineField(
+                                    lineKey,
+                                    "seatNumber",
+                                    event.target.value,
+                                  )
+                                }
+                                style={styles.input}
+                              />
+                            </label>
+                          ) : null}
+
+                          {line.requiredDetails.guestName ? (
+                            <label style={styles.field}>
+                              <span style={styles.fieldLabel}>Guest name</span>
+                              <input
+                                type="text"
+                                value={details.guestName}
+                                onChange={(event) =>
+                                  updateLineField(
+                                    lineKey,
+                                    "guestName",
+                                    event.target.value,
+                                  )
+                                }
+                                style={styles.input}
+                              />
+                            </label>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <p style={styles.noExtraDetailsText}>
+                          No extra event details are required for this item.
+                        </p>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+
+              <label style={styles.field}>
+                <span style={styles.fieldLabel}>Note for organiser optional</span>
+                <textarea
+                  value={buyerDetails.customerNote}
+                  onChange={(event) =>
+                    updateBuyerField("customerNote", event.target.value)
+                  }
+                  style={styles.textarea}
+                  rows={4}
+                  placeholder="Add any helpful collection, delivery or merchandise note."
+                />
+              </label>
+            </section>
+          ) : (
+            <section style={styles.detailsPanel}>
+              <p style={{ ...styles.kicker, color: primaryColour }}>
+                Checkout details
+              </p>
+              <h2 style={styles.detailsTitle}>Checking basket</h2>
+              <p style={styles.detailsIntro}>
+                We are checking current price, stock and options before showing
+                checkout details.
+              </p>
+            </section>
+          )}
         </div>
 
         <aside style={styles.summaryPanel}>
           <p style={{ ...styles.kicker, color: primaryColour }}>
-            Basket summary
+            Order summary
           </p>
 
-          <h2 style={styles.summaryTitle}>Review basket</h2>
+          <h2 style={styles.summaryTitle}>Ready to checkout</h2>
 
           <div style={styles.summaryRows}>
             <div style={styles.summaryRow}>
@@ -693,66 +923,72 @@ export default function MerchandiseBasketClient({
               <span>Subtotal</span>
               <strong>
                 {formatMoney(
-                  basketSummary.subtotalCents,
-                  basketSummary.currency,
+                  validationResult?.basket?.subtotalCents ??
+                    basketSummary.subtotalCents,
+                  validationResult?.basket?.currency || basketSummary.currency,
                 )}
               </strong>
             </div>
           </div>
 
-          {validationResult ? (
-            <div
-              style={{
-                ...styles.validationPanel,
-                ...(validationResult.ok
-                  ? styles.validationGood
-                  : styles.validationBad),
-              }}
-            >
-              <strong style={styles.validationTitle}>
-                {validationResult.ok ? "Basket validated" : "Please check basket"}
-              </strong>
-
-              <span style={styles.validationText}>
-                {validationResult.ok
-                  ? validationResult.message ||
-                    "Basket is valid and ready for checkout details."
-                  : validationResult.error || "Something needs to be corrected."}
+          {validationResult?.ok ? (
+            <div style={{ ...styles.noticePanel, ...styles.noticeGood }}>
+              <strong>Basket checked</strong>
+              <span>Price and availability have been confirmed.</span>
+            </div>
+          ) : validationResult && !validationResult.ok ? (
+            <div style={{ ...styles.noticePanel, ...styles.noticeBad }}>
+              <strong>Please check basket</strong>
+              <span>
+                {validationResult.error ||
+                  "Something in your basket needs attention."}
               </span>
-
-              {validationResult.ok && validationResult.basket ? (
-                <span style={styles.validationMeta}>
-                  Server subtotal:{" "}
-                  {formatMoney(
-                    validationResult.basket.subtotalCents || 0,
-                    validationResult.basket.currency || basketSummary.currency,
-                  )}
-                </span>
-              ) : null}
             </div>
           ) : (
-            <div style={styles.checkoutNotice}>
-              <strong>Validate before checkout</strong>
-              <span>
-                This checks live product status, stock, price, options and
-                tenant rules before we collect buyer details.
-              </span>
+            <div style={{ ...styles.noticePanel, ...styles.noticeNeutral }}>
+              <strong>Checking basket</strong>
+              <span>Confirming availability before secure checkout.</span>
             </div>
           )}
 
+          {checkoutMessage ? (
+            <div
+              style={{
+                ...styles.noticePanel,
+                ...(checkoutMessage.tone === "good"
+                  ? styles.noticeGood
+                  : checkoutMessage.tone === "bad"
+                    ? styles.noticeBad
+                    : styles.noticeNeutral),
+              }}
+            >
+              <strong>
+                {checkoutMessage.tone === "bad"
+                  ? "Checkout paused"
+                  : "Secure checkout"}
+              </strong>
+              <span>{checkoutMessage.text}</span>
+            </div>
+          ) : null}
+
           <button
-            type="button"
-            onClick={validateBasket}
-            disabled={isValidating || hasPendingOrder}
+            type="submit"
+            disabled={!basketIsReady || isCheckingBasket || isStartingCheckout}
             style={{
-              ...styles.validateButton,
-              background: primaryColour,
-              borderColor: primaryColour,
-              color: primaryTextColour,
-              opacity: isValidating || hasPendingOrder ? 0.72 : 1,
+              ...styles.stripeButton,
+              opacity:
+                !basketIsReady || isCheckingBasket || isStartingCheckout
+                  ? 0.72
+                  : 1,
+              cursor:
+                !basketIsReady || isCheckingBasket || isStartingCheckout
+                  ? "not-allowed"
+                  : "pointer",
             }}
           >
-            {isValidating ? "Validating basket..." : "Validate basket"}
+            {isStartingCheckout
+              ? "Opening secure checkout..."
+              : "Continue to secure checkout"}
           </button>
 
           <a
@@ -768,327 +1004,7 @@ export default function MerchandiseBasketClient({
           </a>
         </aside>
       </div>
-
-      {hasValidatedBasket ? (
-        <form
-          className="basket-details-form"
-          style={styles.detailsPanel}
-          onSubmit={checkDetailsReady}
-        >
-          <div style={styles.detailsHeader}>
-            <div>
-              <p style={{ ...styles.kicker, color: primaryColour }}>
-                Buyer and fulfilment
-              </p>
-
-              <h2 style={styles.detailsTitle}>Add checkout details</h2>
-
-              <p style={styles.detailsIntro}>
-                These details are used to create a pending merchandise order
-                before Stripe checkout.
-              </p>
-            </div>
-          </div>
-
-          <div className="details-grid" style={styles.detailsGrid}>
-            <label style={styles.field}>
-              <span style={styles.fieldLabel}>Your name</span>
-              <input
-                type="text"
-                value={buyerDetails.customerName}
-                onChange={(event) =>
-                  updateBuyerField("customerName", event.target.value)
-                }
-                style={styles.input}
-                autoComplete="name"
-              />
-            </label>
-
-            <label style={styles.field}>
-              <span style={styles.fieldLabel}>Email address</span>
-              <input
-                type="email"
-                value={buyerDetails.customerEmail}
-                onChange={(event) =>
-                  updateBuyerField("customerEmail", event.target.value)
-                }
-                style={styles.input}
-                autoComplete="email"
-              />
-            </label>
-
-            <label style={styles.field}>
-              <span style={styles.fieldLabel}>Phone optional</span>
-              <input
-                type="tel"
-                value={buyerDetails.customerPhone}
-                onChange={(event) =>
-                  updateBuyerField("customerPhone", event.target.value)
-                }
-                style={styles.input}
-                autoComplete="tel"
-              />
-            </label>
-          </div>
-
-          <div style={styles.fulfilmentLineList}>
-            {validatedLines.map((line) => {
-              const lineKey = getLineKey(line);
-              const details = lineDetails[lineKey] || {
-                fulfilmentMethod:
-                  line.fulfilmentMethods[0] || "arrange_with_organiser",
-                bookingReference: "",
-                tableNumber: "",
-                seatNumber: "",
-                guestName: "",
-              };
-
-              const requiresAnyDetails =
-                line.requiredDetails.bookingReference ||
-                line.requiredDetails.tableNumber ||
-                line.requiredDetails.seatNumber ||
-                line.requiredDetails.guestName;
-
-              return (
-                <article key={lineKey} style={styles.fulfilmentLineCard}>
-                  <div>
-                    <h3 style={styles.fulfilmentLineTitle}>{line.title}</h3>
-
-                    <p style={styles.fulfilmentLineMeta}>
-                      {line.quantity} ×{" "}
-                      {formatMoney(line.unitPriceCents, line.currency)}
-                      {line.optionLabel ? ` · ${line.optionLabel}` : ""}
-                    </p>
-                  </div>
-
-                  <label style={styles.field}>
-                    <span style={styles.fieldLabel}>Fulfilment option</span>
-                    <select
-                      value={details.fulfilmentMethod}
-                      onChange={(event) =>
-                        updateLineField(
-                          lineKey,
-                          "fulfilmentMethod",
-                          event.target.value,
-                        )
-                      }
-                      style={styles.input}
-                    >
-                      {line.fulfilmentMethods.map((method) => (
-                        <option key={method} value={method}>
-                          {formatFulfilmentMethod(method)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  {requiresAnyDetails ? (
-                    <div className="line-detail-grid" style={styles.lineDetailGrid}>
-                      {line.requiredDetails.bookingReference ? (
-                        <label style={styles.field}>
-                          <span style={styles.fieldLabel}>
-                            Booking reference
-                          </span>
-                          <input
-                            type="text"
-                            value={details.bookingReference}
-                            onChange={(event) =>
-                              updateLineField(
-                                lineKey,
-                                "bookingReference",
-                                event.target.value,
-                              )
-                            }
-                            style={styles.input}
-                          />
-                        </label>
-                      ) : null}
-
-                      {line.requiredDetails.tableNumber ? (
-                        <label style={styles.field}>
-                          <span style={styles.fieldLabel}>Table number</span>
-                          <input
-                            type="text"
-                            value={details.tableNumber}
-                            onChange={(event) =>
-                              updateLineField(
-                                lineKey,
-                                "tableNumber",
-                                event.target.value,
-                              )
-                            }
-                            style={styles.input}
-                          />
-                        </label>
-                      ) : null}
-
-                      {line.requiredDetails.seatNumber ? (
-                        <label style={styles.field}>
-                          <span style={styles.fieldLabel}>Seat number</span>
-                          <input
-                            type="text"
-                            value={details.seatNumber}
-                            onChange={(event) =>
-                              updateLineField(
-                                lineKey,
-                                "seatNumber",
-                                event.target.value,
-                              )
-                            }
-                            style={styles.input}
-                          />
-                        </label>
-                      ) : null}
-
-                      {line.requiredDetails.guestName ? (
-                        <label style={styles.field}>
-                          <span style={styles.fieldLabel}>Guest name</span>
-                          <input
-                            type="text"
-                            value={details.guestName}
-                            onChange={(event) =>
-                              updateLineField(
-                                lineKey,
-                                "guestName",
-                                event.target.value,
-                              )
-                            }
-                            style={styles.input}
-                          />
-                        </label>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <p style={styles.noExtraDetailsText}>
-                      No extra event details are required for this item.
-                    </p>
-                  )}
-                </article>
-              );
-            })}
-          </div>
-
-          <label style={styles.field}>
-            <span style={styles.fieldLabel}>Note for organiser optional</span>
-            <textarea
-              value={buyerDetails.customerNote}
-              onChange={(event) =>
-                updateBuyerField("customerNote", event.target.value)
-              }
-              style={styles.textarea}
-              rows={4}
-              placeholder="Add any helpful collection, delivery or merchandise note."
-            />
-          </label>
-
-          {detailsMessage ? (
-            <div
-              style={{
-                ...styles.detailsMessage,
-                ...(detailsMessage.tone === "good"
-                  ? styles.detailsMessageGood
-                  : styles.detailsMessageBad),
-              }}
-            >
-              {detailsMessage.text}
-            </div>
-          ) : null}
-
-          {orderResult ? (
-            <div
-              style={{
-                ...styles.orderResultPanel,
-                ...(orderResult.ok
-                  ? styles.orderResultGood
-                  : styles.orderResultBad),
-              }}
-            >
-              <strong style={styles.orderResultTitle}>
-                {orderResult.ok ? "Pending order created" : "Order not created"}
-              </strong>
-
-              <span style={styles.orderResultText}>
-                {orderResult.ok
-                  ? orderResult.message ||
-                    "Pending merchandise order created."
-                  : orderResult.error ||
-                    "The pending merchandise order could not be created."}
-              </span>
-
-              {orderResult.ok && orderResult.order ? (
-                <span style={styles.orderReference}>
-                  Reference: {orderResult.order.orderReference}
-                </span>
-              ) : null}
-            </div>
-          ) : null}
-
-          {stripeCheckoutResult && !stripeCheckoutResult.ok ? (
-            <div style={{ ...styles.orderResultPanel, ...styles.orderResultBad }}>
-              <strong style={styles.orderResultTitle}>
-                Stripe checkout not started
-              </strong>
-              <span style={styles.orderResultText}>
-                {stripeCheckoutResult.error ||
-                  "Stripe checkout could not be started."}
-              </span>
-            </div>
-          ) : null}
-
-          <div style={styles.detailsActions}>
-            <button
-              type="submit"
-              disabled={hasPendingOrder}
-              style={{
-                ...styles.secondaryActionButton,
-                borderColor: primaryColour,
-                color: primaryColour,
-                opacity: hasPendingOrder ? 0.72 : 1,
-              }}
-            >
-              Check checkout details
-            </button>
-
-            <button
-              type="button"
-              onClick={createPendingOrder}
-              disabled={isCreatingOrder || hasPendingOrder}
-              style={{
-                ...styles.validateButton,
-                background: primaryColour,
-                borderColor: primaryColour,
-                color: primaryTextColour,
-                opacity: isCreatingOrder || hasPendingOrder ? 0.72 : 1,
-              }}
-            >
-              {isCreatingOrder
-                ? "Creating pending order..."
-                : hasPendingOrder
-                  ? "Pending order created"
-                  : "Create pending order"}
-            </button>
-
-            <button
-              type="button"
-              onClick={startStripeCheckout}
-              disabled={!hasPendingOrder || isStartingStripeCheckout}
-              style={{
-                ...styles.stripeButton,
-                opacity: !hasPendingOrder || isStartingStripeCheckout ? 0.72 : 1,
-                cursor:
-                  !hasPendingOrder || isStartingStripeCheckout
-                    ? "not-allowed"
-                    : "pointer",
-              }}
-            >
-              {isStartingStripeCheckout
-                ? "Opening Stripe checkout..."
-                : "Continue to Stripe checkout"}
-            </button>
-          </div>
-        </form>
-      ) : null}
-    </section>
+    </form>
   );
 }
 
@@ -1324,20 +1240,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 850,
   },
 
-  checkoutNotice: {
-    display: "grid",
-    gap: 5,
-    padding: 13,
-    borderRadius: 18,
-    background: "#fffbeb",
-    color: "#92400e",
-    border: "1px solid #fde68a",
-    fontSize: 13,
-    lineHeight: 1.4,
-    fontWeight: 760,
-  },
-
-  validationPanel: {
+  noticePanel: {
     display: "grid",
     gap: 5,
     padding: 13,
@@ -1348,65 +1251,34 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 760,
   },
 
-  validationGood: {
+  noticeGood: {
     background: "#f0fdf4",
     color: "#166534",
     borderColor: "#bbf7d0",
   },
 
-  validationBad: {
+  noticeBad: {
     background: "#fef2f2",
     color: "#991b1b",
     borderColor: "#fecaca",
   },
 
-  validationTitle: {
-    color: "inherit",
-    fontSize: 14,
-    fontWeight: 950,
-  },
-
-  validationText: {
-    color: "inherit",
-  },
-
-  validationMeta: {
-    color: "inherit",
-    fontWeight: 950,
-  },
-
-  validateButton: {
-    width: "100%",
-    minHeight: 48,
-    padding: "11px 15px",
-    borderRadius: 999,
-    border: "1px solid",
-    fontWeight: 950,
-    cursor: "pointer",
-    boxShadow: "0 12px 24px rgba(22,131,248,0.16)",
+  noticeNeutral: {
+    background: "#f8fafc",
+    color: "#475569",
+    borderColor: "#e2e8f0",
   },
 
   stripeButton: {
     width: "100%",
-    minHeight: 50,
-    padding: "12px 16px",
+    minHeight: 52,
+    padding: "13px 16px",
     borderRadius: 999,
     background: "#635bff",
     color: "#ffffff",
     border: "1px solid #635bff",
     fontWeight: 950,
     boxShadow: "0 12px 24px rgba(99,91,255,0.22)",
-  },
-
-  secondaryActionButton: {
-    width: "100%",
-    minHeight: 48,
-    padding: "11px 15px",
-    borderRadius: 999,
-    background: "#ffffff",
-    border: "1px solid",
-    fontWeight: 950,
-    cursor: "pointer",
   },
 
   primaryButton: {
@@ -1426,25 +1298,17 @@ const styles: Record<string, CSSProperties> = {
   detailsPanel: {
     display: "grid",
     gap: 14,
-    padding: 18,
-    borderRadius: 28,
+    padding: 16,
+    borderRadius: 24,
     background: "#ffffff",
     border: "1px solid #dbeafe",
-    boxShadow: "0 10px 30px rgba(22,131,248,0.06)",
-  },
-
-  detailsHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
+    boxShadow: "0 10px 30px rgba(22,131,248,0.04)",
   },
 
   detailsTitle: {
     margin: "4px 0 0",
     color: "#0f172a",
-    fontSize: 32,
+    fontSize: 30,
     lineHeight: 1.05,
     letterSpacing: "-0.055em",
   },
@@ -1540,78 +1404,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.45,
     fontWeight: 760,
-  },
-
-  detailsMessage: {
-    padding: 13,
-    borderRadius: 18,
-    border: "1px solid",
-    fontSize: 13,
-    lineHeight: 1.45,
-    fontWeight: 850,
-  },
-
-  detailsMessageGood: {
-    background: "#f0fdf4",
-    color: "#166534",
-    borderColor: "#bbf7d0",
-  },
-
-  detailsMessageBad: {
-    background: "#fef2f2",
-    color: "#991b1b",
-    borderColor: "#fecaca",
-  },
-
-  orderResultPanel: {
-    display: "grid",
-    gap: 5,
-    padding: 13,
-    borderRadius: 18,
-    border: "1px solid",
-    fontSize: 13,
-    lineHeight: 1.45,
-    fontWeight: 850,
-  },
-
-  orderResultGood: {
-    background: "#f0fdf4",
-    color: "#166534",
-    borderColor: "#bbf7d0",
-  },
-
-  orderResultBad: {
-    background: "#fef2f2",
-    color: "#991b1b",
-    borderColor: "#fecaca",
-  },
-
-  orderResultTitle: {
-    color: "inherit",
-    fontSize: 14,
-    fontWeight: 950,
-  },
-
-  orderResultText: {
-    color: "inherit",
-  },
-
-  orderReference: {
-    display: "inline-flex",
-    width: "fit-content",
-    padding: "7px 10px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
-    border: "1px solid #bbf7d0",
-    fontSize: 12,
-    fontWeight: 950,
-  },
-
-  detailsActions: {
-    display: "grid",
-    gridTemplateColumns: "1fr",
-    gap: 10,
   },
 
   emptyPanel: {
