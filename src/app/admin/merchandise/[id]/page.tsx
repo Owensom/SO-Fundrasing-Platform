@@ -40,6 +40,20 @@ type MerchandiseProduct = {
   status: string;
   created_at: string;
   updated_at: string;
+
+  linked_event_id: string | null;
+  event_linking_enabled: boolean | null;
+  fulfilment_collect_stand_enabled: boolean | null;
+  fulfilment_collect_table_enabled: boolean | null;
+  fulfilment_deliver_table_enabled: boolean | null;
+  fulfilment_deliver_seat_enabled: boolean | null;
+  fulfilment_post_enabled: boolean | null;
+  fulfilment_arrange_with_organiser_enabled: boolean | null;
+  fulfilment_notes: string | null;
+  require_booking_reference: boolean | null;
+  require_table_number: boolean | null;
+  require_seat_number: boolean | null;
+  require_guest_name: boolean | null;
 };
 
 type TenantSettingsLike = {
@@ -109,6 +123,11 @@ function getCustomSizeOptions(product: MerchandiseProduct) {
     .join(", ");
 }
 
+function isEnabled(value: boolean | null | undefined, fallback = false) {
+  if (typeof value === "boolean") return value;
+  return fallback;
+}
+
 async function requireTenantAccess() {
   const session = await auth();
 
@@ -154,7 +173,20 @@ async function getProduct({
         options_json,
         status,
         created_at::text,
-        updated_at::text
+        updated_at::text,
+        linked_event_id::text,
+        event_linking_enabled,
+        fulfilment_collect_stand_enabled,
+        fulfilment_collect_table_enabled,
+        fulfilment_deliver_table_enabled,
+        fulfilment_deliver_seat_enabled,
+        fulfilment_post_enabled,
+        fulfilment_arrange_with_organiser_enabled,
+        fulfilment_notes,
+        require_booking_reference,
+        require_table_number,
+        require_seat_number,
+        require_guest_name
       from merchandise_products
       where tenant_slug = $1
         and id = $2
@@ -224,6 +256,24 @@ export default async function EditMerchandiseProductPage({
   const imageFocusX = normaliseFocus(product.image_focus_x);
   const imageFocusY = normaliseFocus(product.image_focus_y);
 
+  const eventLinkingEnabled = isEnabled(product.event_linking_enabled);
+  const collectStandEnabled = isEnabled(
+    product.fulfilment_collect_stand_enabled,
+    true,
+  );
+  const collectTableEnabled = isEnabled(
+    product.fulfilment_collect_table_enabled,
+  );
+  const deliverTableEnabled = isEnabled(
+    product.fulfilment_deliver_table_enabled,
+  );
+  const deliverSeatEnabled = isEnabled(product.fulfilment_deliver_seat_enabled);
+  const postEnabled = isEnabled(product.fulfilment_post_enabled);
+  const arrangeWithOrganiserEnabled = isEnabled(
+    product.fulfilment_arrange_with_organiser_enabled,
+    true,
+  );
+
   return (
     <main className="admin-merchandise-form-page" style={styles.page}>
       <style>{responsiveStyles}</style>
@@ -234,15 +284,16 @@ export default async function EditMerchandiseProductPage({
             ← Back to merchandise
           </Link>
 
-          <p style={styles.badge}>Phase 7A setup</p>
+          <p style={styles.badge}>Phase 7C/7D setup</p>
 
           <h1 className="merchandise-form-title" style={styles.title}>
             Edit merchandise product
           </h1>
 
           <p style={styles.subtitle}>
-            Update the product record. Public shop display and checkout remain
-            intentionally disconnected until later phases.
+            Update the product record. Event linking and fulfilment setup are
+            now being prepared, while checkout remains intentionally
+            disconnected until a later phase.
           </p>
 
           <p style={styles.tenantLine}>
@@ -416,6 +467,192 @@ export default async function EditMerchandiseProductPage({
         </section>
 
         <section style={styles.card}>
+          <p style={styles.kicker}>Event linking and fulfilment setup</p>
+
+          <p style={styles.sectionHelp}>
+            Optional setup for products connected to an event, such as ceilidh
+            merchandise, table delivery, collection stands or post-event
+            fulfilment. This prepares the product record only. Checkout,
+            payments, orders and fulfilment automation are not enabled in this
+            phase.
+          </p>
+
+          <div style={styles.readinessPanel}>
+            <div
+              style={{
+                ...styles.readinessItem,
+                ...(eventLinkingEnabled
+                  ? styles.readinessItemGood
+                  : styles.readinessItemNeutral),
+              }}
+            >
+              <span style={styles.readinessLabel}>Event linking</span>
+              <strong style={styles.readinessValue}>
+                {eventLinkingEnabled ? "Enabled" : "Not enabled"}
+              </strong>
+            </div>
+
+            <div
+              style={{
+                ...styles.readinessItem,
+                ...(collectStandEnabled ||
+                collectTableEnabled ||
+                deliverTableEnabled ||
+                deliverSeatEnabled ||
+                postEnabled ||
+                arrangeWithOrganiserEnabled
+                  ? styles.readinessItemGood
+                  : styles.readinessItemWarning),
+              }}
+            >
+              <span style={styles.readinessLabel}>Fulfilment options</span>
+              <strong style={styles.readinessValue}>
+                {collectStandEnabled ||
+                collectTableEnabled ||
+                deliverTableEnabled ||
+                deliverSeatEnabled ||
+                postEnabled ||
+                arrangeWithOrganiserEnabled
+                  ? "At least one option selected"
+                  : "Needs at least one option"}
+              </strong>
+            </div>
+          </div>
+
+          <label style={styles.toggleRow}>
+            <input
+              type="checkbox"
+              name="event_linking_enabled"
+              value="1"
+              defaultChecked={eventLinkingEnabled}
+              style={styles.checkbox}
+            />
+            <span>
+              <strong style={styles.toggleTitle}>Link this product to an event</strong>
+              <small style={styles.toggleHelp}>
+                Use this when merchandise is designed for a specific event or
+                may need table, seat or booking details later.
+              </small>
+            </span>
+          </label>
+
+          <Field
+            label="Linked event ID"
+            helper="Optional for now. Paste the event UUID only when this product belongs to a specific event. A safer event picker can be added once the event list query is wired separately."
+          >
+            <input
+              name="linked_event_id"
+              type="text"
+              defaultValue={product.linked_event_id || ""}
+              placeholder="Optional event UUID"
+              style={styles.input}
+            />
+          </Field>
+
+          <div style={styles.fulfilmentBox}>
+            <span style={styles.fulfilmentTitle}>Fulfilment choices</span>
+
+            <div className="fulfilment-grid" style={styles.fulfilmentGrid}>
+              <CheckboxCard
+                name="fulfilment_collect_stand_enabled"
+                title="Collect from merchandise stand"
+                helper="Best default for event merchandise."
+                defaultChecked={collectStandEnabled}
+              />
+
+              <CheckboxCard
+                name="fulfilment_collect_table_enabled"
+                title="Collect from table"
+                helper="Useful when the organiser has table packs or table hosts."
+                defaultChecked={collectTableEnabled}
+              />
+
+              <CheckboxCard
+                name="fulfilment_deliver_table_enabled"
+                title="Deliver to table"
+                helper="For seated events where table delivery may be offered."
+                defaultChecked={deliverTableEnabled}
+              />
+
+              <CheckboxCard
+                name="fulfilment_deliver_seat_enabled"
+                title="Deliver to seat"
+                helper="For ticketed seating where seat details may be needed."
+                defaultChecked={deliverSeatEnabled}
+              />
+
+              <CheckboxCard
+                name="fulfilment_post_enabled"
+                title="Post after event"
+                helper="For items that can be sent later."
+                defaultChecked={postEnabled}
+              />
+
+              <CheckboxCard
+                name="fulfilment_arrange_with_organiser_enabled"
+                title="Arrange with organiser"
+                helper="A safe fallback while fulfilment automation is not live."
+                defaultChecked={arrangeWithOrganiserEnabled}
+              />
+            </div>
+          </div>
+
+          <div style={styles.fulfilmentBox}>
+            <span style={styles.fulfilmentTitle}>
+              Details to request later at checkout
+            </span>
+
+            <p style={styles.sectionHelp}>
+              These settings only prepare the product. They do not currently
+              change checkout or create merchandise orders.
+            </p>
+
+            <div className="fulfilment-grid" style={styles.fulfilmentGrid}>
+              <CheckboxCard
+                name="require_booking_reference"
+                title="Booking reference"
+                helper="Useful for event-linked collection or table delivery."
+                defaultChecked={isEnabled(product.require_booking_reference)}
+              />
+
+              <CheckboxCard
+                name="require_table_number"
+                title="Table number"
+                helper="Useful for table collection or delivery."
+                defaultChecked={isEnabled(product.require_table_number)}
+              />
+
+              <CheckboxCard
+                name="require_seat_number"
+                title="Seat number"
+                helper="Useful for seated events."
+                defaultChecked={isEnabled(product.require_seat_number)}
+              />
+
+              <CheckboxCard
+                name="require_guest_name"
+                title="Guest name"
+                helper="Useful when buying for someone else."
+                defaultChecked={isEnabled(product.require_guest_name)}
+              />
+            </div>
+          </div>
+
+          <Field
+            label="Fulfilment notes"
+            helper="Optional internal guidance for the organiser. This is setup-only and is not sent to customers yet."
+          >
+            <textarea
+              name="fulfilment_notes"
+              rows={4}
+              defaultValue={product.fulfilment_notes || ""}
+              placeholder="Example: Collect from the merchandise table beside the entrance. Event-linked delivery may be added later."
+              style={styles.textarea}
+            />
+          </Field>
+        </section>
+
+        <section style={styles.card}>
           <p style={styles.kicker}>Image setup</p>
 
           <ImageFocusUploadField
@@ -469,6 +706,34 @@ function Field({
   );
 }
 
+function CheckboxCard({
+  name,
+  title,
+  helper,
+  defaultChecked,
+}: {
+  name: string;
+  title: string;
+  helper: string;
+  defaultChecked: boolean;
+}) {
+  return (
+    <label style={styles.checkboxCard}>
+      <input
+        type="checkbox"
+        name={name}
+        value="1"
+        defaultChecked={defaultChecked}
+        style={styles.checkbox}
+      />
+      <span style={styles.checkboxCardText}>
+        <strong style={styles.checkboxCardTitle}>{title}</strong>
+        <small style={styles.checkboxCardHelp}>{helper}</small>
+      </span>
+    </label>
+  );
+}
+
 const responsiveStyles = `
 .admin-merchandise-form-page,
 .admin-merchandise-form-page * {
@@ -495,6 +760,10 @@ const responsiveStyles = `
 @media (max-width: 860px) {
   .admin-merchandise-form-page .size-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .admin-merchandise-form-page .fulfilment-grid {
+    grid-template-columns: 1fr !important;
   }
 }
 
@@ -888,5 +1157,129 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.35,
     fontWeight: 900,
     overflowWrap: "anywhere",
+  },
+
+  readinessPanel: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  readinessItem: {
+    display: "grid",
+    gap: 5,
+    padding: 14,
+    borderRadius: 18,
+    border: "1px solid #e2e8f0",
+  },
+
+  readinessItemGood: {
+    background: "#f0fdf4",
+    borderColor: "#bbf7d0",
+  },
+
+  readinessItemWarning: {
+    background: "#fffbeb",
+    borderColor: "#fde68a",
+  },
+
+  readinessItemNeutral: {
+    background: "#f8fafc",
+    borderColor: "#e2e8f0",
+  },
+
+  readinessLabel: {
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  readinessValue: {
+    color: "#0f172a",
+    fontSize: 14,
+    lineHeight: 1.35,
+    fontWeight: 950,
+  },
+
+  toggleRow: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 11,
+    padding: 14,
+    borderRadius: 18,
+    background: "#eff6ff",
+    border: "1px solid #bfdbfe",
+    cursor: "pointer",
+  },
+
+  toggleTitle: {
+    display: "block",
+    color: "#0f172a",
+    fontSize: 14,
+    lineHeight: 1.3,
+    fontWeight: 950,
+  },
+
+  toggleHelp: {
+    display: "block",
+    marginTop: 4,
+    color: "#475569",
+    fontSize: 12,
+    lineHeight: 1.4,
+    fontWeight: 700,
+  },
+
+  fulfilmentBox: {
+    display: "grid",
+    gap: 10,
+    padding: 14,
+    borderRadius: 20,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+
+  fulfilmentTitle: {
+    color: "#0f172a",
+    fontSize: 14,
+    fontWeight: 950,
+  },
+
+  fulfilmentGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  checkboxCard: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 10,
+    minHeight: 76,
+    padding: 13,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #dbeafe",
+    cursor: "pointer",
+  },
+
+  checkboxCardText: {
+    display: "grid",
+    gap: 4,
+  },
+
+  checkboxCardTitle: {
+    color: "#0f172a",
+    fontSize: 13,
+    lineHeight: 1.25,
+    fontWeight: 950,
+  },
+
+  checkboxCardHelp: {
+    color: "#64748b",
+    fontSize: 12,
+    lineHeight: 1.35,
+    fontWeight: 700,
   },
 };
