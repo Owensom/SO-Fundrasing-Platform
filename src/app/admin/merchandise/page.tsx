@@ -539,6 +539,20 @@ export default async function AdminMerchandisePage() {
                 </Link>
 
                 <Link
+                  href="/admin/merchandise/orders"
+                  style={styles.secondaryPanelButton}
+                >
+                  Orders →
+                </Link>
+
+                <Link
+                  href="/admin/merchandise/fulfilment"
+                  style={styles.secondaryPanelButton}
+                >
+                  Fulfilment planning →
+                </Link>
+
+                <Link
                   href={getPublicShopHref(tenantSlug)}
                   target="_blank"
                   style={styles.secondaryPanelButton}
@@ -595,9 +609,9 @@ export default async function AdminMerchandisePage() {
               />
 
               <ReadinessItem
-                label="Stock"
-                value="Manual for now"
-                detail="Sold quantity is not updated automatically until checkout and order handling are built."
+                label="Orders"
+                value="Read-only ready"
+                detail="Order tables and the read-only orders page are ready, but no checkout creates records yet."
                 tone="neutral"
               />
             </div>
