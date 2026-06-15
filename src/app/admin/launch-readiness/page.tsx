@@ -77,6 +77,14 @@ type EventReadinessRow = {
   event_addons_json: unknown;
 };
 
+type MerchandiseReadinessRow = {
+  id: string;
+  status: string;
+  price_cents: number;
+  currency: string;
+  sold_quantity: number;
+};
+
 type MoneyRow = {
   count: number | string;
   total_cents: number | string | null;
@@ -474,6 +482,23 @@ async function getEvents(tenantSlug: string) {
   );
 }
 
+async function getMerchandiseProducts(tenantSlug: string) {
+  return query<MerchandiseReadinessRow>(
+    `
+      select
+        id,
+        status,
+        price_cents,
+        currency,
+        sold_quantity
+      from merchandise_products
+      where tenant_slug = $1
+      order by created_at desc
+    `,
+    [tenantSlug],
+  );
+}
+
 async function getPaidDonationSummary(tenantSlug: string) {
   return queryOne<MoneyRow>(
     `
@@ -766,6 +791,28 @@ function buildAuctionWarnings(auctions: Array<Record<string, unknown>>) {
   return warnings;
 }
 
+function buildMerchandiseWarnings(products: MerchandiseReadinessRow[]) {
+  const warnings: CampaignWarning[] = [];
+
+  const publishedProducts = products.filter(
+    (item) => item.status === "published",
+  );
+
+  for (const product of publishedProducts) {
+    if (Number(product.price_cents || 0) <= 0) {
+      warnings.push({
+        title: `Merchandise product ${product.id}: price missing`,
+        detail:
+          "Published merchandise products should have a valid price before supporters can buy them.",
+        href: "/admin/merchandise",
+        tone: "danger",
+      });
+    }
+  }
+
+  return warnings;
+}
+
 function buildTenantReadinessItems(input: {
   tenantSlug: string;
   settings: TenantLaunchSettings | null;
@@ -773,6 +820,7 @@ function buildTenantReadinessItems(input: {
   squares: SquaresReadinessRow[];
   events: EventReadinessRow[];
   auctions: Array<Record<string, unknown>>;
+  merchandiseProducts: MerchandiseReadinessRow[];
   donationSummary: MoneyRow | null;
   eventOrderSummary: MoneyRow | null;
   supportSummary: SupportSummaryRow | null;
@@ -791,12 +839,23 @@ function buildTenantReadinessItems(input: {
   const publishedAuctions = input.auctions.filter(
     (item) => cleanText(item.status) === "published",
   );
+  const publishedMerchandiseProducts = input.merchandiseProducts.filter(
+    (item) => item.status === "published",
+  );
 
   const totalPublishedCampaigns =
     publishedRaffles.length +
     publishedSquares.length +
     publishedEvents.length +
     publishedAuctions.length;
+
+  const totalPublishedLiveItems =
+    totalPublishedCampaigns + publishedMerchandiseProducts.length;
+
+  const merchandiseSold = input.merchandiseProducts.reduce(
+    (sum, item) => sum + Number(item.sold_quantity || 0),
+    0,
+  );
 
   const hasDisplayName = Boolean(cleanText(settings?.public_display_name));
   const hasLogo = Boolean(
@@ -845,6 +904,31 @@ function buildTenantReadinessItems(input: {
       action: "View public hub",
     },
     {
+      title: "Merchandise shop",
+      status:
+        publishedMerchandiseProducts.length > 0
+          ? "Products published"
+          : input.merchandiseProducts.length > 0
+            ? "Products in setup"
+            : "No products yet",
+      detail:
+        publishedMerchandiseProducts.length > 0
+          ? `${publishedMerchandiseProducts.length} merchandise product${
+              publishedMerchandiseProducts.length === 1 ? "" : "s"
+            } published, with ${merchandiseSold} sold across the product catalogue.`
+          : input.merchandiseProducts.length > 0
+            ? "Merchandise products exist but none are currently published."
+            : "No merchandise products found. This is fine if the tenant is not using the shop yet.",
+      tone:
+        publishedMerchandiseProducts.length > 0
+          ? "good"
+          : input.merchandiseProducts.length > 0
+            ? "warning"
+            : "neutral",
+      href: "/admin/merchandise",
+      action: "Open merchandise",
+    },
+    {
       title: "Phone shortcuts and sharing",
       status: "Shortcut guidance live",
       detail:
@@ -857,7 +941,7 @@ function buildTenantReadinessItems(input: {
       title: "Campaign readiness UI",
       status: "Platform-wide colour language complete",
       detail:
-        "Events, Raffles, Squares and Auctions now share the same full-card readiness language: green for ready, amber for check, red for action and grey for info.",
+        "Events, Raffles, Squares and Auctions share the same full-card readiness language: green for ready, amber for check, red for action and grey for info.",
       tone: "good",
     },
     {
@@ -938,8 +1022,8 @@ function buildTenantReadinessItems(input: {
             }`,
       detail:
         input.campaignWarnings.length === 0
-          ? "Published campaign checks did not detect missing prices, dates or key configuration issues."
-          : "Review the campaign warnings before sharing widely.",
+          ? "Published campaign and merchandise checks did not detect missing prices, dates or key configuration issues."
+          : "Review the campaign and merchandise warnings before sharing widely.",
       tone: input.campaignWarnings.some((item) => item.tone === "danger")
         ? "danger"
         : input.campaignWarnings.length > 0
@@ -992,6 +1076,7 @@ export default async function AdminLaunchReadinessPage() {
     squares,
     events,
     auctionsRaw,
+    merchandiseProducts,
     donationSummary,
     eventOrderSummary,
     supportSummary,
@@ -1001,6 +1086,7 @@ export default async function AdminLaunchReadinessPage() {
     getSquares(tenantSlug),
     getEvents(tenantSlug),
     listAuctions(tenantSlug),
+    getMerchandiseProducts(tenantSlug),
     getPaidDonationSummary(tenantSlug),
     getPaidEventOrderSummary(tenantSlug),
     getSupportSummary(tenantSlug),
@@ -1014,11 +1100,13 @@ export default async function AdminLaunchReadinessPage() {
   const squaresWarnings = buildSquaresWarnings(squares);
   const eventWarnings = buildEventWarnings(events);
   const auctionWarnings = buildAuctionWarnings(auctions);
+  const merchandiseWarnings = buildMerchandiseWarnings(merchandiseProducts);
   const campaignWarnings = [
     ...raffleWarnings,
     ...squaresWarnings,
     ...eventWarnings,
     ...auctionWarnings,
+    ...merchandiseWarnings,
   ];
 
   const readinessItems = buildTenantReadinessItems({
@@ -1028,6 +1116,7 @@ export default async function AdminLaunchReadinessPage() {
     squares,
     events,
     auctions,
+    merchandiseProducts,
     donationSummary,
     eventOrderSummary,
     supportSummary,
@@ -1037,11 +1126,24 @@ export default async function AdminLaunchReadinessPage() {
   const readinessScore = scoreReadiness(readinessItems);
   const overallTone = getOverallTone(readinessScore);
   const tier = normaliseSubscriptionTier(settings?.subscription_tier);
+
   const publishedCampaignCount =
     raffles.filter((item) => item.status === "published").length +
     squares.filter((item) => item.status === "published").length +
     events.filter((item) => item.status === "published").length +
     auctions.filter((item) => cleanText(item.status) === "published").length;
+
+  const publishedMerchandiseCount = merchandiseProducts.filter(
+    (item) => item.status === "published",
+  ).length;
+
+  const publishedLiveItemCount =
+    publishedCampaignCount + publishedMerchandiseCount;
+
+  const merchandiseSold = merchandiseProducts.reduce(
+    (sum, item) => sum + Number(item.sold_quantity || 0),
+    0,
+  );
 
   const paidDonationTotal = Number(donationSummary?.total_cents || 0);
   const paidEventOrderTotal = Number(eventOrderSummary?.total_cents || 0);
@@ -1052,7 +1154,7 @@ export default async function AdminLaunchReadinessPage() {
 
       <section className="launch-hero" style={styles.hero}>
         <div>
-          <div style={styles.eyebrow}>Phase 6F.3</div>
+          <div style={styles.eyebrow}>Launch operations</div>
 
           <h1 className="launch-title" style={styles.title}>
             Launch Readiness
@@ -1060,8 +1162,8 @@ export default async function AdminLaunchReadinessPage() {
 
           <p style={styles.subtitle}>
             A read-only launch confidence check for this tenant. It highlights
-            branding, public hub, sharing shortcuts, campaigns, payments,
-            Gift Aid, support and obvious campaign setup warnings without
+            branding, public hub, sharing shortcuts, campaigns, merchandise,
+            payments, Gift Aid, support and obvious setup warnings without
             changing any live flow.
           </p>
 
@@ -1114,7 +1216,7 @@ export default async function AdminLaunchReadinessPage() {
       </section>
 
       <section className="metric-grid" style={styles.metricGrid}>
-        <MetricCard label="Published campaigns" value={publishedCampaignCount} />
+        <MetricCard label="Published live items" value={publishedLiveItemCount} />
 
         <MetricCard
           label="Paid donations"
@@ -1124,6 +1226,12 @@ export default async function AdminLaunchReadinessPage() {
         <MetricCard
           label="Paid event orders"
           value={formatMoney(paidEventOrderTotal)}
+        />
+
+        <MetricCard
+          label="Merchandise sold"
+          value={merchandiseSold}
+          tone={publishedMerchandiseCount > 0 ? "good" : "neutral"}
         />
 
         <MetricCard
@@ -1152,14 +1260,15 @@ export default async function AdminLaunchReadinessPage() {
             <h2 style={styles.sectionTitle}>Launch warnings</h2>
             <p style={styles.sectionText}>
               These checks look for obvious missing fields on published
-              campaigns. They are advisory and do not block publishing.
+              campaigns and merchandise products. They are advisory and do not
+              block publishing.
             </p>
           </div>
         </div>
 
         {campaignWarnings.length === 0 ? (
           <div style={styles.emptyState}>
-            No launch warnings detected for published campaigns.
+            No launch warnings detected for published campaigns or merchandise.
           </div>
         ) : (
           <div style={styles.warningList}>
@@ -1183,7 +1292,7 @@ export default async function AdminLaunchReadinessPage() {
 
                   <p style={styles.warningDetail}>{warning.detail}</p>
 
-                  <span style={styles.warningAction}>Open campaign →</span>
+                  <span style={styles.warningAction}>Open area →</span>
                 </article>
               </Link>
             ))}
@@ -1199,8 +1308,8 @@ export default async function AdminLaunchReadinessPage() {
 
           <ol style={styles.stepList}>
             <li>Confirm branding and public contact email.</li>
-            <li>Publish only campaigns that are ready to share.</li>
-            <li>Open each public campaign page on mobile and desktop.</li>
+            <li>Publish only campaigns and products that are ready to share.</li>
+            <li>Open each public campaign and shop page on mobile and desktop.</li>
             <li>Confirm Share Kit links and phone shortcut guidance.</li>
             <li>Complete one controlled checkout or donation test.</li>
             <li>Confirm receipt email and admin order/reporting entry.</li>
@@ -1216,7 +1325,7 @@ export default async function AdminLaunchReadinessPage() {
           <p style={styles.sectionText}>
             This page does not write to the database and does not change
             checkout, Stripe, emails, raffles, squares, events, auctions,
-            donations, Heads or Tails or Higher or Lower.
+            merchandise, donations, Heads or Tails or Higher or Lower.
           </p>
 
           <div style={styles.infoBox}>
@@ -1512,7 +1621,7 @@ const styles: Record<string, CSSProperties> = {
 
   metricGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
     gap: 12,
     marginBottom: 18,
   },
