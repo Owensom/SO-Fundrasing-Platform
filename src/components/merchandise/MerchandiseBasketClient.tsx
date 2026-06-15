@@ -104,6 +104,11 @@ type LineFulfilmentDetails = {
   guestName: string;
 };
 
+type CheckoutCompleteState = {
+  orderReference: string;
+  sessionId: string;
+};
+
 function getBasketKey(tenantSlug: string) {
   return `so_merchandise_basket_${tenantSlug}`;
 }
@@ -127,6 +132,16 @@ function writeBasket(tenantSlug: string, items: BasketItem[]) {
   if (typeof window === "undefined") return;
 
   window.localStorage.setItem(getBasketKey(tenantSlug), JSON.stringify(items));
+}
+
+function clearStoredBasket(tenantSlug: string) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.removeItem(getBasketKey(tenantSlug));
+  } catch {
+    window.localStorage.setItem(getBasketKey(tenantSlug), "[]");
+  }
 }
 
 function cleanText(value: unknown) {
@@ -186,6 +201,82 @@ function getInitialLineDetails(lines: ValidatedBasketLine[]) {
   return details;
 }
 
+function getCheckoutCompleteStateFromUrl(): CheckoutCompleteState | null {
+  if (typeof window === "undefined") return null;
+
+  const params = new URLSearchParams(window.location.search);
+
+  const cancelled =
+    params.get("cancelled") === "true" ||
+    params.get("canceled") === "true" ||
+    params.get("status") === "cancelled" ||
+    params.get("status") === "canceled" ||
+    params.get("checkout") === "cancelled" ||
+    params.get("checkout") === "canceled";
+
+  if (cancelled) return null;
+
+  const sessionId = cleanText(
+    params.get("session_id") ||
+      params.get("sessionId") ||
+      params.get("stripe_session_id") ||
+      params.get("stripeSessionId"),
+  );
+
+  const orderReference = cleanText(
+    params.get("order_reference") ||
+      params.get("orderReference") ||
+      params.get("merchandise_order_reference") ||
+      params.get("merchandiseOrderReference") ||
+      params.get("reference"),
+  );
+
+  const success =
+    params.get("success") === "true" ||
+    params.get("checkout_success") === "true" ||
+    params.get("checkoutSuccess") === "true" ||
+    params.get("merchandise_success") === "true" ||
+    params.get("merchandiseSuccess") === "true" ||
+    params.get("status") === "success" ||
+    params.get("checkout") === "success" ||
+    Boolean(sessionId);
+
+  if (!success) return null;
+
+  return {
+    orderReference,
+    sessionId,
+  };
+}
+
+function removeCheckoutParamsFromUrl() {
+  if (typeof window === "undefined") return;
+
+  const url = new URL(window.location.href);
+
+  [
+    "success",
+    "checkout_success",
+    "checkoutSuccess",
+    "merchandise_success",
+    "merchandiseSuccess",
+    "status",
+    "checkout",
+    "session_id",
+    "sessionId",
+    "stripe_session_id",
+    "stripeSessionId",
+    "order_reference",
+    "orderReference",
+    "merchandise_order_reference",
+    "merchandiseOrderReference",
+    "reference",
+  ].forEach((key) => url.searchParams.delete(key));
+
+  const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+  window.history.replaceState({}, "", nextUrl);
+}
+
 export default function MerchandiseBasketClient({
   tenantSlug,
   shopHref,
@@ -195,6 +286,8 @@ export default function MerchandiseBasketClient({
   const [items, setItems] = useState<BasketItem[]>([]);
   const [isCheckingBasket, setIsCheckingBasket] = useState(false);
   const [isStartingCheckout, setIsStartingCheckout] = useState(false);
+  const [checkoutComplete, setCheckoutComplete] =
+    useState<CheckoutCompleteState | null>(null);
 
   const [validationResult, setValidationResult] =
     useState<BasketValidationResult | null>(null);
@@ -216,6 +309,20 @@ export default function MerchandiseBasketClient({
   >({});
 
   useEffect(() => {
+    const checkoutCompleteState = getCheckoutCompleteStateFromUrl();
+
+    if (checkoutCompleteState) {
+      clearStoredBasket(tenantSlug);
+      setItems([]);
+      setValidationResult(null);
+      setLineDetails({});
+      setCheckoutMessage(null);
+      setCheckoutComplete(checkoutCompleteState);
+      removeCheckoutParamsFromUrl();
+      return;
+    }
+
+    setCheckoutComplete(null);
     setItems(readBasket(tenantSlug));
   }, [tenantSlug]);
 
@@ -303,12 +410,18 @@ export default function MerchandiseBasketClient({
     setValidationResult(null);
     setLineDetails({});
     setCheckoutMessage(null);
+    setCheckoutComplete(null);
   }
 
   function updateItems(nextItems: BasketItem[]) {
     setItems(nextItems);
     resetCheckoutState();
-    writeBasket(tenantSlug, nextItems);
+
+    if (nextItems.length === 0) {
+      clearStoredBasket(tenantSlug);
+    } else {
+      writeBasket(tenantSlug, nextItems);
+    }
   }
 
   function updateQuantity(index: number, quantity: number) {
@@ -565,6 +678,46 @@ export default function MerchandiseBasketClient({
     } finally {
       setIsStartingCheckout(false);
     }
+  }
+
+  if (checkoutComplete) {
+    return (
+      <section style={styles.successPanel}>
+        <div style={styles.successIcon}>✓</div>
+
+        <p style={{ ...styles.kicker, color: primaryColour }}>
+          Order confirmed
+        </p>
+
+        <h2 style={styles.successTitle}>Thank you for your order</h2>
+
+        <p style={styles.successText}>
+          Your merchandise order has been received and your basket has been
+          cleared. A receipt email will be sent to the email address used at
+          checkout.
+        </p>
+
+        {checkoutComplete.orderReference ? (
+          <div style={styles.successReference}>
+            Order reference: <strong>{checkoutComplete.orderReference}</strong>
+          </div>
+        ) : null}
+
+        <div className="success-actions" style={styles.successActions}>
+          <a
+            href={shopHref}
+            style={{
+              ...styles.primaryButton,
+              background: primaryColour,
+              borderColor: primaryColour,
+              color: primaryTextColour,
+            }}
+          >
+            Continue shopping →
+          </a>
+        </div>
+      </section>
+    );
   }
 
   if (items.length === 0) {
@@ -1461,5 +1614,65 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
     lineHeight: 1.5,
     fontWeight: 760,
+  },
+
+  successPanel: {
+    display: "grid",
+    justifyItems: "center",
+    gap: 12,
+    width: "100%",
+    padding: 30,
+    borderRadius: 28,
+    background:
+      "linear-gradient(135deg, rgba(240,253,244,1), rgba(255,255,255,1) 62%, rgba(239,246,255,0.92))",
+    border: "1px solid #bbf7d0",
+    boxShadow: "0 14px 34px rgba(15,23,42,0.06)",
+    textAlign: "center",
+  },
+
+  successIcon: {
+    display: "grid",
+    placeItems: "center",
+    width: 62,
+    height: 62,
+    borderRadius: 22,
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #86efac",
+    fontSize: 30,
+    fontWeight: 950,
+  },
+
+  successTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 34,
+    lineHeight: 1.03,
+    letterSpacing: "-0.055em",
+  },
+
+  successText: {
+    margin: 0,
+    maxWidth: 640,
+    color: "#475569",
+    lineHeight: 1.55,
+    fontWeight: 760,
+  },
+
+  successReference: {
+    padding: "10px 13px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#166534",
+    border: "1px solid #bbf7d0",
+    fontSize: 13,
+    fontWeight: 850,
+  },
+
+  successActions: {
+    display: "grid",
+    width: "100%",
+    maxWidth: 320,
+    marginTop: 4,
   },
 };
