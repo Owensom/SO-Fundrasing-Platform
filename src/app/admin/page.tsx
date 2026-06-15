@@ -142,15 +142,21 @@ export default async function AdminDashboardPage() {
     "/admin",
   )}`;
 
-  const [raffles, squares, events, auctions, merchandiseProducts, tenantSettingsRaw] =
-    await Promise.all([
-      getAdminRaffles(),
-      listSquaresGames(tenantSlug),
-      listEvents(tenantSlug),
-      listAuctions(tenantSlug),
-      listMerchandiseProducts(tenantSlug),
-      getTenantSettings(tenantSlug),
-    ]);
+  const [
+    raffles,
+    squares,
+    events,
+    auctions,
+    merchandiseProducts,
+    tenantSettingsRaw,
+  ] = await Promise.all([
+    getAdminRaffles(),
+    listSquaresGames(tenantSlug),
+    listEvents(tenantSlug),
+    listAuctions(tenantSlug),
+    listMerchandiseProducts(tenantSlug),
+    getTenantSettings(tenantSlug),
+  ]);
 
   const tenantSettings = tenantSettingsRaw as TenantBillingLike | null;
 
@@ -449,8 +455,8 @@ export default async function AdminDashboardPage() {
           </h2>
 
           <p style={styles.sectionText}>
-            A compact overview of the key campaign numbers currently available
-            for this tenant.
+            A compact, neutral overview of the key campaign numbers currently
+            available for this tenant.
           </p>
         </div>
       </section>
@@ -658,8 +664,9 @@ export default async function AdminDashboardPage() {
 
           <p style={styles.planText}>
             Current tenant capabilities, platform fee and plan-based features.
-            This section is kept lower on the dashboard because most day-to-day
-            work starts with campaigns, public sharing, orders and finance.
+            This panel stays lower on the dashboard so everyday work starts with
+            campaigns, public sharing, orders and finance, while plan details
+            remain easy to confirm when needed.
           </p>
         </div>
 
@@ -726,9 +733,9 @@ export default async function AdminDashboardPage() {
           </h2>
 
           <p style={styles.adminInstallText}>
-            During live events, raffles, auctions or campaign launches, you can
-            add the admin dashboard to your phone or iPad home screen for quick
-            access.
+            During live events, raffles, auctions or campaign launches, add this
+            admin dashboard to your phone or iPad home screen for quick access
+            to campaign tools, orders, finance, support and launch checks.
           </p>
 
           <div className="admin-install-steps" style={styles.adminInstallSteps}>
@@ -1277,7 +1284,7 @@ const styles: Record<string, CSSProperties> = {
     margin: "8px 0 0",
     color: "#64748b",
     lineHeight: 1.6,
-    maxWidth: 780,
+    maxWidth: 940,
     fontWeight: 700,
     overflowWrap: "anywhere",
   },
@@ -1365,7 +1372,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 28,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    minHeight: 250,
+    minHeight: 248,
     boxShadow: "0 8px 30px rgba(15,23,42,0.05)",
     height: "100%",
     minWidth: 0,
@@ -1385,7 +1392,7 @@ const styles: Record<string, CSSProperties> = {
   },
 
   compactCard: {
-    minHeight: 210,
+    minHeight: 214,
     gap: 12,
   },
 
@@ -1479,7 +1486,7 @@ const styles: Record<string, CSSProperties> = {
   cardDescription: {
     margin: 0,
     color: "#64748b",
-    lineHeight: 1.5,
+    lineHeight: 1.52,
     fontSize: 14,
     fontWeight: 700,
     overflowWrap: "anywhere",
@@ -1519,8 +1526,8 @@ const styles: Record<string, CSSProperties> = {
 
   planPanel: {
     display: "grid",
-    gap: 18,
-    padding: 22,
+    gap: 20,
+    padding: 24,
     borderRadius: 28,
     background:
       "linear-gradient(135deg, rgba(37,99,235,0.08), rgba(255,255,255,1) 72%)",
@@ -1550,8 +1557,8 @@ const styles: Record<string, CSSProperties> = {
   planText: {
     margin: "8px 0 0",
     color: "#475569",
-    lineHeight: 1.6,
-    maxWidth: 880,
+    lineHeight: 1.58,
+    maxWidth: 1120,
     fontWeight: 750,
     overflowWrap: "anywhere",
   },
@@ -1632,7 +1639,7 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "58px minmax(0, 1fr)",
     gap: 15,
     alignItems: "start",
-    padding: 18,
+    padding: 20,
     borderRadius: 26,
     background:
       "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(239,246,255,0.96) 58%, rgba(255,251,235,0.88) 100%)",
@@ -1688,14 +1695,14 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.55,
     fontWeight: 750,
     overflowWrap: "anywhere",
-    maxWidth: 900,
+    maxWidth: 1120,
   },
 
   adminInstallSteps: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 10,
-    marginTop: 3,
+    gap: 14,
+    marginTop: 5,
     minWidth: 0,
   },
 };
