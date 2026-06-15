@@ -287,8 +287,8 @@ export default async function AdminDashboardPage() {
             </h1>
 
             <p className="admin-dashboard-subtitle" style={styles.subtitle}>
-              Manage campaigns, launch confidence, payments and supporter
-              operations across one premium fundraising workspace.
+              Create campaigns, check launch readiness, share the public site
+              and review supporter activity from one calm workspace.
             </p>
 
             <p className="admin-dashboard-tenant" style={styles.tenant}>
@@ -316,10 +316,18 @@ export default async function AdminDashboardPage() {
 
             <Link
               href="/admin/orders"
+              className="primaryButton"
+              style={styles.primaryButton}
+            >
+              Orders →
+            </Link>
+
+            <Link
+              href="/admin/share"
               className="secondaryButton"
               style={styles.secondaryButton}
             >
-              Orders →
+              Share Kit →
             </Link>
 
             <Link
@@ -336,14 +344,6 @@ export default async function AdminDashboardPage() {
               style={styles.secondaryButton}
             >
               Help & Support →
-            </Link>
-
-            <Link
-              href="/admin/settings/billing"
-              className="secondaryButton"
-              style={styles.secondaryButton}
-            >
-              Billing →
             </Link>
           </div>
         </div>
@@ -373,6 +373,278 @@ export default async function AdminDashboardPage() {
         </div>
       </section>
 
+      <section style={styles.sectionHeader}>
+        <div>
+          <p style={styles.kicker}>Campaign workspaces</p>
+
+          <h2
+            className="so-brand-card-title admin-section-title"
+            style={styles.sectionTitle}
+          >
+            Manage fundraising campaigns
+          </h2>
+
+          <p style={styles.sectionText}>
+            Start here to create, edit and monitor raffles, squares, events,
+            auctions and merchandise.
+          </p>
+        </div>
+      </section>
+
+      <section className="admin-campaign-grid" style={styles.campaignGrid}>
+        <DashboardCard
+          href="/admin/raffles"
+          image="/brand/so-default-raffles.png"
+          title="Raffles"
+          description="Create, manage and draw standard raffles and 50/50 raffles."
+          stats={`${raffles.length} total · ${publishedRaffles.length} published`}
+        />
+
+        <DashboardCard
+          href="/admin/squares"
+          image="/brand/so-default-squares.png"
+          title="Squares"
+          description="Run football cards and live squares competitions."
+          stats={`${squares.length} total · ${publishedSquares.length} published`}
+        />
+
+        <DashboardCard
+          href="/admin/events"
+          image="/brand/so-default-events.png"
+          title="Events"
+          description="Manage events, quiz nights, seating plans, tickets, guests and event add-ons."
+          stats={`${events.length} total · ${publishedEvents.length} published`}
+        />
+
+        <DashboardCard
+          href="/admin/auctions"
+          image="/brand/so-default-auctions.png"
+          title="Auctions"
+          description="Run premium auction fundraising campaigns."
+          stats={`${auctions.length} total · ${publishedAuctions.length} published`}
+          locked={!auctionCapability.allowed}
+          lockText="Professional required"
+        />
+
+        <DashboardCard
+          href="/admin/merchandise"
+          image="/brand/so-default-merchandise.png"
+          title="Merchandise"
+          description="Manage products, public shop display, basket checkout and paid merchandise orders."
+          stats={`${merchandiseProducts.length} products · ${publishedMerchandiseProducts.length} published · ${merchandiseSold} sold`}
+          locked={!merchandiseCapability.allowed}
+          lockText="Professional required"
+        />
+      </section>
+
+      <section style={styles.sectionHeader}>
+        <div>
+          <p style={styles.kicker}>Quick snapshot</p>
+
+          <h2
+            className="so-brand-card-title admin-section-title"
+            style={styles.sectionTitle}
+          >
+            Today’s activity at a glance
+          </h2>
+
+          <p style={styles.sectionText}>
+            A compact overview of the key campaign numbers currently available
+            for this tenant.
+          </p>
+        </div>
+      </section>
+
+      <section className="admin-focus-grid" style={styles.focusGrid}>
+        <FocusCard
+          label="Raffle tickets sold"
+          value={totalRaffleTicketsSold}
+          text={`${totalRaffleTicketsRemaining} raffle tickets remaining`}
+        />
+
+        <FocusCard
+          label="Squares sold"
+          value={squaresSold}
+          text="Across all active squares campaigns"
+        />
+
+        <FocusCard
+          label="Published events"
+          value={publishedEvents.length}
+          text={`${events.length} total events created`}
+        />
+
+        <FocusCard
+          label="Active auctions"
+          value={publishedAuctions.length}
+          text={`${auctions.length} total auctions created`}
+        />
+
+        <FocusCard
+          label="Merchandise products"
+          value={merchandiseProducts.length}
+          text={`${publishedMerchandiseProducts.length} published · ${merchandiseSold} sold`}
+        />
+
+        <FocusCard
+          label="Published campaigns"
+          value={totalPublishedCampaigns}
+          text={`${totalCampaigns} total campaigns created`}
+        />
+      </section>
+
+      <section style={styles.sectionHeader}>
+        <div>
+          <p style={styles.kicker}>Public presence</p>
+
+          <h2
+            className="so-brand-card-title admin-section-title"
+            style={styles.sectionTitle}
+          >
+            Public hub, branding and sharing
+          </h2>
+
+          <p style={styles.sectionText}>
+            Control how supporters see the organisation, then create branded
+            links, QR codes and social assets for live campaigns.
+          </p>
+        </div>
+      </section>
+
+      <section
+        className="admin-settings-card-grid"
+        style={styles.settingsCardGrid}
+      >
+        <DashboardCard
+          href="/admin/settings/public-hub"
+          badgeText="HUB"
+          title="Public Hub"
+          description="Choose the highlighted campaign shown on the public campaign hub."
+          stats="Featured campaign settings"
+          tone="blue"
+          compact
+        />
+
+        <DashboardCard
+          href="/admin/settings/branding"
+          badgeText="BRAND"
+          title="Branding"
+          description="Manage public display name, logos, colours and tenant-facing brand settings."
+          stats={
+            brandingCapability.allowed ||
+            Boolean(tenantSettings?.platform_owner_bypass)
+              ? "Advanced branding available"
+              : "Basic branding settings"
+          }
+          tone="gold"
+          compact
+        />
+
+        <DashboardCard
+          href="/admin/share"
+          badgeText="SHARE"
+          title="Campaign Share Kit"
+          description="Create branded campaign links, donation links, captions, QR codes and share cards."
+          stats="Public hub and campaign assets"
+          tone="gold"
+          compact
+        />
+      </section>
+
+      <section style={styles.sectionHeader}>
+        <div>
+          <p style={styles.kicker}>Operations</p>
+
+          <h2
+            className="so-brand-card-title admin-section-title"
+            style={styles.sectionTitle}
+          >
+            Orders, finance and support
+          </h2>
+
+          <p style={styles.sectionText}>
+            Review supporter activity, payment metadata, donations, customer
+            records, support requests and subscription settings.
+          </p>
+        </div>
+      </section>
+
+      <section
+        className="admin-operations-card-grid"
+        style={styles.operationsCardGrid}
+      >
+        <DashboardCard
+          href="/admin/launch-readiness"
+          badgeText="READY"
+          title="Launch Readiness"
+          description="Check branding, public hub, campaign warnings, payment readiness and final launch confidence."
+          stats="Read-only launch checklist"
+          tone="blue"
+          compact
+          featured
+        />
+
+        <DashboardCard
+          href="/admin/orders"
+          badgeText="ORDERS"
+          title="Orders"
+          description="Review raffle sales, squares sales, event orders, auction bids, donations and merchandise purchases."
+          stats="Unified activity dashboard"
+          tone="blue"
+          compact
+        />
+
+        <DashboardCard
+          href="/admin/metadata"
+          badgeText="FEES"
+          title="Finance"
+          description="Review payment metadata, platform fees, Stripe fees and organiser net estimates."
+          stats="Money breakdown"
+          tone="gold"
+          compact
+        />
+
+        <DashboardCard
+          href="/admin/donations"
+          badgeText="GIFT"
+          title="Donations & Gift Aid"
+          description="Review pure donations, donor details, payment status and Gift Aid declarations."
+          stats="Donation reporting"
+          tone="gold"
+          compact
+        />
+
+        <DashboardCard
+          href="/admin/customers"
+          badgeText="PEOPLE"
+          title="Customers"
+          description="Review supporter and buyer records connected to campaign activity."
+          stats="Supporter records"
+          tone="blue"
+          compact
+        />
+
+        <DashboardCard
+          href="/admin/support"
+          badgeText="HELP"
+          title="Help & Support"
+          description="Report a problem, ask for help and send tenant context to platform support."
+          stats="Support requests"
+          tone="blue"
+          compact
+        />
+
+        <DashboardCard
+          href="/admin/settings/billing"
+          badgeText="PLAN"
+          title="Billing"
+          description="View subscription tier, platform commission, enabled capabilities and billing readiness."
+          stats="Subscription settings"
+          tone="blue"
+          compact
+        />
+      </section>
+
       <section className="admin-plan-panel" style={styles.planPanel}>
         <div>
           <p style={styles.planKicker}>Subscription status</p>
@@ -385,9 +657,9 @@ export default async function AdminDashboardPage() {
           </h2>
 
           <p style={styles.planText}>
-            Your dashboard reflects the current tenant plan, campaign
-            capabilities, platform fee and launch readiness tools available to
-            this organisation.
+            Current tenant capabilities, platform fee and plan-based features.
+            This section is kept lower on the dashboard because most day-to-day
+            work starts with campaigns, public sharing, orders and finance.
           </p>
         </div>
 
@@ -472,364 +744,6 @@ export default async function AdminDashboardPage() {
           </div>
         </div>
       </section>
-
-      <section className="admin-focus-grid" style={styles.focusGrid}>
-        <FocusCard
-          label="Raffle tickets sold"
-          value={totalRaffleTicketsSold}
-          text={`${totalRaffleTicketsRemaining} raffle tickets remaining`}
-        />
-
-        <FocusCard
-          label="Squares sold"
-          value={squaresSold}
-          text="Across all active squares campaigns"
-        />
-
-        <FocusCard
-          label="Published events"
-          value={publishedEvents.length}
-          text={`${events.length} total events created`}
-        />
-
-        <FocusCard
-          label="Active auctions"
-          value={publishedAuctions.length}
-          text={`${auctions.length} total auctions created`}
-        />
-
-        <FocusCard
-          label="Merchandise products"
-          value={merchandiseProducts.length}
-          text={`${publishedMerchandiseProducts.length} published · ${merchandiseSold} sold`}
-        />
-
-        <FocusCard
-          label="Published campaigns"
-          value={totalPublishedCampaigns}
-          text={`${totalCampaigns} total campaigns created`}
-        />
-      </section>
-
-      <section style={styles.sectionHeader}>
-        <div>
-          <p style={styles.kicker}>Launch operations</p>
-
-          <h2
-            className="so-brand-card-title admin-section-title"
-            style={styles.sectionTitle}
-          >
-            Run the platform with confidence
-          </h2>
-
-          <p style={styles.sectionText}>
-            Start with readiness, then review orders, finance, support,
-            sharing and billing from the key operational dashboards.
-          </p>
-        </div>
-      </section>
-
-      <section
-        className="admin-operations-card-grid"
-        style={styles.operationsCardGrid}
-      >
-        <DashboardCard
-          href="/admin/launch-readiness"
-          badgeText="READY"
-          title="Launch Readiness"
-          description="Check branding, public hub, campaign warnings, payment readiness and final launch confidence."
-          stats="Read-only launch checklist"
-          tone="blue"
-          compact
-          featured
-        />
-
-        <DashboardCard
-          href="/admin/share"
-          badgeText="SHARE"
-          title="Campaign Share Kit"
-          description="Create branded campaign links, donation links, captions and share cards for the public hub and live campaigns."
-          stats="Campaign sharing centre"
-          tone="gold"
-          compact
-        />
-
-        <DashboardCard
-          href="/admin/support"
-          badgeText="HELP"
-          title="Help & Support"
-          description="Report a problem, ask for help and send tenant context to platform support."
-          stats="Support requests"
-          tone="blue"
-          compact
-        />
-
-        <DashboardCard
-          href="/admin/orders"
-          badgeText="ORDERS"
-          title="Orders"
-          description="Review raffle sales, squares sales, event orders, auction bids, donations and merchandise purchases."
-          stats="Unified activity dashboard"
-          tone="blue"
-          compact
-        />
-
-        <DashboardCard
-          href="/admin/metadata"
-          badgeText="FEES"
-          title="Finance"
-          description="Review payment metadata, platform fees, Stripe fees and organiser net estimates."
-          stats="Money breakdown"
-          tone="gold"
-          compact
-        />
-
-        <DashboardCard
-          href="/admin/donations"
-          badgeText="GIFT"
-          title="Donations & Gift Aid"
-          description="Review pure donations, donor details, payment status and Gift Aid declarations."
-          stats="Donation reporting"
-          tone="gold"
-          compact
-        />
-
-        <DashboardCard
-          href="/admin/settings/billing"
-          badgeText="PLAN"
-          title="Billing"
-          description="View subscription tier, platform commission, enabled capabilities and billing readiness."
-          stats="Subscription settings"
-          tone="blue"
-          compact
-        />
-      </section>
-
-      <section style={styles.sectionHeader}>
-        <div>
-          <p style={styles.kicker}>Campaign workspaces</p>
-
-          <h2
-            className="so-brand-card-title admin-section-title"
-            style={styles.sectionTitle}
-          >
-            Manage fundraising campaigns
-          </h2>
-
-          <p style={styles.sectionText}>
-            Open the main campaign areas for raffles, squares, events, auctions
-            and merchandise. Each workspace includes clearer readiness guidance
-            before launch.
-          </p>
-        </div>
-      </section>
-
-      <section className="admin-campaign-grid" style={styles.campaignGrid}>
-        <DashboardCard
-          href="/admin/raffles"
-          image="/brand/so-default-raffles.png"
-          title="Raffles"
-          description="Create, manage and draw standard raffles and 50/50 raffles."
-          stats={`${raffles.length} total · ${publishedRaffles.length} published`}
-        />
-
-        <DashboardCard
-          href="/admin/squares"
-          image="/brand/so-default-squares.png"
-          title="Squares"
-          description="Run football cards and live squares competitions."
-          stats={`${squares.length} total · ${publishedSquares.length} published`}
-        />
-
-        <DashboardCard
-          href="/admin/events"
-          image="/brand/so-default-events.png"
-          title="Events"
-          description="Manage events, quiz nights, seating plans, tickets, guests and event add-ons."
-          stats={`${events.length} total · ${publishedEvents.length} published`}
-        />
-
-        <DashboardCard
-          href="/admin/auctions"
-          image="/brand/so-default-auctions.png"
-          title="Auctions"
-          description="Run premium auction fundraising campaigns."
-          stats={`${auctions.length} total · ${publishedAuctions.length} published`}
-          locked={!auctionCapability.allowed}
-          lockText="Professional required"
-        />
-
-        <DashboardCard
-          href="/admin/merchandise"
-          image="/brand/so-default-merchandise.png"
-          title="Merchandise"
-          description="Manage branded merchandise products, public shop display, basket checkout and paid merchandise orders."
-          stats={`${merchandiseProducts.length} products · ${publishedMerchandiseProducts.length} published · ${merchandiseSold} sold`}
-          locked={!merchandiseCapability.allowed}
-          lockText="Professional required"
-        />
-      </section>
-
-      <section style={styles.sectionHeader}>
-        <div>
-          <p style={styles.kicker}>Public setup</p>
-
-          <h2
-            className="so-brand-card-title admin-section-title"
-            style={styles.sectionTitle}
-          >
-            Public hub and branding
-          </h2>
-
-          <p style={styles.sectionText}>
-            Control how supporters experience the tenant’s public campaign hub,
-            highlighted campaign and visual identity.
-          </p>
-        </div>
-      </section>
-
-      <section
-        className="admin-settings-card-grid"
-        style={styles.settingsCardGrid}
-      >
-        <DashboardCard
-          href="/admin/settings/public-hub"
-          badgeText="HUB"
-          title="Public Hub"
-          description="Choose the highlighted campaign shown on the public campaign hub."
-          stats="Featured campaign settings"
-          tone="blue"
-          compact
-        />
-
-        <DashboardCard
-          href="/admin/settings/branding"
-          badgeText="BRAND"
-          title="Branding"
-          description="Manage public display name, logos, colours and tenant-facing brand settings."
-          stats={
-            brandingCapability.allowed ||
-            Boolean(tenantSettings?.platform_owner_bypass)
-              ? "Advanced branding available"
-              : "Basic branding settings"
-          }
-          tone="gold"
-          compact
-        />
-      </section>
-
-      <section className="admin-operations-grid" style={styles.operationsGrid}>
-        <section className="admin-finance-panel" style={styles.financePanel}>
-          <div>
-            <p style={styles.financeKicker}>Finance & transactions</p>
-
-            <h2
-              className="so-brand-card-title admin-section-title"
-              style={styles.financeTitle}
-            >
-              Money breakdown
-            </h2>
-
-            <p style={styles.financeText}>
-              Review payment metadata, Stripe fees, platform contribution,
-              supporter details and organiser net estimates from one clean
-              operations panel.
-            </p>
-          </div>
-
-          <div className="admin-panel-actions" style={styles.panelActions}>
-            <Link
-              href="/admin/metadata"
-              className="financeButton"
-              style={styles.financeButton}
-            >
-              Open finance →
-            </Link>
-
-            <Link
-              href="/admin/orders"
-              className="financeButtonSecondary"
-              style={styles.financeButtonSecondary}
-            >
-              Orders →
-            </Link>
-
-            <Link
-              href="/admin/donations"
-              className="financeButtonSecondary"
-              style={styles.financeButtonSecondary}
-            >
-              Donations & Gift Aid →
-            </Link>
-
-            <Link
-              href="/admin/customers"
-              className="financeButtonSecondary"
-              style={styles.financeButtonSecondary}
-            >
-              Customers →
-            </Link>
-
-            <Link
-              href="/admin/settings/billing"
-              className="financeButtonSecondary"
-              style={styles.financeButtonSecondary}
-            >
-              Billing →
-            </Link>
-          </div>
-        </section>
-
-        <section className="admin-data-panel" style={styles.dataPanel}>
-          <div>
-            <p style={styles.kicker}>Live platform overview</p>
-
-            <h2
-              className="so-brand-card-title admin-section-title"
-              style={styles.sectionTitle}
-            >
-              Campaign summary
-            </h2>
-
-            <p style={styles.sectionText}>
-              A simple snapshot of the live campaign data currently available
-              to this tenant.
-            </p>
-          </div>
-
-          <div className="admin-data-grid" style={styles.dataGrid}>
-            <DataBlock
-              label="Raffles"
-              total={raffles.length}
-              published={publishedRaffles.length}
-            />
-
-            <DataBlock
-              label="Squares"
-              total={squares.length}
-              published={publishedSquares.length}
-            />
-
-            <DataBlock
-              label="Events"
-              total={events.length}
-              published={publishedEvents.length}
-            />
-
-            <DataBlock
-              label="Auctions"
-              total={auctions.length}
-              published={publishedAuctions.length}
-            />
-
-            <DataBlock
-              label="Merchandise"
-              total={merchandiseProducts.length}
-              published={publishedMerchandiseProducts.length}
-            />
-          </div>
-        </section>
-      </section>
     </main>
   );
 }
@@ -912,26 +826,6 @@ function FocusCard({
 
       <p style={styles.focusText}>{text}</p>
     </article>
-  );
-}
-
-function DataBlock({
-  label,
-  total,
-  published,
-}: {
-  label: string;
-  total: number;
-  published: number;
-}) {
-  return (
-    <div className="admin-data-block" style={styles.dataBlock}>
-      <div style={styles.dataLabel}>{label}</div>
-
-      <div style={styles.dataValue}>{total}</div>
-
-      <div style={styles.dataSub}>{published} published</div>
-    </div>
   );
 }
 
@@ -1061,8 +955,7 @@ const responsiveStyles = `
 }
 
 @media (max-width: 1180px) {
-  .admin-dashboard-page .admin-command-centre,
-  .admin-dashboard-page .admin-operations-grid {
+  .admin-dashboard-page .admin-command-centre {
     grid-template-columns: 1fr !important;
   }
 
@@ -1109,8 +1002,6 @@ const responsiveStyles = `
 
   .admin-dashboard-page .admin-command-stats,
   .admin-dashboard-page .admin-focus-grid,
-  .admin-dashboard-page .admin-data-grid,
-  .admin-dashboard-page .admin-panel-actions,
   .admin-dashboard-page .admin-plan-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
@@ -1128,18 +1019,14 @@ const responsiveStyles = `
   .admin-dashboard-page .admin-command-actions,
   .admin-dashboard-page .admin-command-stats,
   .admin-dashboard-page .admin-focus-grid,
-  .admin-dashboard-page .admin-data-grid,
   .admin-dashboard-page .admin-campaign-grid,
   .admin-dashboard-page .admin-operations-card-grid,
   .admin-dashboard-page .admin-settings-card-grid,
-  .admin-dashboard-page .admin-panel-actions,
   .admin-dashboard-page .admin-plan-grid {
     grid-template-columns: 1fr !important;
   }
 
   .admin-dashboard-page .admin-dashboard-card,
-  .admin-dashboard-page .admin-finance-panel,
-  .admin-dashboard-page .admin-data-panel,
   .admin-dashboard-page .admin-plan-panel,
   .admin-dashboard-page .admin-install-panel {
     padding: 16px !important;
@@ -1360,19 +1247,11 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
-  planPanel: {
-    display: "grid",
-    gap: 18,
-    padding: 22,
-    borderRadius: 28,
-    background:
-      "linear-gradient(135deg, rgba(37,99,235,0.08), rgba(255,255,255,1) 72%)",
-    border: "1px solid #bfdbfe",
-    boxShadow: "0 8px 30px rgba(15,23,42,0.04)",
-    marginBottom: 18,
+  sectionHeader: {
+    margin: "26px 0 16px",
   },
 
-  planKicker: {
+  kicker: {
     margin: "0 0 7px",
     color: "#2563eb",
     fontSize: 12,
@@ -1381,7 +1260,7 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "0.08em",
   },
 
-  planTitle: {
+  sectionTitle: {
     margin: 0,
     color: "#0f172a",
     fontSize: 30,
@@ -1389,163 +1268,28 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
-  planText: {
+  sectionText: {
     margin: "8px 0 0",
-    color: "#475569",
-    lineHeight: 1.6,
-    maxWidth: 860,
-    fontWeight: 750,
-    overflowWrap: "anywhere",
-  },
-
-  planGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 12,
-  },
-
-  planFeature: {
-    display: "grid",
-    gap: 8,
-    padding: 14,
-    borderRadius: 18,
-    minWidth: 0,
-  },
-
-  planFeatureIncluded: {
-    background: "#ffffff",
-    border: "1px solid #bbf7d0",
-  },
-
-  planFeatureLocked: {
-    background: "#fff7ed",
-    border: "1px solid #fed7aa",
-  },
-
-  planFeatureTop: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-
-  planFeatureLabel: {
-    color: "#0f172a",
-    fontSize: 14,
-    fontWeight: 950,
-    overflowWrap: "anywhere",
-  },
-
-  planPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "5px 9px",
-    borderRadius: 999,
-    fontSize: 11,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-    whiteSpace: "nowrap",
-  },
-
-  planPillIncluded: {
-    background: "#dcfce7",
-    color: "#166534",
-    border: "1px solid #86efac",
-  },
-
-  planPillLocked: {
-    background: "#ffedd5",
-    color: "#9a3412",
-    border: "1px solid #fdba74",
-  },
-
-  planFeatureText: {
-    margin: 0,
     color: "#64748b",
-    fontSize: 13,
-    lineHeight: 1.45,
-    fontWeight: 750,
-  },
-
-  adminInstallPanel: {
-    display: "grid",
-    gridTemplateColumns: "58px minmax(0, 1fr)",
-    gap: 15,
-    alignItems: "start",
-    padding: 18,
-    borderRadius: 26,
-    background:
-      "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(239,246,255,0.96) 58%, rgba(255,251,235,0.88) 100%)",
-    border: "1px solid #bfdbfe",
-    boxShadow: "0 12px 32px rgba(15,23,42,0.06)",
-    marginBottom: 18,
-    minWidth: 0,
-  },
-
-  adminInstallIcon: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 54,
-    height: 54,
-    borderRadius: 18,
-    background: "#eff6ff",
-    color: "#2563eb",
-    border: "1px solid #bfdbfe",
-    fontSize: 24,
-    fontWeight: 950,
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.72)",
-  },
-
-  adminInstallCopy: {
-    display: "grid",
-    gap: 7,
-    minWidth: 0,
-  },
-
-  adminInstallKicker: {
-    margin: 0,
-    color: "#2563eb",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-
-  adminInstallTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 28,
-    lineHeight: 1.06,
-    letterSpacing: "-0.05em",
+    lineHeight: 1.6,
+    maxWidth: 780,
+    fontWeight: 700,
     overflowWrap: "anywhere",
   },
 
-  adminInstallText: {
-    margin: 0,
-    color: "#475569",
-    fontSize: 14,
-    lineHeight: 1.55,
-    fontWeight: 750,
-    overflowWrap: "anywhere",
-    maxWidth: 900,
-  },
-
-  adminInstallSteps: {
+  campaignGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 10,
-    marginTop: 3,
-    minWidth: 0,
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
+    gap: 16,
+    marginBottom: 20,
+    alignItems: "stretch",
   },
 
   focusGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
     gap: 12,
-    marginBottom: 18,
+    marginBottom: 20,
   },
 
   focusCard: {
@@ -1583,44 +1327,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     fontWeight: 700,
     overflowWrap: "anywhere",
-  },
-
-  sectionHeader: {
-    margin: "26px 0 16px",
-  },
-
-  kicker: {
-    margin: "0 0 7px",
-    color: "#2563eb",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-
-  sectionTitle: {
-    margin: 0,
-    color: "#0f172a",
-    fontSize: 30,
-    letterSpacing: "-0.05em",
-    overflowWrap: "anywhere",
-  },
-
-  sectionText: {
-    margin: "8px 0 0",
-    color: "#64748b",
-    lineHeight: 1.6,
-    maxWidth: 760,
-    fontWeight: 700,
-    overflowWrap: "anywhere",
-  },
-
-  campaignGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
-    gap: 16,
-    marginBottom: 20,
-    alignItems: "stretch",
   },
 
   operationsCardGrid: {
@@ -1806,33 +1512,29 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
   },
 
-  operationsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 16,
-  },
-
-  financePanel: {
+  planPanel: {
     display: "grid",
     gap: 18,
     padding: 22,
     borderRadius: 28,
     background:
-      "linear-gradient(135deg, rgba(251,191,36,0.12) 0%, rgba(255,255,255,1) 80%)",
-    border: "1px solid #fde68a",
-    minWidth: 0,
+      "linear-gradient(135deg, rgba(37,99,235,0.08), rgba(255,255,255,1) 72%)",
+    border: "1px solid #bfdbfe",
+    boxShadow: "0 8px 30px rgba(15,23,42,0.04)",
+    marginTop: 26,
+    marginBottom: 18,
   },
 
-  financeKicker: {
+  planKicker: {
     margin: "0 0 7px",
-    color: "#b45309",
+    color: "#2563eb",
     fontSize: 12,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
 
-  financeTitle: {
+  planTitle: {
     margin: 0,
     color: "#0f172a",
     fontSize: 30,
@@ -1840,97 +1542,155 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
-  financeText: {
+  planText: {
     margin: "8px 0 0",
-    color: "#78350f",
+    color: "#475569",
     lineHeight: 1.6,
-    fontWeight: 700,
+    maxWidth: 880,
+    fontWeight: 750,
     overflowWrap: "anywhere",
   },
 
-  panelActions: {
+  planGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 10,
-    alignItems: "stretch",
-  },
-
-  financeButton: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    minHeight: 54,
-    padding: "14px 16px",
-    borderRadius: 18,
-    background: "#0f172a",
-    color: "#ffffff",
-    textDecoration: "none",
-    fontWeight: 950,
-    whiteSpace: "normal",
-    width: "100%",
-    boxShadow: "0 14px 28px rgba(15,23,42,0.16)",
-  },
-
-  financeButtonSecondary: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    minHeight: 54,
-    padding: "14px 16px",
-    borderRadius: 18,
-    background: "#ffffff",
-    color: "#0f172a",
-    border: "1px solid #cbd5e1",
-    textDecoration: "none",
-    fontWeight: 950,
-    whiteSpace: "normal",
-    width: "100%",
-    boxShadow: "0 8px 20px rgba(15,23,42,0.04)",
-  },
-
-  dataPanel: {
-    display: "grid",
-    gap: 18,
-    padding: 22,
-    borderRadius: 28,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
-    minWidth: 0,
-  },
-
-  dataGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: 12,
   },
 
-  dataBlock: {
+  planFeature: {
     display: "grid",
-    gap: 6,
-    padding: 16,
-    borderRadius: 20,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
+    gap: 8,
+    padding: 14,
+    borderRadius: 18,
     minWidth: 0,
   },
 
-  dataLabel: {
-    color: "#64748b",
-    fontSize: 13,
-    fontWeight: 850,
+  planFeatureIncluded: {
+    background: "#ffffff",
+    border: "1px solid #bbf7d0",
   },
 
-  dataValue: {
+  planFeatureLocked: {
+    background: "#fff7ed",
+    border: "1px solid #fed7aa",
+  },
+
+  planFeatureTop: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+
+  planFeatureLabel: {
     color: "#0f172a",
-    fontSize: 32,
+    fontSize: 14,
     fontWeight: 950,
-    letterSpacing: "-0.06em",
     overflowWrap: "anywhere",
   },
 
-  dataSub: {
-    color: "#2563eb",
+  planPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "5px 9px",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    whiteSpace: "nowrap",
+  },
+
+  planPillIncluded: {
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #86efac",
+  },
+
+  planPillLocked: {
+    background: "#ffedd5",
+    color: "#9a3412",
+    border: "1px solid #fdba74",
+  },
+
+  planFeatureText: {
+    margin: 0,
+    color: "#64748b",
     fontSize: 13,
-    fontWeight: 850,
+    lineHeight: 1.45,
+    fontWeight: 750,
+  },
+
+  adminInstallPanel: {
+    display: "grid",
+    gridTemplateColumns: "58px minmax(0, 1fr)",
+    gap: 15,
+    alignItems: "start",
+    padding: 18,
+    borderRadius: 26,
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(239,246,255,0.96) 58%, rgba(255,251,235,0.88) 100%)",
+    border: "1px solid #bfdbfe",
+    boxShadow: "0 12px 32px rgba(15,23,42,0.06)",
+    marginBottom: 18,
+    minWidth: 0,
+  },
+
+  adminInstallIcon: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    background: "#eff6ff",
+    color: "#2563eb",
+    border: "1px solid #bfdbfe",
+    fontSize: 24,
+    fontWeight: 950,
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.72)",
+  },
+
+  adminInstallCopy: {
+    display: "grid",
+    gap: 7,
+    minWidth: 0,
+  },
+
+  adminInstallKicker: {
+    margin: 0,
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  adminInstallTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 28,
+    lineHeight: 1.06,
+    letterSpacing: "-0.05em",
+    overflowWrap: "anywhere",
+  },
+
+  adminInstallText: {
+    margin: 0,
+    color: "#475569",
+    fontSize: 14,
+    lineHeight: 1.55,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+    maxWidth: 900,
+  },
+
+  adminInstallSteps: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
+    marginTop: 3,
+    minWidth: 0,
   },
 };
