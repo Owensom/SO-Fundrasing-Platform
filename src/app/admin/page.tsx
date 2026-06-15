@@ -455,8 +455,8 @@ export default async function AdminDashboardPage() {
           </h2>
 
           <p style={styles.sectionText}>
-            A compact, neutral overview of the key campaign numbers currently
-            available for this tenant.
+            A compact overview of the key campaign numbers currently available
+            for this tenant.
           </p>
         </div>
       </section>
@@ -1284,7 +1284,8 @@ const styles: Record<string, CSSProperties> = {
     margin: "8px 0 0",
     color: "#64748b",
     lineHeight: 1.6,
-    maxWidth: 940,
+    width: "100%",
+    maxWidth: "100%",
     fontWeight: 700,
     overflowWrap: "anywhere",
   },
@@ -1558,7 +1559,8 @@ const styles: Record<string, CSSProperties> = {
     margin: "8px 0 0",
     color: "#475569",
     lineHeight: 1.58,
-    maxWidth: 1120,
+    width: "100%",
+    maxWidth: "100%",
     fontWeight: 750,
     overflowWrap: "anywhere",
   },
@@ -1695,7 +1697,8 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.55,
     fontWeight: 750,
     overflowWrap: "anywhere",
-    maxWidth: 1120,
+    width: "100%",
+    maxWidth: "100%",
   },
 
   adminInstallSteps: {
