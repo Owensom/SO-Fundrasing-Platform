@@ -511,8 +511,8 @@ export default async function AdminDashboardPage() {
           </h2>
 
           <p style={styles.sectionText}>
-            Control how supporters see the organisation, then create branded
-            links, QR codes and social assets for live campaigns.
+            Manage the public hub, branding, QR codes, campaign links and share
+            assets supporters see before they donate, buy or book.
           </p>
         </div>
       </section>
@@ -569,8 +569,8 @@ export default async function AdminDashboardPage() {
           </h2>
 
           <p style={styles.sectionText}>
-            Review supporter activity, payment metadata, donations, customer
-            records, support requests and subscription settings.
+            Review supporter activity, orders, payments, donations, customers,
+            support requests, billing and subscription settings in one place.
           </p>
         </div>
       </section>
