@@ -13,12 +13,19 @@ type MerchandiseReceiptItem = {
 };
 
 type MerchandiseEmailBranding = {
+  [key: string]: unknown;
   public_display_name?: string | null;
   public_logo_url?: string | null;
   public_logo_mark_url?: string | null;
   public_primary_colour?: string | null;
   public_accent_colour?: string | null;
   public_footer_text?: string | null;
+  displayName?: string | null;
+  logoUrl?: string | null;
+  logoMarkUrl?: string | null;
+  primaryColour?: string | null;
+  accentColour?: string | null;
+  footerText?: string | null;
 };
 
 type SendMerchandiseReceiptEmailInput = {
@@ -43,10 +50,12 @@ const resend = process.env.RESEND_API_KEY
   : null;
 
 const FROM_EMAIL =
-  process.env.RESEND_FROM_EMAIL || "SO Fundraising Platform <noreply@so-fundraising-platform.com>";
+  process.env.RESEND_FROM_EMAIL ||
+  "SO Fundraising Platform <noreply@so-fundraising-platform.com>";
 
 const PLATFORM_URL =
-  process.env.NEXT_PUBLIC_APP_URL || "https://so-fundraising-platform.vercel.app";
+  process.env.NEXT_PUBLIC_APP_URL ||
+  "https://so-fundraising-platform.vercel.app";
 
 const MERCHANDISE_EMAIL_LOGO_URL = `${PLATFORM_URL}/brand/merchandise-shop-gold.png`;
 
@@ -86,6 +95,12 @@ function formatFulfilmentMethod(value: string | null | undefined) {
   if (clean === "deliver_to_seat") return "Deliver to seat";
   if (clean === "post_after_event") return "Post after event";
   if (clean === "arrange_with_organiser") return "Arrange with organiser";
+
+  if (clean === "collect_stand") return "Collect from merchandise stand";
+  if (clean === "collect_table") return "Collect from table";
+  if (clean === "deliver_table") return "Deliver to table";
+  if (clean === "deliver_seat") return "Deliver to seat";
+
   if (clean === "collection") return "Collection";
   if (clean === "delivery") return "Delivery";
 
@@ -97,22 +112,35 @@ function formatFulfilmentMethod(value: string | null | undefined) {
 }
 
 function brandName(branding?: MerchandiseEmailBranding | null) {
-  return cleanText(branding?.public_display_name, "SO Fundraising Platform");
+  return (
+    cleanText(branding?.public_display_name) ||
+    cleanText(branding?.displayName) ||
+    "SO Fundraising Platform"
+  );
 }
 
 function brandFooter(branding?: MerchandiseEmailBranding | null) {
-  return cleanText(
-    branding?.public_footer_text,
-    "Thank you for supporting this fundraising campaign.",
+  return (
+    cleanText(branding?.public_footer_text) ||
+    cleanText(branding?.footerText) ||
+    "Thank you for supporting this fundraising campaign."
   );
 }
 
 function brandPrimary(branding?: MerchandiseEmailBranding | null) {
-  return cleanText(branding?.public_primary_colour, "#0f172a");
+  return (
+    cleanText(branding?.public_primary_colour) ||
+    cleanText(branding?.primaryColour) ||
+    "#0f172a"
+  );
 }
 
 function brandAccent(branding?: MerchandiseEmailBranding | null) {
-  return cleanText(branding?.public_accent_colour, "#d4af37");
+  return (
+    cleanText(branding?.public_accent_colour) ||
+    cleanText(branding?.accentColour) ||
+    "#d4af37"
+  );
 }
 
 function renderDetailRow(label: string, value: string | null | undefined) {
@@ -122,8 +150,12 @@ function renderDetailRow(label: string, value: string | null | undefined) {
 
   return `
     <tr>
-      <td style="padding:8px 0;color:#64748b;font-size:13px;font-weight:800;">${escapeHtml(label)}</td>
-      <td style="padding:8px 0;color:#0f172a;font-size:13px;font-weight:900;text-align:right;">${escapeHtml(clean)}</td>
+      <td style="padding:8px 0;color:#64748b;font-size:13px;font-weight:800;">${escapeHtml(
+        label,
+      )}</td>
+      <td style="padding:8px 0;color:#0f172a;font-size:13px;font-weight:900;text-align:right;">${escapeHtml(
+        clean,
+      )}</td>
     </tr>
   `;
 }
@@ -162,7 +194,9 @@ function renderMerchandiseItems(
       return `
         <tr>
           <td style="padding:14px 0;border-bottom:1px solid #e2e8f0;">
-            <div style="color:#0f172a;font-size:14px;font-weight:950;line-height:1.35;">${escapeHtml(title)}</div>
+            <div style="color:#0f172a;font-size:14px;font-weight:950;line-height:1.35;">${escapeHtml(
+              title,
+            )}</div>
             ${
               secondaryParts.length
                 ? `<div style="margin-top:4px;color:#64748b;font-size:12px;font-weight:750;line-height:1.45;">${escapeHtml(
@@ -225,7 +259,9 @@ function renderMerchandiseReceiptEmail(input: SendMerchandiseReceiptEmailInput) 
               <td style="padding:0;background:${escapeHtml(primary)};">
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                   <tr>
-                    <td style="padding:30px 28px 26px;text-align:center;background:radial-gradient(circle at top right, rgba(255,255,255,0.14), transparent 34%),linear-gradient(135deg, ${escapeHtml(primary)} 0%, #020617 100%);">
+                    <td style="padding:30px 28px 26px;text-align:center;background:radial-gradient(circle at top right, rgba(255,255,255,0.14), transparent 34%),linear-gradient(135deg, ${escapeHtml(
+                      primary,
+                    )} 0%, #020617 100%);">
                       <img
                         src="${escapeHtml(MERCHANDISE_EMAIL_LOGO_URL)}"
                         alt="Merchandise"
@@ -234,7 +270,11 @@ function renderMerchandiseReceiptEmail(input: SendMerchandiseReceiptEmailInput) 
                         style="display:block;margin:0 auto 16px;width:86px;height:86px;object-fit:contain;border-radius:22px;"
                       />
 
-                      <div style="display:inline-block;padding:7px 12px;border-radius:999px;background:rgba(255,255,255,0.08);border:1px solid ${escapeHtml(accent)};color:${escapeHtml(accent)};font-size:11px;font-weight:950;letter-spacing:0.08em;text-transform:uppercase;">
+                      <div style="display:inline-block;padding:7px 12px;border-radius:999px;background:rgba(255,255,255,0.08);border:1px solid ${escapeHtml(
+                        accent,
+                      )};color:${escapeHtml(
+                        accent,
+                      )};font-size:11px;font-weight:950;letter-spacing:0.08em;text-transform:uppercase;">
                         Merchandise order
                       </div>
 
@@ -243,7 +283,9 @@ function renderMerchandiseReceiptEmail(input: SendMerchandiseReceiptEmailInput) 
                       </h1>
 
                       <p style="margin:12px auto 0;max-width:460px;color:#dbeafe;font-size:15px;line-height:1.55;font-weight:700;">
-                        ${escapeHtml(tenantName)} has received your merchandise order. Keep this email for your records.
+                        ${escapeHtml(
+                          tenantName,
+                        )} has received your merchandise order. Keep this email for your records.
                       </p>
                     </td>
                   </tr>
