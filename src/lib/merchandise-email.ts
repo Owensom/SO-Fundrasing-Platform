@@ -384,23 +384,53 @@ export async function sendMerchandiseReceiptEmail(
   input: SendMerchandiseReceiptEmailInput,
 ) {
   if (!resend) {
-    console.warn("Merchandise receipt email skipped: RESEND_API_KEY missing");
+    console.warn("Merchandise receipt email skipped: RESEND_API_KEY missing", {
+      orderReference: cleanText(input.orderReference, "unknown"),
+      to: cleanText(input.to, "missing"),
+    });
     return;
   }
 
   const to = cleanText(input.to);
 
   if (!to) {
-    console.warn("Merchandise receipt email skipped: missing recipient");
+    console.warn("Merchandise receipt email skipped: missing recipient", {
+      orderReference: cleanText(input.orderReference, "unknown"),
+    });
     return;
   }
 
   const orderReference = cleanText(input.orderReference, "merchandise order");
 
-  await resend.emails.send({
+  console.log("Merchandise receipt email sending", {
+    to,
+    orderReference,
+    from: FROM_EMAIL,
+    logoUrl: MERCHANDISE_EMAIL_LOGO_URL,
+  });
+
+  const result = await resend.emails.send({
     from: FROM_EMAIL,
     to,
     subject: `Your merchandise order ${orderReference}`,
     html: renderMerchandiseReceiptEmail(input),
+  });
+
+  if (result.error) {
+    console.error("Merchandise receipt email rejected by Resend", {
+      to,
+      orderReference,
+      error: result.error,
+    });
+
+    throw new Error(
+      result.error.message || "Merchandise receipt email rejected by Resend",
+    );
+  }
+
+  console.log("Merchandise receipt email accepted by Resend", {
+    to,
+    orderReference,
+    resendEmailId: result.data?.id || null,
   });
 }
