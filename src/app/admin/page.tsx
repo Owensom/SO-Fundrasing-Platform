@@ -963,6 +963,7 @@ const responsiveStyles = `
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
 
+  .admin-dashboard-page .admin-campaign-grid,
   .admin-dashboard-page .admin-focus-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
@@ -1003,6 +1004,10 @@ const responsiveStyles = `
   .admin-dashboard-page .admin-command-stats,
   .admin-dashboard-page .admin-focus-grid,
   .admin-dashboard-page .admin-plan-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .admin-dashboard-page .admin-campaign-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
@@ -1279,7 +1284,7 @@ const styles: Record<string, CSSProperties> = {
 
   campaignGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
+    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
     gap: 16,
     marginBottom: 20,
     alignItems: "stretch",
@@ -1331,7 +1336,7 @@ const styles: Record<string, CSSProperties> = {
 
   operationsCardGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
     gap: 16,
     marginBottom: 20,
     alignItems: "stretch",
