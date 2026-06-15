@@ -643,7 +643,6 @@ async function getMerchandiseOrders(
     };
   });
 }
-
 function filterOrders(
   orders: UnifiedOrder[],
   typeFilter: string,
@@ -969,16 +968,40 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
         </div>
       </section>
 
-      <section className="summaryGrid" style={styles.summaryGrid}>
-        <SummaryCard label="Visible rows" value={filteredOrders.length} />
-        <SummaryCard label="All rows" value={allOrders.length} />
-        <SummaryCard label="Unique customers" value={uniqueCustomers} />
-        <SummaryCard label="Raffle rows" value={raffleOrders.length} />
-        <SummaryCard label="Squares rows" value={squaresOrders.length} />
-        <SummaryCard label="Event rows" value={eventOrders.length} />
-        <SummaryCard label="Auction bids" value={auctionOrders.length} />
-        <SummaryCard label="Donations" value={donationOrders.length} />
-        <SummaryCard label="Merchandise" value={merchandiseOrders.length} />
+      <section className="summaryPanelGrid" style={styles.summaryPanelGrid}>
+        <SummaryGroup
+          kicker="Current view"
+          title="Activity"
+          text="The filtered tenant activity currently shown on this page."
+        >
+          <SummaryMetric label="Visible rows" value={filteredOrders.length} />
+          <SummaryMetric label="All rows" value={allOrders.length} />
+          <SummaryMetric label="Unique customers" value={uniqueCustomers} />
+        </SummaryGroup>
+
+        <SummaryGroup
+          kicker="Campaign records"
+          title="Campaign activity"
+          text="Rows pulled from the live campaign modules."
+        >
+          <SummaryMetric label="Raffles" value={raffleOrders.length} />
+          <SummaryMetric label="Squares" value={squaresOrders.length} />
+          <SummaryMetric label="Events" value={eventOrders.length} />
+          <SummaryMetric label="Auctions" value={auctionOrders.length} />
+        </SummaryGroup>
+
+        <SummaryGroup
+          kicker="Money and extras"
+          title="Support activity"
+          text="Donation and shop activity included in the unified view."
+        >
+          <SummaryMetric label="Donations" value={donationOrders.length} />
+          <SummaryMetric label="Merchandise" value={merchandiseOrders.length} />
+          <SummaryMetric
+            label="Export"
+            value={filteredOrders.length ? "Ready" : "Empty"}
+          />
+        </SummaryGroup>
       </section>
 
       <section className="filterCard" style={styles.filterCard}>
@@ -1209,11 +1232,37 @@ function MiniMetric({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: ReactNode }) {
+function SummaryGroup({
+  kicker,
+  title,
+  text,
+  children,
+}: {
+  kicker: string;
+  title: string;
+  text: string;
+  children: ReactNode;
+}) {
   return (
-    <div style={styles.summaryCard}>
-      <span>{label}</span>
-      <strong>{value}</strong>
+    <article className="summaryGroup" style={styles.summaryGroup}>
+      <div style={styles.summaryGroupHeader}>
+        <span style={styles.summaryGroupKicker}>{kicker}</span>
+        <h2 style={styles.summaryGroupTitle}>{title}</h2>
+        <p style={styles.summaryGroupText}>{text}</p>
+      </div>
+
+      <div className="summaryMetricGrid" style={styles.summaryMetricGrid}>
+        {children}
+      </div>
+    </article>
+  );
+}
+
+function SummaryMetric({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div style={styles.summaryMetric}>
+      <span style={styles.summaryMetricLabel}>{label}</span>
+      <strong style={styles.summaryMetricValue}>{value}</strong>
     </div>
   );
 }
@@ -1247,7 +1296,7 @@ const responsiveStyles = `
   }
 
   .orders-page .heroStats,
-  .orders-page .summaryGrid {
+  .orders-page .summaryPanelGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
@@ -1281,6 +1330,16 @@ const responsiveStyles = `
   }
 }
 
+@media (max-width: 760px) {
+  .orders-page .summaryPanelGrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .orders-page .summaryMetricGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
 @media (max-width: 620px) {
   .orders-page {
     width: 100% !important;
@@ -1300,16 +1359,17 @@ const responsiveStyles = `
   }
 
   .orders-page .heroStats,
-  .orders-page .summaryGrid,
   .orders-page .heroPanelGrid,
   .orders-page .heroActions,
-  .orders-page .mobileActions {
+  .orders-page .mobileActions,
+  .orders-page .summaryMetricGrid {
     grid-template-columns: 1fr !important;
   }
 
   .orders-page .filterCard,
   .orders-page .ordersCard,
-  .orders-page .mobileOrderCard {
+  .orders-page .mobileOrderCard,
+  .orders-page .summaryGroup {
     padding: 14px !important;
     border-radius: 20px !important;
   }
@@ -1534,22 +1594,91 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "center",
   },
 
-  summaryGrid: {
+  summaryPanelGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
-    gap: 12,
+    gridTemplateColumns: "1fr 1.15fr 1fr",
+    gap: 14,
     marginBottom: 16,
+    alignItems: "stretch",
   },
 
-  summaryCard: {
+  summaryGroup: {
+    display: "grid",
+    gap: 13,
+    padding: 16,
+    borderRadius: 24,
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,1), rgba(248,250,252,0.98) 70%, rgba(239,246,255,0.9))",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 8px 24px rgba(15,23,42,0.045)",
+    minWidth: 0,
+  },
+
+  summaryGroupHeader: {
     display: "grid",
     gap: 5,
-    padding: 15,
-    borderRadius: 18,
+    minWidth: 0,
+  },
+
+  summaryGroupKicker: {
+    color: "#2563eb",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  summaryGroupTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 22,
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+    overflowWrap: "anywhere",
+  },
+
+  summaryGroupText: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.4,
+    fontWeight: 730,
+    overflowWrap: "anywhere",
+  },
+
+  summaryMetricGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 9,
+    marginTop: "auto",
+  },
+
+  summaryMetric: {
+    display: "grid",
+    gap: 5,
+    padding: 12,
+    borderRadius: 17,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    boxShadow: "0 2px 12px rgba(15,23,42,0.04)",
     minWidth: 0,
+    overflowWrap: "anywhere",
+  },
+
+  summaryMetricLabel: {
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    lineHeight: 1.1,
+  },
+
+  summaryMetricValue: {
+    color: "#0f172a",
+    fontSize: 24,
+    lineHeight: 1,
+    fontWeight: 950,
+    letterSpacing: "-0.04em",
     overflowWrap: "anywhere",
   },
 
