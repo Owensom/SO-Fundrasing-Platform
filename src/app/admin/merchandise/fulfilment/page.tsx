@@ -11,6 +11,7 @@ import {
   getTierLabel,
   normaliseSubscriptionTier,
 } from "@/lib/subscription-capabilities";
+import { updateMerchandiseOrderFulfilment } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -50,6 +51,35 @@ type MerchandiseProduct = {
   require_guest_name: boolean | null;
   created_at: string;
   updated_at: string;
+};
+
+type MerchandiseFulfilmentOrder = {
+  id: string;
+  tenant_slug: string;
+  order_reference: string;
+  status: string;
+  customer_name: string | null;
+  customer_email: string | null;
+  customer_phone: string | null;
+  fulfilment_method: string | null;
+  linked_event_id: string | null;
+  linked_event_title: string | null;
+  booking_reference: string | null;
+  table_number: string | null;
+  seat_number: string | null;
+  guest_name: string | null;
+  customer_note: string | null;
+  total_cents: number;
+  currency: string;
+  paid_at: string | null;
+  fulfilled_at: string | null;
+  fulfilment_status: string;
+  internal_note: string | null;
+  created_at: string;
+  updated_at: string;
+  item_count: number;
+  total_quantity: number;
+  product_titles: string | null;
 };
 
 type EventGroup = {
@@ -99,6 +129,53 @@ function statusLabel(status: string) {
   if (status === "published") return "Published";
   if (status === "closed") return "Closed";
   return "Draft";
+}
+
+function orderStatusLabel(status: string) {
+  if (status === "checkout_started") return "Checkout started";
+  if (status === "paid") return "Paid";
+  if (status === "payment_failed") return "Payment failed";
+  if (status === "cancelled") return "Cancelled";
+  if (status === "refunded") return "Refunded";
+  if (status === "fulfilled") return "Fulfilled";
+  if (status === "part_fulfilled") return "Part fulfilled";
+  return "Draft";
+}
+
+function fulfilmentStatusLabel(status: string | null | undefined) {
+  if (status === "ready_for_collection") return "Ready for collection";
+  if (status === "collected") return "Collected";
+  if (status === "ready_for_delivery") return "Ready for delivery";
+  if (status === "delivered") return "Delivered";
+  if (status === "posted") return "Posted";
+  if (status === "arranged") return "Arranged";
+  return "Not started";
+}
+
+function fulfilmentMethodLabel(method: string | null) {
+  if (method === "collect_stand") return "Collect from stand";
+  if (method === "collect_table") return "Collect from table";
+  if (method === "deliver_table") return "Deliver to table";
+  if (method === "deliver_seat") return "Deliver to seat";
+  if (method === "post_after_event") return "Post after event";
+  if (method === "arrange_with_organiser") return "Arrange with organiser";
+  return "Not selected";
+}
+
+function fulfilmentStatusTone(status: string | null | undefined) {
+  if (status === "collected" || status === "delivered" || status === "posted") {
+    return "good";
+  }
+
+  if (
+    status === "ready_for_collection" ||
+    status === "ready_for_delivery" ||
+    status === "arranged"
+  ) {
+    return "warning";
+  }
+
+  return "neutral";
 }
 
 function getPublicProductHref(product: MerchandiseProduct) {
@@ -331,12 +408,88 @@ async function listMerchandiseProducts(tenantSlug: string) {
   );
 }
 
-export default async function AdminMerchandiseFulfilmentPage() {
+async function listMerchandiseFulfilmentOrders(tenantSlug: string) {
+  return query<MerchandiseFulfilmentOrder>(
+    `
+      select
+        merchandise_orders.id::text,
+        merchandise_orders.tenant_slug,
+        merchandise_orders.order_reference,
+        merchandise_orders.status,
+        merchandise_orders.customer_name,
+        merchandise_orders.customer_email,
+        merchandise_orders.customer_phone,
+        merchandise_orders.fulfilment_method,
+        merchandise_orders.linked_event_id::text,
+        events.title as linked_event_title,
+        merchandise_orders.booking_reference,
+        merchandise_orders.table_number,
+        merchandise_orders.seat_number,
+        merchandise_orders.guest_name,
+        merchandise_orders.customer_note,
+        merchandise_orders.total_cents,
+        merchandise_orders.currency,
+        merchandise_orders.paid_at::text,
+        merchandise_orders.fulfilled_at::text,
+        merchandise_orders.fulfilment_status,
+        merchandise_orders.internal_note,
+        merchandise_orders.created_at::text,
+        merchandise_orders.updated_at::text,
+        coalesce(count(merchandise_order_items.id), 0)::int as item_count,
+        coalesce(sum(merchandise_order_items.quantity), 0)::int as total_quantity,
+        string_agg(
+          merchandise_order_items.product_title ||
+          coalesce(' — ' || nullif(merchandise_order_items.option_label, ''), ''),
+          ', '
+          order by merchandise_order_items.created_at asc
+        ) as product_titles
+      from merchandise_orders
+      left join events
+        on events.id = merchandise_orders.linked_event_id
+       and events.tenant_slug = merchandise_orders.tenant_slug
+      left join merchandise_order_items
+        on merchandise_order_items.order_id = merchandise_orders.id
+       and merchandise_order_items.tenant_slug = merchandise_orders.tenant_slug
+      where merchandise_orders.tenant_slug = $1
+        and merchandise_orders.status in ('paid', 'fulfilled', 'part_fulfilled')
+      group by
+        merchandise_orders.id,
+        events.title
+      order by
+        case
+          when merchandise_orders.fulfilment_status in ('not_started', '') then 1
+          when merchandise_orders.fulfilment_status in ('ready_for_collection', 'ready_for_delivery', 'arranged') then 2
+          when merchandise_orders.fulfilment_status in ('collected', 'delivered', 'posted') then 3
+          else 4
+        end,
+        merchandise_orders.paid_at desc nulls last,
+        merchandise_orders.created_at desc
+    `,
+    [tenantSlug],
+  );
+}
+
+export default async function AdminMerchandiseFulfilmentPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const saved =
+    typeof resolvedSearchParams.saved === "string"
+      ? resolvedSearchParams.saved
+      : "";
+  const error =
+    typeof resolvedSearchParams.error === "string"
+      ? resolvedSearchParams.error
+      : "";
+
   const tenantSlug = await requireTenantAccess();
 
-  const [tenantSettingsRaw, products] = await Promise.all([
+  const [tenantSettingsRaw, products, fulfilmentOrders] = await Promise.all([
     getTenantSettings(tenantSlug),
     listMerchandiseProducts(tenantSlug),
+    listMerchandiseFulfilmentOrders(tenantSlug),
   ]);
 
   const tenantSettings = tenantSettingsRaw as TenantSettingsLike | null;
@@ -368,6 +521,21 @@ export default async function AdminMerchandiseFulfilmentPage() {
   );
   const requiresCheckoutDetailsProducts = products.filter(
     (product) => getRequiredDetails(product).length > 0,
+  );
+
+  const readyOrders = fulfilmentOrders.filter((order) =>
+    ["ready_for_collection", "ready_for_delivery", "arranged"].includes(
+      order.fulfilment_status,
+    ),
+  );
+
+  const completedOrders = fulfilmentOrders.filter((order) =>
+    ["collected", "delivered", "posted"].includes(order.fulfilment_status),
+  );
+
+  const notStartedOrders = fulfilmentOrders.filter(
+    (order) =>
+      !order.fulfilment_status || order.fulfilment_status === "not_started",
   );
 
   const eventGroups = groupProductsByEvent(products);
@@ -414,15 +582,15 @@ export default async function AdminMerchandiseFulfilmentPage() {
               <div style={styles.badgeRow}>
                 <span style={styles.statusBadge}>Merchandise fulfilment</span>
                 <span style={styles.planBadge}>{getTierLabel(tier)} plan</span>
-                <span style={styles.phaseBadge}>Planning only</span>
+                <span style={styles.phaseBadge}>Order tracking live</span>
               </div>
 
               <div className="hero-action-row" style={styles.heroActionRow}>
                 <Link
-                  href="/admin/merchandise"
+                  href="/admin/merchandise/orders"
                   style={styles.secondaryHeroButton}
                 >
-                  ← Merchandise
+                  ← Orders
                 </Link>
 
                 <Link href="/admin/merchandise/new" style={styles.primaryPill}>
@@ -443,58 +611,107 @@ export default async function AdminMerchandiseFulfilmentPage() {
             </h1>
 
             <p style={styles.heroDescription}>
-              Review event-linked merchandise, collection and delivery options,
-              and customer details that may be requested later. This page is
-              read-only and does not create orders, payments, receipts or stock
-              movements.
+              Track paid merchandise orders for collection, delivery, posting or
+              organiser follow-up. This page only updates fulfilment tracking —
+              it does not create payments, resend receipts or change Stripe
+              checkout.
             </p>
           </div>
         </div>
 
         <div className="hero-stats" style={styles.heroStats}>
+          <StatCard label="Paid orders" value={fulfilmentOrders.length} />
+          <StatCard label="Not started" value={notStartedOrders.length} />
+          <StatCard label="Ready / arranged" value={readyOrders.length} />
+          <StatCard label="Completed" value={completedOrders.length} />
           <StatCard label="Products" value={products.length} />
-          <StatCard label="Published" value={publishedProducts.length} />
           <StatCard label="Event-linked" value={eventLinkedProducts.length} />
-          <StatCard
-            label="Fulfilment configured"
-            value={fulfilmentConfiguredProducts.length}
-          />
-          <StatCard label="Needs setup" value={needsFulfilmentProducts.length} />
-          <StatCard
-            label="Checkout details later"
-            value={requiresCheckoutDetailsProducts.length}
-          />
         </div>
       </section>
+
+      {saved ? (
+        <section style={styles.successPanel}>
+          Fulfilment tracking has been updated.
+        </section>
+      ) : null}
+
+      {error ? (
+        <section style={styles.errorPanel}>
+          The fulfilment update could not be saved. Please check the order and
+          try again.
+        </section>
+      ) : null}
 
       <section className="readiness-grid" style={styles.readinessGrid}>
         <ReadinessCard
           label="Checkout"
-          value="Not connected"
-          detail="This page is planning-only. It does not connect Stripe, create orders, send receipts or decrement stock."
-          tone="warning"
+          value="Preserved"
+          detail="Fulfilment tracking does not change basket checkout, Stripe sessions, receipts or payment metadata."
+          tone="good"
         />
 
         <ReadinessCard
-          label="Event-linked products"
-          value={`${eventLinkedProducts.length} configured`}
-          detail="Products can be grouped by tenant event for later collection or delivery workflows."
-          tone={eventLinkedProducts.length ? "good" : "neutral"}
+          label="Paid order tracking"
+          value={`${fulfilmentOrders.length} orders`}
+          detail="Only paid, fulfilled or part-fulfilled merchandise orders are shown for organiser action."
+          tone={fulfilmentOrders.length ? "good" : "neutral"}
         />
 
         <ReadinessCard
-          label="Fulfilment options"
+          label="Fulfilment status"
+          value={`${completedOrders.length} completed`}
+          detail="Completed statuses set the fulfilled date while keeping checkout and payment history intact."
+          tone={completedOrders.length ? "good" : "neutral"}
+        />
+
+        <ReadinessCard
+          label="Product planning"
           value={`${fulfilmentConfiguredProducts.length} configured`}
-          detail="Collection, delivery, postal and organiser-arranged options are shown from product setup."
+          detail="Product setup still shows event links, planned methods and checkout detail requirements."
           tone={fulfilmentConfiguredProducts.length ? "good" : "neutral"}
         />
+      </section>
 
-        <ReadinessCard
-          label="Customer details"
-          value={`${requiresCheckoutDetailsProducts.length} planned`}
-          detail="Booking reference, table number, seat number or guest name may be requested in a later checkout phase."
-          tone={requiresCheckoutDetailsProducts.length ? "good" : "neutral"}
-        />
+      <section className="orders-panel" style={styles.ordersPanel}>
+        <div style={styles.sectionHeader}>
+          <div>
+            <p style={styles.kicker}>Paid order fulfilment</p>
+            <h2 style={styles.sectionTitle}>Orders to fulfil</h2>
+            <p style={styles.sectionText}>
+              Update order-level fulfilment status and organiser notes. These
+              controls are admin-only and tenant-isolated.
+            </p>
+          </div>
+
+          <Link href="/admin/merchandise/orders" style={styles.darkButton}>
+            View orders →
+          </Link>
+        </div>
+
+        {fulfilmentOrders.length === 0 ? (
+          <div style={styles.emptyInline}>
+            Paid merchandise orders will appear here after successful Stripe
+            payment.
+          </div>
+        ) : (
+          <div style={styles.orderList}>
+            {fulfilmentOrders.map((order) => (
+              <FulfilmentOrderCard key={order.id} order={order} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section style={styles.planningIntro}>
+        <div>
+          <p style={styles.kicker}>Product fulfilment setup</p>
+          <h2 style={styles.sectionTitle}>Product planning</h2>
+          <p style={styles.sectionText}>
+            This preserves the original product planning view, grouped by event,
+            so organisers can still check which products have event links,
+            collection methods and required customer details.
+          </p>
+        </div>
       </section>
 
       {products.length === 0 ? (
@@ -564,6 +781,139 @@ function ReadinessCard({
       <span style={styles.readinessLabel}>{label}</span>
       <strong style={styles.readinessValue}>{value}</strong>
       <p style={styles.readinessText}>{detail}</p>
+    </article>
+  );
+}
+
+function FulfilmentOrderCard({
+  order,
+}: {
+  order: MerchandiseFulfilmentOrder;
+}) {
+  const tone = fulfilmentStatusTone(order.fulfilment_status);
+
+  return (
+    <article
+      style={{
+        ...styles.orderCard,
+        ...(tone === "good"
+          ? styles.orderGood
+          : tone === "warning"
+            ? styles.orderWarning
+            : styles.orderNeutral),
+      }}
+    >
+      <div className="order-main-row" style={styles.orderMainRow}>
+        <div style={styles.orderTitleBlock}>
+          <div style={styles.productPillRow}>
+            <span style={styles.statusPill}>{orderStatusLabel(order.status)}</span>
+            <span
+              style={{
+                ...styles.fulfilmentPill,
+                ...(tone === "good"
+                  ? styles.fulfilmentPillGood
+                  : tone === "warning"
+                    ? styles.fulfilmentPillWarning
+                    : styles.fulfilmentPillNeutral),
+              }}
+            >
+              {fulfilmentStatusLabel(order.fulfilment_status)}
+            </span>
+          </div>
+
+          <h3 style={styles.productTitle}>{order.order_reference}</h3>
+
+          <p style={styles.productSubtitle}>
+            {cleanText(order.customer_name, "No customer name")} ·{" "}
+            {cleanText(order.customer_email, "No email")} ·{" "}
+            {formatMoney(order.total_cents, order.currency)}
+          </p>
+        </div>
+
+        <div style={styles.orderTotalBlock}>
+          <span style={styles.miniStatLabel}>Paid</span>
+          <strong style={styles.miniStatValue}>{formatDate(order.paid_at)}</strong>
+        </div>
+      </div>
+
+      <div className="planning-grid" style={styles.planningGrid}>
+        <InfoBlock
+          label="Products"
+          value={cleanText(order.product_titles, "No items recorded")}
+        />
+        <InfoBlock
+          label="Items"
+          value={`${order.item_count} line item${
+            order.item_count === 1 ? "" : "s"
+          } · ${order.total_quantity} total`}
+        />
+        <InfoBlock
+          label="Fulfilment method"
+          value={fulfilmentMethodLabel(order.fulfilment_method)}
+        />
+        <InfoBlock
+          label="Event"
+          value={cleanText(order.linked_event_title, "No linked event")}
+        />
+        <InfoBlock
+          label="Booking reference"
+          value={cleanText(order.booking_reference, "Not provided")}
+        />
+        <InfoBlock
+          label="Table / seat"
+          value={
+            [
+              cleanText(order.table_number),
+              cleanText(order.seat_number),
+            ].filter(Boolean).join(" / ") || "Not provided"
+          }
+        />
+        <InfoBlock
+          label="Guest name"
+          value={cleanText(order.guest_name, "Not provided")}
+        />
+        <InfoBlock
+          label="Customer note"
+          value={cleanText(order.customer_note, "No customer note")}
+        />
+        <InfoBlock label="Fulfilled at" value={formatDate(order.fulfilled_at)} />
+      </div>
+
+      <form action={updateMerchandiseOrderFulfilment} style={styles.updateForm}>
+        <input type="hidden" name="orderId" value={order.id} />
+
+        <label style={styles.formLabel}>
+          <span style={styles.formLabelText}>Fulfilment status</span>
+          <select
+            name="fulfilmentStatus"
+            defaultValue={cleanText(order.fulfilment_status, "not_started")}
+            style={styles.selectField}
+          >
+            <option value="not_started">Not started</option>
+            <option value="ready_for_collection">Ready for collection</option>
+            <option value="ready_for_delivery">Ready for delivery</option>
+            <option value="arranged">Arranged with organiser</option>
+            <option value="collected">Collected</option>
+            <option value="delivered">Delivered</option>
+            <option value="posted">Posted</option>
+          </select>
+        </label>
+
+        <label style={styles.formLabel}>
+          <span style={styles.formLabelText}>Internal note</span>
+          <textarea
+            name="internalNote"
+            defaultValue={cleanText(order.internal_note)}
+            rows={3}
+            placeholder="Optional organiser note, collection update, delivery detail or follow-up reminder."
+            style={styles.textareaField}
+          />
+        </label>
+
+        <button type="submit" style={styles.saveButton}>
+          Save fulfilment update
+        </button>
+      </form>
     </article>
   );
 }
@@ -730,7 +1080,12 @@ const responsiveStyles = `
 .admin-merchandise-fulfilment-page h2,
 .admin-merchandise-fulfilment-page h3,
 .admin-merchandise-fulfilment-page strong,
-.admin-merchandise-fulfilment-page span {
+.admin-merchandise-fulfilment-page span,
+.admin-merchandise-fulfilment-page form,
+.admin-merchandise-fulfilment-page label,
+.admin-merchandise-fulfilment-page select,
+.admin-merchandise-fulfilment-page textarea,
+.admin-merchandise-fulfilment-page button {
   min-width: 0;
   max-width: 100%;
 }
@@ -738,7 +1093,8 @@ const responsiveStyles = `
 @media (max-width: 920px) {
   .admin-merchandise-fulfilment-page .hero-brand-row,
   .admin-merchandise-fulfilment-page .group-header,
-  .admin-merchandise-fulfilment-page .product-main-row {
+  .admin-merchandise-fulfilment-page .product-main-row,
+  .admin-merchandise-fulfilment-page .order-main-row {
     grid-template-columns: 1fr !important;
   }
 
@@ -769,7 +1125,9 @@ const responsiveStyles = `
   }
 
   .admin-merchandise-fulfilment-page .fulfilment-hero,
-  .admin-merchandise-fulfilment-page .group-card {
+  .admin-merchandise-fulfilment-page .group-card,
+  .admin-merchandise-fulfilment-page .orders-panel,
+  .admin-merchandise-fulfilment-page .planning-intro {
     padding: 18px !important;
     border-radius: 24px !important;
   }
@@ -799,7 +1157,8 @@ const responsiveStyles = `
   }
 
   .admin-merchandise-fulfilment-page .hero-action-row a,
-  .admin-merchandise-fulfilment-page .product-actions a {
+  .admin-merchandise-fulfilment-page .product-actions a,
+  .admin-merchandise-fulfilment-page button {
     width: 100% !important;
   }
 }
@@ -921,9 +1280,9 @@ const styles: Record<string, CSSProperties> = {
     width: "fit-content",
     padding: "7px 11px",
     borderRadius: 999,
-    background: "rgba(251,191,36,0.12)",
-    color: "#fde68a",
-    border: "1px solid rgba(251,191,36,0.54)",
+    background: "rgba(34,197,94,0.14)",
+    color: "#bbf7d0",
+    border: "1px solid rgba(134,239,172,0.54)",
     fontSize: 12,
     fontWeight: 950,
     whiteSpace: "nowrap",
@@ -1016,22 +1375,6 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "center",
   },
 
-  secondaryButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "fit-content",
-    minHeight: 44,
-    padding: "10px 15px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
-    border: "1px solid #cbd5e1",
-    textDecoration: "none",
-    fontWeight: 950,
-    textAlign: "center",
-  },
-
   secondaryHeroButton: {
     display: "inline-flex",
     alignItems: "center",
@@ -1042,6 +1385,22 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 999,
     background: "#ffffff",
     color: "#0f172a",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
+  darkButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    minHeight: 42,
+    padding: "9px 14px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
     textDecoration: "none",
     fontSize: 13,
     fontWeight: 950,
@@ -1101,6 +1460,197 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     lineHeight: 1.4,
     fontWeight: 730,
+  },
+
+  successPanel: {
+    marginBottom: 14,
+    padding: "12px 14px",
+    borderRadius: 18,
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #86efac",
+    fontWeight: 900,
+  },
+
+  errorPanel: {
+    marginBottom: 14,
+    padding: "12px 14px",
+    borderRadius: 18,
+    background: "#fef2f2",
+    color: "#991b1b",
+    border: "1px solid #fecaca",
+    fontWeight: 900,
+  },
+
+  ordersPanel: {
+    display: "grid",
+    gap: 14,
+    padding: 20,
+    borderRadius: 26,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
+    marginBottom: 18,
+  },
+
+  sectionHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    flexWrap: "wrap",
+    alignItems: "flex-start",
+  },
+
+  sectionTitle: {
+    margin: "5px 0 0",
+    color: "#0f172a",
+    fontSize: 30,
+    lineHeight: 1.05,
+    letterSpacing: "-0.055em",
+    overflowWrap: "anywhere",
+  },
+
+  sectionText: {
+    margin: "7px 0 0",
+    color: "#64748b",
+    lineHeight: 1.45,
+    fontWeight: 740,
+  },
+
+  emptyInline: {
+    padding: 16,
+    borderRadius: 20,
+    background: "#f8fafc",
+    border: "1px dashed #cbd5e1",
+    color: "#64748b",
+    fontWeight: 780,
+  },
+
+  orderList: {
+    display: "grid",
+    gap: 12,
+  },
+
+  orderCard: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    borderRadius: 22,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+
+  orderGood: {
+    background: "linear-gradient(135deg, #f0fdf4 0%, #ffffff 84%)",
+    borderColor: "#bbf7d0",
+  },
+
+  orderWarning: {
+    background: "linear-gradient(135deg, #fffbeb 0%, #ffffff 84%)",
+    borderColor: "#fde68a",
+  },
+
+  orderNeutral: {
+    background: "linear-gradient(135deg, #f8fafc 0%, #ffffff 84%)",
+    borderColor: "#e2e8f0",
+  },
+
+  orderMainRow: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 12,
+    alignItems: "start",
+  },
+
+  orderTitleBlock: {
+    display: "grid",
+    gap: 7,
+  },
+
+  orderTotalBlock: {
+    display: "grid",
+    gap: 4,
+    justifyItems: "end",
+    padding: 12,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    minWidth: 150,
+  },
+
+  updateForm: {
+    display: "grid",
+    gap: 10,
+    padding: 12,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+
+  formLabel: {
+    display: "grid",
+    gap: 6,
+  },
+
+  formLabelText: {
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  selectField: {
+    width: "100%",
+    minHeight: 44,
+    padding: "10px 12px",
+    borderRadius: 14,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 14,
+    fontWeight: 800,
+  },
+
+  textareaField: {
+    width: "100%",
+    padding: "11px 12px",
+    borderRadius: 14,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 14,
+    lineHeight: 1.45,
+    fontWeight: 700,
+    resize: "vertical",
+  },
+
+  saveButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    minHeight: 44,
+    padding: "10px 15px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    border: "1px solid #1683f8",
+    textDecoration: "none",
+    fontWeight: 950,
+    textAlign: "center",
+    cursor: "pointer",
+  },
+
+  planningIntro: {
+    display: "grid",
+    gap: 10,
+    padding: 20,
+    borderRadius: 26,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
+    marginBottom: 16,
   },
 
   groupsWrapper: {
@@ -1175,9 +1725,10 @@ const styles: Record<string, CSSProperties> = {
 
   miniStatValue: {
     color: "#0f172a",
-    fontSize: 20,
-    lineHeight: 1,
+    fontSize: 15,
+    lineHeight: 1.2,
     fontWeight: 950,
+    overflowWrap: "anywhere",
   },
 
   productList: {
@@ -1263,6 +1814,12 @@ const styles: Record<string, CSSProperties> = {
     background: "#fffbeb",
     color: "#92400e",
     borderColor: "#fde68a",
+  },
+
+  fulfilmentPillNeutral: {
+    background: "#f8fafc",
+    color: "#475569",
+    borderColor: "#e2e8f0",
   },
 
   productTitle: {
