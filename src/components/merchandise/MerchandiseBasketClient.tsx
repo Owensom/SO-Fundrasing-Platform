@@ -21,6 +21,7 @@ type MerchandiseBasketClientProps = {
   primaryColour: string;
   primaryTextColour: string;
   buyerFeeContributionsEnabled?: boolean;
+  platformFeePercent?: number;
 };
 
 type ValidatedBasketLine = {
@@ -110,6 +111,9 @@ type CheckoutCompleteState = {
   orderReference: string;
   sessionId: string;
 };
+
+const STRIPE_STANDARD_UK_PERCENT = 0.015;
+const STRIPE_STANDARD_UK_FIXED_CENTS = 20;
 
 function getBasketKey(tenantSlug: string) {
   return `so_merchandise_basket_${tenantSlug}`;
@@ -203,6 +207,54 @@ function getInitialLineDetails(lines: ValidatedBasketLine[]) {
   return details;
 }
 
+function safePercent(value: unknown) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number) || number < 0) {
+    return 0;
+  }
+
+  return Math.min(100, number);
+}
+
+function calculatePlatformCommissionCents(params: {
+  subtotalCents: number;
+  platformFeePercent: number;
+}) {
+  const subtotalCents = Math.max(0, Math.round(params.subtotalCents || 0));
+  const platformFeePercent = safePercent(params.platformFeePercent);
+
+  if (!subtotalCents || !platformFeePercent) {
+    return 0;
+  }
+
+  return Math.max(0, Math.round(subtotalCents * (platformFeePercent / 100)));
+}
+
+function calculateSupporterCoverFeeCents(params: {
+  subtotalCents: number;
+  platformCommissionCents: number;
+}) {
+  const subtotalCents = Math.max(0, Math.round(params.subtotalCents || 0));
+  const platformCommissionCents = Math.max(
+    0,
+    Math.round(params.platformCommissionCents || 0),
+  );
+
+  if (!subtotalCents && !platformCommissionCents) {
+    return 0;
+  }
+
+  const grossAmountCents = Math.ceil(
+    (subtotalCents +
+      platformCommissionCents +
+      STRIPE_STANDARD_UK_FIXED_CENTS) /
+      (1 - STRIPE_STANDARD_UK_PERCENT),
+  );
+
+  return Math.max(grossAmountCents - subtotalCents, 0);
+}
+
 function getCheckoutCompleteStateFromUrl(): CheckoutCompleteState | null {
   if (typeof window === "undefined") return null;
 
@@ -289,6 +341,7 @@ export default function MerchandiseBasketClient({
   primaryColour,
   primaryTextColour,
   buyerFeeContributionsEnabled = false,
+  platformFeePercent = 0,
 }: MerchandiseBasketClientProps) {
   const [items, setItems] = useState<BasketItem[]>([]);
   const [isCheckingBasket, setIsCheckingBasket] = useState(false);
@@ -406,6 +459,28 @@ export default function MerchandiseBasketClient({
       currency,
     };
   }, [items]);
+
+  const summarySubtotalCents =
+    validationResult?.basket?.subtotalCents ?? basketSummary.subtotalCents;
+
+  const summaryCurrency =
+    validationResult?.basket?.currency || basketSummary.currency;
+
+  const estimatedPlatformCommissionCents = calculatePlatformCommissionCents({
+    subtotalCents: summarySubtotalCents,
+    platformFeePercent,
+  });
+
+  const estimatedSupporterContributionCents = buyerFeeContributionsEnabled
+    ? calculateSupporterCoverFeeCents({
+        subtotalCents: summarySubtotalCents,
+        platformCommissionCents: estimatedPlatformCommissionCents,
+      })
+    : 0;
+
+  const estimatedCheckoutTotalCents =
+    summarySubtotalCents +
+    (coverFees ? estimatedSupporterContributionCents : 0);
 
   const validatedLines = validationResult?.ok
     ? validationResult.basket?.lines || []
@@ -1116,12 +1191,25 @@ export default function MerchandiseBasketClient({
 
             <div style={styles.summaryRow}>
               <span>Subtotal</span>
+              <strong>{formatMoney(summarySubtotalCents, summaryCurrency)}</strong>
+            </div>
+
+            {buyerFeeContributionsEnabled && coverFees ? (
+              <div style={styles.summaryRow}>
+                <span>Fee contribution</span>
+                <strong>
+                  {formatMoney(
+                    estimatedSupporterContributionCents,
+                    summaryCurrency,
+                  )}
+                </strong>
+              </div>
+            ) : null}
+
+            <div style={{ ...styles.summaryRow, ...styles.summaryTotalRow }}>
+              <span>Estimated total</span>
               <strong>
-                {formatMoney(
-                  validationResult?.basket?.subtotalCents ??
-                    basketSummary.subtotalCents,
-                  validationResult?.basket?.currency || basketSummary.currency,
-                )}
+                {formatMoney(estimatedCheckoutTotalCents, summaryCurrency)}
               </strong>
             </div>
           </div>
@@ -1138,8 +1226,17 @@ export default function MerchandiseBasketClient({
               <span style={styles.coverFeesCopy}>
                 <strong>Help cover platform and payment fees</strong>
                 <span>
-                  Add a small contribution at checkout so more of the
-                  merchandise sale supports the organiser.
+                  Estimated contribution:{" "}
+                  <b>
+                    {formatMoney(
+                      estimatedSupporterContributionCents,
+                      summaryCurrency,
+                    )}
+                  </b>
+                </span>
+                <span>
+                  This helps more of the merchandise sale support the organiser.
+                  The exact total is confirmed securely in Stripe.
                 </span>
               </span>
             </label>
@@ -1197,7 +1294,10 @@ export default function MerchandiseBasketClient({
             {isStartingCheckout
               ? "Opening secure checkout..."
               : coverFees && buyerFeeContributionsEnabled
-                ? "Continue and cover fees"
+                ? `Continue and pay ${formatMoney(
+                    estimatedCheckoutTotalCents,
+                    summaryCurrency,
+                  )}`
                 : "Continue to secure checkout"}
           </button>
 
@@ -1448,6 +1548,13 @@ const styles: Record<string, CSSProperties> = {
     gap: 10,
     color: "#475569",
     fontWeight: 850,
+  },
+
+  summaryTotalRow: {
+    marginTop: 4,
+    paddingTop: 8,
+    borderTop: "1px solid #e2e8f0",
+    color: "#0f172a",
   },
 
   coverFeesPanel: {
