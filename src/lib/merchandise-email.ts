@@ -259,15 +259,15 @@ function renderMerchandiseReceiptEmail(input: SendMerchandiseReceiptEmailInput) 
               <td style="padding:0;background:${escapeHtml(primary)};">
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                   <tr>
-                    <td style="padding:30px 28px 26px;text-align:center;background:radial-gradient(circle at top right, rgba(255,255,255,0.14), transparent 34%),linear-gradient(135deg, ${escapeHtml(
+                    <td style="padding:34px 28px 30px;text-align:center;background:radial-gradient(circle at top right, rgba(255,255,255,0.14), transparent 34%),linear-gradient(135deg, ${escapeHtml(
                       primary,
                     )} 0%, #020617 100%);">
                       <img
                         src="${escapeHtml(MERCHANDISE_EMAIL_LOGO_URL)}"
                         alt="Merchandise"
-                        width="86"
-                        height="86"
-                        style="display:block;margin:0 auto 16px;width:86px;height:86px;object-fit:contain;border-radius:22px;"
+                        width="132"
+                        height="132"
+                        style="display:block;margin:0 auto 18px;width:132px;height:132px;object-fit:contain;border-radius:30px;"
                       />
 
                       <div style="display:inline-block;padding:7px 12px;border-radius:999px;background:rgba(255,255,255,0.08);border:1px solid ${escapeHtml(
@@ -407,6 +407,7 @@ export async function sendMerchandiseReceiptEmail(
     orderReference,
     from: FROM_EMAIL,
     logoUrl: MERCHANDISE_EMAIL_LOGO_URL,
+    logoSize: "132px",
   });
 
   const result = await resend.emails.send({
