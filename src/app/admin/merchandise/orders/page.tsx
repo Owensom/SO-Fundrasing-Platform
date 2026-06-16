@@ -343,15 +343,15 @@ export default async function AdminMerchandiseOrdersPage() {
             </div>
           </div>
 
-          <div style={styles.heroActionsPanel}>
+          <div className="hero-actions-panel" style={styles.heroActionsPanel}>
             <Link
               href="/admin/merchandise/fulfilment"
-              style={styles.primaryButton}
+              style={styles.heroPrimaryActionButton}
             >
               Fulfilment planning →
             </Link>
 
-            <Link href="/admin/merchandise" style={styles.secondaryButton}>
+            <Link href="/admin/merchandise" style={styles.heroSecondaryActionButton}>
               Product catalogue →
             </Link>
           </div>
@@ -673,7 +673,16 @@ const responsiveStyles = `
   }
 
   .admin-merchandise-orders-page .hero-actions-panel {
+    display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    width: 100% !important;
+    max-width: none !important;
+    justify-self: stretch !important;
+    align-items: stretch !important;
+  }
+
+  .admin-merchandise-orders-page .hero-actions-panel a {
+    width: 100% !important;
   }
 
   .admin-merchandise-orders-page .hero-logo-plate {
@@ -750,7 +759,7 @@ const styles: Record<string, CSSProperties> = {
 
   heroMainRow: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(210px, 0.26fr)",
+    gridTemplateColumns: "minmax(0, 1fr) 220px",
     gap: 16,
     alignItems: "start",
     minWidth: 0,
@@ -899,11 +908,56 @@ const styles: Record<string, CSSProperties> = {
   },
 
   heroActionsPanel: {
-    display: "grid",
-    gridTemplateColumns: "1fr",
+    display: "flex",
+    flexDirection: "column",
     gap: 10,
-    alignSelf: "stretch",
+    alignItems: "stretch",
+    justifyContent: "flex-start",
+    justifySelf: "end",
+    alignSelf: "start",
+    width: "100%",
+    maxWidth: 220,
     minWidth: 0,
+  },
+
+  heroPrimaryActionButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    minHeight: 48,
+    padding: "11px 16px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.16)",
+    textDecoration: "none",
+    fontWeight: 950,
+    fontSize: 14,
+    lineHeight: 1.2,
+    textAlign: "center",
+    whiteSpace: "normal",
+    boxShadow: "0 14px 30px rgba(22,131,248,0.30)",
+  },
+
+  heroSecondaryActionButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    minHeight: 48,
+    padding: "11px 16px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid rgba(255,255,255,0.72)",
+    textDecoration: "none",
+    fontWeight: 950,
+    fontSize: 14,
+    lineHeight: 1.2,
+    textAlign: "center",
+    whiteSpace: "normal",
+    boxShadow: "0 14px 30px rgba(15,23,42,0.18)",
   },
 
   primaryButton: {
