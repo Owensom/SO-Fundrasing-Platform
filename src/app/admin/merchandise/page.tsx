@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const DEFAULT_MERCHANDISE_IMAGE_SRC = "/brand/so-default-merchandise.png";
+const LOW_STOCK_THRESHOLD = 5;
 
 type MerchandiseProductStatus = "draft" | "published" | "closed";
 
@@ -80,7 +81,7 @@ function formatMoney(cents: number, currency = "GBP") {
   try {
     return new Intl.NumberFormat("en-GB", {
       style: "currency",
-      currency,
+      currency: cleanText(currency, "GBP").toUpperCase(),
     }).format(Number(cents || 0) / 100);
   } catch {
     return `£${(Number(cents || 0) / 100).toFixed(2)}`;
@@ -165,11 +166,27 @@ function getStockRemaining(product: MerchandiseProduct) {
   );
 }
 
+function isSoldOut(product: MerchandiseProduct) {
+  const remaining = getStockRemaining(product);
+  return remaining !== null && remaining <= 0;
+}
+
+function isLowStock(product: MerchandiseProduct) {
+  const remaining = getStockRemaining(product);
+  return (
+    remaining !== null && remaining > 0 && remaining <= LOW_STOCK_THRESHOLD
+  );
+}
+
 function getStockLabel(product: MerchandiseProduct) {
   const remaining = getStockRemaining(product);
 
   if (remaining === null) {
-    return "Not limited";
+    return "Unlimited / manual";
+  }
+
+  if (remaining <= 0) {
+    return "Sold out";
   }
 
   if (remaining === 1) {
@@ -177,6 +194,56 @@ function getStockLabel(product: MerchandiseProduct) {
   }
 
   return `${remaining} remaining`;
+}
+
+function getStockDetailLabel(product: MerchandiseProduct) {
+  const remaining = getStockRemaining(product);
+
+  if (remaining === null) {
+    return `${Number(product.sold_quantity || 0)} sold · no stock limit`;
+  }
+
+  return `${Number(product.sold_quantity || 0)} sold of ${Number(
+    product.stock_quantity || 0,
+  )}`;
+}
+
+function getStockTone(product: MerchandiseProduct): "good" | "warning" | "neutral" {
+  if (product.status === "closed") return "neutral";
+  if (isSoldOut(product)) return "warning";
+  if (isLowStock(product)) return "warning";
+  return "good";
+}
+
+function getStockPillLabel(product: MerchandiseProduct) {
+  if (product.stock_quantity === null) return "Stock unlimited";
+  if (isSoldOut(product)) return "Sold out";
+  if (isLowStock(product)) return "Low stock";
+  return "Stock available";
+}
+
+function stockPillStyle(tone: "good" | "warning" | "neutral") {
+  if (tone === "good") {
+    return {
+      background: "#ecfdf5",
+      color: "#166534",
+      borderColor: "#bbf7d0",
+    };
+  }
+
+  if (tone === "warning") {
+    return {
+      background: "#fffbeb",
+      color: "#92400e",
+      borderColor: "#fde68a",
+    };
+  }
+
+  return {
+    background: "#f8fafc",
+    color: "#475569",
+    borderColor: "#e2e8f0",
+  };
 }
 
 function getSizeOptions(product: MerchandiseProduct) {
@@ -217,18 +284,44 @@ function getFulfilmentOptionCount(product: MerchandiseProduct) {
   ].filter(Boolean).length;
 }
 
-function getFulfilmentLabel(product: MerchandiseProduct) {
-  const count = getFulfilmentOptionCount(product);
+function getFulfilmentOptions(product: MerchandiseProduct) {
+  const options: string[] = [];
 
-  if (count === 0) {
+  if (isEnabled(product.fulfilment_collect_stand_enabled, true)) {
+    options.push("Stand collection");
+  }
+
+  if (isEnabled(product.fulfilment_collect_table_enabled)) {
+    options.push("Table collection");
+  }
+
+  if (isEnabled(product.fulfilment_deliver_table_enabled)) {
+    options.push("Table delivery");
+  }
+
+  if (isEnabled(product.fulfilment_deliver_seat_enabled)) {
+    options.push("Seat delivery");
+  }
+
+  if (isEnabled(product.fulfilment_post_enabled)) {
+    options.push("Post after event");
+  }
+
+  if (isEnabled(product.fulfilment_arrange_with_organiser_enabled, true)) {
+    options.push("Arrange with organiser");
+  }
+
+  return options;
+}
+
+function getFulfilmentLabel(product: MerchandiseProduct) {
+  const options = getFulfilmentOptions(product);
+
+  if (options.length === 0) {
     return "Needs setup";
   }
 
-  if (count === 1) {
-    return "1 option";
-  }
-
-  return `${count} options`;
+  return options.join(", ");
 }
 
 function getCustomerDetailCount(product: MerchandiseProduct) {
@@ -241,24 +334,78 @@ function getCustomerDetailCount(product: MerchandiseProduct) {
 }
 
 function getCustomerDetailLabel(product: MerchandiseProduct) {
-  const count = getCustomerDetailCount(product);
+  const details: string[] = [];
 
-  if (count === 0) {
+  if (isEnabled(product.require_booking_reference)) {
+    details.push("Booking reference");
+  }
+
+  if (isEnabled(product.require_table_number)) {
+    details.push("Table number");
+  }
+
+  if (isEnabled(product.require_seat_number)) {
+    details.push("Seat number");
+  }
+
+  if (isEnabled(product.require_guest_name)) {
+    details.push("Guest name");
+  }
+
+  if (details.length === 0) {
     return "No extra details";
   }
 
-  if (count === 1) {
-    return "1 checkout detail";
+  return details.join(", ");
+}
+
+function usesEventTableOrSeatFulfilment(product: MerchandiseProduct) {
+  return (
+    isEnabled(product.fulfilment_collect_table_enabled) ||
+    isEnabled(product.fulfilment_deliver_table_enabled) ||
+    isEnabled(product.fulfilment_deliver_seat_enabled)
+  );
+}
+
+function needsEventDetailSetup(product: MerchandiseProduct) {
+  if (!isEnabled(product.event_linking_enabled)) return false;
+
+  if (!cleanText(product.linked_event_id)) return true;
+
+  return usesEventTableOrSeatFulfilment(product) && getCustomerDetailCount(product) === 0;
+}
+
+function getProductWarnings(product: MerchandiseProduct) {
+  const warnings: string[] = [];
+
+  if (product.status === "published" && isSoldOut(product)) {
+    warnings.push("Published but sold out");
   }
 
-  return `${count} checkout details`;
+  if (product.status === "published" && isLowStock(product)) {
+    warnings.push("Low stock");
+  }
+
+  if (product.status === "published" && getFulfilmentOptionCount(product) === 0) {
+    warnings.push("No fulfilment method");
+  }
+
+  if (isEnabled(product.event_linking_enabled) && !cleanText(product.linked_event_id)) {
+    warnings.push("Event link missing");
+  }
+
+  if (needsEventDetailSetup(product)) {
+    warnings.push("Event details may be needed");
+  }
+
+  return warnings;
 }
 
 function getProductReadinessTone(product: MerchandiseProduct) {
   if (product.status === "closed") return "neutral";
   if (product.status !== "published") return "neutral";
 
-  if (getFulfilmentOptionCount(product) === 0) {
+  if (getProductWarnings(product).length > 0) {
     return "warning";
   }
 
@@ -274,8 +421,20 @@ function getProductReadinessLabel(product: MerchandiseProduct) {
     return "Draft setup";
   }
 
+  if (isSoldOut(product)) {
+    return "Sold out";
+  }
+
   if (getFulfilmentOptionCount(product) === 0) {
     return "Public, needs fulfilment";
+  }
+
+  if (needsEventDetailSetup(product)) {
+    return "Event detail check";
+  }
+
+  if (isLowStock(product)) {
+    return "Low stock";
   }
 
   return "Checkout ready";
@@ -365,7 +524,14 @@ async function listMerchandiseProducts(tenantSlug: string) {
         on events.id = merchandise_products.linked_event_id
        and events.tenant_slug = merchandise_products.tenant_slug
       where merchandise_products.tenant_slug = $1
-      order by merchandise_products.created_at desc
+      order by
+        case
+          when merchandise_products.status = 'published' then 1
+          when merchandise_products.status = 'draft' then 2
+          when merchandise_products.status = 'closed' then 3
+          else 4
+        end,
+        merchandise_products.created_at desc
     `,
     [tenantSlug],
   );
@@ -409,7 +575,31 @@ export default async function AdminMerchandisePage() {
   );
   const checkoutReadyProducts = products.filter(
     (product) =>
-      product.status === "published" && getFulfilmentOptionCount(product) > 0,
+      product.status === "published" &&
+      getFulfilmentOptionCount(product) > 0 &&
+      !isSoldOut(product),
+  );
+
+  const stockLimitedProducts = products.filter(
+    (product) => product.stock_quantity !== null,
+  );
+  const unlimitedStockProducts = products.filter(
+    (product) => product.stock_quantity === null,
+  );
+  const soldOutProducts = products.filter(isSoldOut);
+  const publishedSoldOutProducts = products.filter(
+    (product) => product.status === "published" && isSoldOut(product),
+  );
+  const lowStockProducts = products.filter(
+    (product) => product.status === "published" && isLowStock(product),
+  );
+  const productsNeedingFulfilment = products.filter(
+    (product) =>
+      product.status === "published" && getFulfilmentOptionCount(product) === 0,
+  );
+  const eventDetailWarnings = products.filter(needsEventDetailSetup);
+  const productsNeedingAttention = products.filter(
+    (product) => getProductWarnings(product).length > 0,
   );
 
   const soldQuantity = products.reduce(
@@ -431,7 +621,7 @@ export default async function AdminMerchandisePage() {
       <section className="merchandise-hero" style={styles.hero}>
         <div className="hero-main-row" style={styles.heroMainRow}>
           <div className="hero-brand-row" style={styles.heroBrandRow}>
-            <div style={styles.heroLogoPlate}>
+            <div className="hero-logo-plate" style={styles.heroLogoPlate}>
               <img
                 src={DEFAULT_MERCHANDISE_IMAGE_SRC}
                 alt="Merchandise"
@@ -457,10 +647,10 @@ export default async function AdminMerchandisePage() {
               </h1>
 
               <p style={styles.heroDescription}>
-                Manage products, event links, fulfilment settings and paid
-                merchandise orders. Public browsing and Stripe checkout are
-                live; payments update order status and sold quantities after
-                webhook confirmation.
+                Manage products, event links, fulfilment settings, stock
+                visibility and paid merchandise orders. Public browsing and
+                Stripe checkout are live; payments update order status and sold
+                quantities after webhook confirmation.
               </p>
             </div>
           </div>
@@ -484,11 +674,8 @@ export default async function AdminMerchandisePage() {
         <div className="merchandise-hero-stats" style={styles.heroStats}>
           <StatCard label="Products" value={products.length} />
           <StatCard label="Published" value={publishedProducts.length} />
-          <StatCard label="Event-linked" value={eventLinkedProducts.length} />
-          <StatCard
-            label="Checkout ready"
-            value={checkoutReadyProducts.length}
-          />
+          <StatCard label="Checkout ready" value={checkoutReadyProducts.length} />
+          <StatCard label="Stock alerts" value={productsNeedingAttention.length} />
           <StatCard label="Sold quantity" value={soldQuantity} />
           <StatCard
             label="Recorded sales"
@@ -532,8 +719,8 @@ export default async function AdminMerchandisePage() {
                 <p style={styles.readinessIntro}>
                   Published products are visible on the public shop and can be
                   bought through secure Stripe checkout. Paid orders appear in
-                  Orders, and sold quantities update after the payment webhook
-                  confirms success.
+                  Orders, sold quantities update after payment confirmation, and
+                  fulfilment status can be tracked from the fulfilment page.
                 </p>
               </div>
             </div>
@@ -559,7 +746,7 @@ export default async function AdminMerchandisePage() {
               >
                 <span style={styles.actionKicker}>Manual</span>
                 <strong style={styles.actionTitle}>Fulfilment</strong>
-                <span style={styles.actionText}>Plan collection and delivery.</span>
+                <span style={styles.actionText}>Track collection and delivery.</span>
               </Link>
 
               <Link
@@ -620,8 +807,69 @@ export default async function AdminMerchandisePage() {
 
               <ReadinessItem
                 label="Receipts"
-                value="Planned"
-                detail="Merchandise-specific customer receipt emails are not wired in yet."
+                value="Connected"
+                detail="Merchandise customer receipt emails are sent with tenant branding after successful payment."
+                tone="good"
+              />
+            </div>
+          </section>
+
+          <section className="stock-watch-panel" style={styles.stockWatchPanel}>
+            <div style={styles.sectionHeader}>
+              <div>
+                <div style={styles.sectionEyebrow}>Stock and fulfilment</div>
+                <h2 style={styles.sectionTitle}>Readiness watchlist</h2>
+                <p style={styles.sectionIntro}>
+                  This is admin guidance only. It does not change basket,
+                  checkout, Stripe, webhook, receipts or public product logic.
+                </p>
+              </div>
+
+              <Link href="/admin/merchandise/fulfilment" style={styles.darkButton}>
+                Open fulfilment →
+              </Link>
+            </div>
+
+            <div className="stock-watch-grid" style={styles.stockWatchGrid}>
+              <WatchCard
+                label="Sold out while published"
+                value={publishedSoldOutProducts.length}
+                text="Published stock-limited products with no remaining stock."
+                tone={publishedSoldOutProducts.length ? "warning" : "good"}
+              />
+
+              <WatchCard
+                label="Low stock"
+                value={lowStockProducts.length}
+                text={`Published products with ${LOW_STOCK_THRESHOLD} or fewer remaining.`}
+                tone={lowStockProducts.length ? "warning" : "good"}
+              />
+
+              <WatchCard
+                label="Needs fulfilment"
+                value={productsNeedingFulfilment.length}
+                text="Published products without a fulfilment option."
+                tone={productsNeedingFulfilment.length ? "warning" : "good"}
+              />
+
+              <WatchCard
+                label="Event detail check"
+                value={eventDetailWarnings.length}
+                text="Event-linked products that may need table, seat, booking or guest details."
+                tone={eventDetailWarnings.length ? "warning" : "good"}
+              />
+
+              <WatchCard
+                label="Stock limited"
+                value={stockLimitedProducts.length}
+                text="Products using a fixed stock quantity."
+                tone="neutral"
+              />
+
+              <WatchCard
+                label="Unlimited stock"
+                value={unlimitedStockProducts.length}
+                text="Products using manual or unlimited stock."
                 tone="neutral"
               />
             </div>
@@ -663,8 +911,8 @@ export default async function AdminMerchandisePage() {
                   <h2 style={styles.sectionTitle}>Product catalogue</h2>
                   <p style={styles.sectionIntro}>
                     Published products are public and available through the
-                    merchandise basket. Fulfilment and event-linking readiness
-                    are shown per product.
+                    merchandise basket. Stock, fulfilment and event-linking
+                    readiness are shown per product.
                   </p>
                 </div>
               </div>
@@ -708,7 +956,7 @@ export default async function AdminMerchandisePage() {
             <SummaryCard
               label="Checkout-ready products"
               value={checkoutReadyProducts.length}
-              text="Published products with fulfilment guidance configured."
+              text="Published products with stock available and fulfilment guidance configured."
             />
 
             <SummaryCard
@@ -763,6 +1011,35 @@ function ReadinessItem({
   );
 }
 
+function WatchCard({
+  label,
+  value,
+  text,
+  tone,
+}: {
+  label: string;
+  value: ReactNode;
+  text: string;
+  tone: "good" | "warning" | "neutral";
+}) {
+  return (
+    <article
+      style={{
+        ...styles.watchCard,
+        ...(tone === "good"
+          ? styles.watchCardGood
+          : tone === "warning"
+            ? styles.watchCardWarning
+            : styles.watchCardNeutral),
+      }}
+    >
+      <span style={styles.watchLabel}>{label}</span>
+      <strong style={styles.watchValue}>{value}</strong>
+      <p style={styles.watchText}>{text}</p>
+    </article>
+  );
+}
+
 function SummaryCard({
   label,
   value,
@@ -787,9 +1064,20 @@ function ProductCard({ product }: { product: MerchandiseProduct }) {
   const canPreviewPublic = product.status === "published";
   const readinessTone = getProductReadinessTone(product);
   const linkedEventLabel = getLinkedEventLabel(product);
+  const stockTone = getStockTone(product);
+  const warnings = getProductWarnings(product);
 
   return (
-    <article style={styles.itemCard}>
+    <article
+      style={{
+        ...styles.itemCard,
+        ...(readinessTone === "good"
+          ? styles.itemCardGood
+          : readinessTone === "warning"
+            ? styles.itemCardWarning
+            : styles.itemCardNeutral),
+      }}
+    >
       <div className="merchandise-item-layout" style={styles.itemLayout}>
         <div style={styles.itemImagePreviewWrap}>
           {product.image_url ? (
@@ -835,11 +1123,22 @@ function ProductCard({ product }: { product: MerchandiseProduct }) {
                   {getProductReadinessLabel(product)}
                 </span>
 
+                <span
+                  style={{
+                    ...styles.stockPill,
+                    ...stockPillStyle(stockTone),
+                  }}
+                >
+                  {getStockPillLabel(product)}
+                </span>
+
                 {isEnabled(product.event_linking_enabled) ? (
                   <span style={styles.eventPill}>Event-linked</span>
                 ) : null}
 
-                <span style={styles.checkoutPill}>Checkout enabled</span>
+                {canPreviewPublic && !isSoldOut(product) ? (
+                  <span style={styles.checkoutPill}>Checkout enabled</span>
+                ) : null}
               </div>
 
               <h3 style={styles.itemTitle}>{product.title}</h3>
@@ -847,6 +1146,16 @@ function ProductCard({ product }: { product: MerchandiseProduct }) {
               <p style={styles.itemDescription}>
                 {product.description || "No product description added yet."}
               </p>
+
+              {warnings.length ? (
+                <div style={styles.warningStrip}>
+                  {warnings.map((warning) => (
+                    <span key={warning} style={styles.warningChip}>
+                      {warning}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -855,6 +1164,11 @@ function ProductCard({ product }: { product: MerchandiseProduct }) {
             style={styles.itemMetaGrid}
           >
             <InfoBlock label="Stock" value={getStockLabel(product)} />
+
+            <InfoBlock
+              label="Stock detail"
+              value={getStockDetailLabel(product)}
+            />
 
             <InfoBlock label="Sold quantity" value={product.sold_quantity} />
 
@@ -881,6 +1195,8 @@ function ProductCard({ product }: { product: MerchandiseProduct }) {
             />
 
             <InfoBlock label="Created" value={formatDate(product.created_at)} />
+
+            <InfoBlock label="Updated" value={formatDate(product.updated_at)} />
           </div>
 
           <div className="merchandise-item-actions" style={styles.itemActions}>
@@ -960,11 +1276,12 @@ const responsiveStyles = `
 
   .admin-merchandise-page .merchandise-hero-stats,
   .admin-merchandise-page .merchandise-readiness-grid,
-  .admin-merchandise-page .merchandise-actions {
+  .admin-merchandise-page .merchandise-actions,
+  .admin-merchandise-page .stock-watch-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
-  .admin-merchandise-page .heroLogoPlate {
+  .admin-merchandise-page .hero-logo-plate {
     width: 132px !important;
     height: 132px !important;
   }
@@ -977,7 +1294,8 @@ const responsiveStyles = `
 
   .admin-merchandise-page .merchandise-hero,
   .admin-merchandise-page .merchandise-readiness-panel,
-  .admin-merchandise-page .merchandise-section-card {
+  .admin-merchandise-page .merchandise-section-card,
+  .admin-merchandise-page .stock-watch-panel {
     padding: 18px !important;
     border-radius: 24px !important;
   }
@@ -987,7 +1305,7 @@ const responsiveStyles = `
     line-height: 1 !important;
   }
 
-  .admin-merchandise-page .heroLogoPlate {
+  .admin-merchandise-page .hero-logo-plate {
     width: 110px !important;
     height: 110px !important;
   }
@@ -996,7 +1314,8 @@ const responsiveStyles = `
   .admin-merchandise-page .merchandise-readiness-grid,
   .admin-merchandise-page .merchandise-summary-grid,
   .admin-merchandise-page .merchandise-item-meta-grid,
-  .admin-merchandise-page .merchandise-actions {
+  .admin-merchandise-page .merchandise-actions,
+  .admin-merchandise-page .stock-watch-grid {
     grid-template-columns: 1fr !important;
   }
 
@@ -1143,6 +1462,7 @@ const styles: Record<string, CSSProperties> = {
   },
 
   statusBadge: {
+    display: "inline-flex",
     width: "fit-content",
     padding: "8px 12px",
     borderRadius: 999,
@@ -1155,6 +1475,7 @@ const styles: Record<string, CSSProperties> = {
   },
 
   planBadge: {
+    display: "inline-flex",
     width: "fit-content",
     padding: "8px 12px",
     borderRadius: 999,
@@ -1167,6 +1488,7 @@ const styles: Record<string, CSSProperties> = {
   },
 
   phaseBadge: {
+    display: "inline-flex",
     width: "fit-content",
     padding: "8px 12px",
     borderRadius: 999,
@@ -1190,6 +1512,22 @@ const styles: Record<string, CSSProperties> = {
     textDecoration: "none",
     fontSize: 13,
     fontWeight: 950,
+  },
+
+  darkButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    minHeight: 42,
+    padding: "9px 14px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
   },
 
   statCard: {
@@ -1450,6 +1788,73 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
+  stockWatchPanel: {
+    display: "grid",
+    gap: 16,
+    padding: 20,
+    borderRadius: 26,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
+    marginBottom: 18,
+    minWidth: 0,
+  },
+
+  stockWatchGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  watchCard: {
+    display: "grid",
+    gap: 6,
+    padding: 13,
+    borderRadius: 18,
+    border: "1px solid #e2e8f0",
+    background: "#ffffff",
+    minWidth: 0,
+  },
+
+  watchCardGood: {
+    background: "linear-gradient(135deg, #ecfdf5 0%, #ffffff 80%)",
+    borderColor: "#bbf7d0",
+  },
+
+  watchCardWarning: {
+    background: "linear-gradient(135deg, #fffbeb 0%, #ffffff 80%)",
+    borderColor: "#fde68a",
+  },
+
+  watchCardNeutral: {
+    background: "linear-gradient(135deg, #f8fafc 0%, #ffffff 80%)",
+    borderColor: "#e2e8f0",
+  },
+
+  watchLabel: {
+    color: "#64748b",
+    fontSize: 10,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    lineHeight: 1.2,
+  },
+
+  watchValue: {
+    color: "#0f172a",
+    fontSize: 26,
+    lineHeight: 1,
+    fontWeight: 950,
+  },
+
+  watchText: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: 12,
+    lineHeight: 1.35,
+    fontWeight: 730,
+  },
+
   sectionCard: {
     display: "grid",
     gap: 18,
@@ -1509,6 +1914,21 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
     overflow: "hidden",
     boxShadow: "0 8px 24px rgba(15,23,42,0.04)",
+  },
+
+  itemCardGood: {
+    background: "linear-gradient(135deg, #f0fdf4 0%, #ffffff 84%)",
+    borderColor: "#bbf7d0",
+  },
+
+  itemCardWarning: {
+    background: "linear-gradient(135deg, #fffbeb 0%, #ffffff 84%)",
+    borderColor: "#fde68a",
+  },
+
+  itemCardNeutral: {
+    background: "linear-gradient(135deg, #f8fafc 0%, #ffffff 84%)",
+    borderColor: "#e2e8f0",
   },
 
   itemLayout: {
@@ -1615,6 +2035,18 @@ const styles: Record<string, CSSProperties> = {
     whiteSpace: "nowrap",
   },
 
+  stockPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    width: "fit-content",
+    padding: "7px 10px",
+    borderRadius: 999,
+    border: "1px solid",
+    fontSize: 12,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
   eventPill: {
     display: "inline-flex",
     alignItems: "center",
@@ -1661,9 +2093,32 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
+  warningStrip: {
+    display: "flex",
+    gap: 7,
+    flexWrap: "wrap",
+    padding: 10,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #fde68a",
+  },
+
+  warningChip: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "6px 9px",
+    borderRadius: 999,
+    background: "#fffbeb",
+    color: "#92400e",
+    border: "1px solid #fde68a",
+    fontSize: 11,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+
   itemMetaGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
     gap: 10,
     minWidth: 0,
   },
