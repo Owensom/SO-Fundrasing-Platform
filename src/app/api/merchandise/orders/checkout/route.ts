@@ -13,10 +13,19 @@ export const revalidate = 0;
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
+const STRIPE_STANDARD_UK_PERCENT = 0.015;
+const STRIPE_STANDARD_UK_FIXED_CENTS = 20;
+
 type CheckoutPayload = {
   tenantSlug?: unknown;
   orderId?: unknown;
   orderReference?: unknown;
+  coverFees?: unknown;
+  cover_fees?: unknown;
+  donorCoveredFees?: unknown;
+  donor_covered_fees?: unknown;
+  buyerCoversFees?: unknown;
+  buyer_covers_fees?: unknown;
 };
 
 type TenantConnectStatus = {
@@ -33,6 +42,7 @@ type TenantSettingsForCheckout = {
   platform_owner_bypass?: boolean | null;
   platform_fee_percent?: number | string | null;
   stripe_connect_account_id?: string | null;
+  buyer_fee_contributions_enabled?: boolean | null;
 };
 
 type MerchandiseOrder = {
@@ -73,6 +83,14 @@ function cleanText(value: unknown, fallback = "") {
   return clean || fallback;
 }
 
+function boolValue(value: unknown) {
+  if (typeof value === "boolean") return value;
+
+  const clean = String(value ?? "").trim().toLowerCase();
+
+  return clean === "true" || clean === "1" || clean === "yes" || clean === "on";
+}
+
 function safePercent(value: unknown) {
   const number = Number(value);
 
@@ -95,6 +113,30 @@ function calculatePlatformCommissionCents(params: {
   }
 
   return Math.max(0, Math.round(subtotalCents * (platformFeePercent / 100)));
+}
+
+function calculateSupporterCoverFeeCents(params: {
+  subtotalCents: number;
+  platformCommissionCents: number;
+}) {
+  const subtotalCents = Math.max(0, Math.round(params.subtotalCents || 0));
+  const platformCommissionCents = Math.max(
+    0,
+    Math.round(params.platformCommissionCents || 0),
+  );
+
+  if (!subtotalCents && !platformCommissionCents) {
+    return 0;
+  }
+
+  const grossAmountCents = Math.ceil(
+    (subtotalCents +
+      platformCommissionCents +
+      STRIPE_STANDARD_UK_FIXED_CENTS) /
+      (1 - STRIPE_STANDARD_UK_PERCENT),
+  );
+
+  return Math.max(grossAmountCents - subtotalCents, 0);
 }
 
 function getBaseUrl(request: NextRequest) {
@@ -137,27 +179,35 @@ function isConnectReady(connectStatus: TenantConnectStatus | null) {
   );
 }
 
-function buildStripeDescription(items: MerchandiseOrderItem[]) {
-  const itemCount = items.reduce(
+function buildStripeDescription(params: {
+  items: MerchandiseOrderItem[];
+  supporterContributionCents: number;
+}) {
+  const itemCount = params.items.reduce(
     (total, item) => total + Number(item.quantity || 0),
     0,
   );
 
-  const firstItem = items[0];
+  const firstItem = params.items[0];
+
+  const suffix =
+    params.supporterContributionCents > 0
+      ? " · includes a contribution towards platform/payment costs"
+      : "";
 
   if (!firstItem) {
-    return "Merchandise order";
+    return `Merchandise order${suffix}`;
   }
 
-  if (items.length === 1) {
+  if (params.items.length === 1) {
     return `${itemCount} × ${firstItem.product_title}${
       firstItem.option_label ? ` · ${firstItem.option_label}` : ""
-    }`;
+    }${suffix}`;
   }
 
   return `${itemCount} merchandise item${itemCount === 1 ? "" : "s"} across ${
-    items.length
-  } product line${items.length === 1 ? "" : "s"}`;
+    params.items.length
+  } product line${params.items.length === 1 ? "" : "s"}${suffix}`;
 }
 
 async function getTenantConnectStatus(
@@ -428,8 +478,7 @@ export async function POST(request: NextRequest) {
       .slice(0, 3);
 
     const calculatedSubtotalCents = items.reduce(
-      (total, item) =>
-        total + Number(item.line_total_cents || 0),
+      (total, item) => total + Number(item.line_total_cents || 0),
       0,
     );
 
@@ -448,12 +497,50 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const platformFeeCents = calculatePlatformCommissionCents({
+    const buyerFeeContributionsEnabled = Boolean(
+      tenantSettings.buyer_fee_contributions_enabled,
+    );
+
+    const requestedCoverFees = boolValue(
+      payload.coverFees ??
+        payload.cover_fees ??
+        payload.donorCoveredFees ??
+        payload.donor_covered_fees ??
+        payload.buyerCoversFees ??
+        payload.buyer_covers_fees,
+    );
+
+    const platformCommissionCents = calculatePlatformCommissionCents({
       subtotalCents,
       platformFeePercent: Number(tenantSettings.platform_fee_percent ?? 0),
     });
 
-    const totalCents = subtotalCents;
+    const supporterContributionCents =
+      requestedCoverFees && buyerFeeContributionsEnabled
+        ? calculateSupporterCoverFeeCents({
+            subtotalCents,
+            platformCommissionCents,
+          })
+        : 0;
+
+    const totalCents = subtotalCents + supporterContributionCents;
+
+    const stripeProcessingCoverCents = Math.max(
+      supporterContributionCents - platformCommissionCents,
+      0,
+    );
+
+    const applicationFeeAmountCents =
+      supporterContributionCents > 0
+        ? supporterContributionCents
+        : platformCommissionCents;
+
+    const tenantTargetAmountCents = subtotalCents;
+
+    const tenantNetAfterApplicationFeeCents = Math.max(
+      totalCents - applicationFeeAmountCents,
+      0,
+    );
 
     const connectStatus = await getTenantConnectStatus(tenantSlug);
 
@@ -467,8 +554,8 @@ export async function POST(request: NextRequest) {
 
     const shouldApplyApplicationFee =
       shouldUseConnectRouting &&
-      platformFeeCents > 0 &&
-      platformFeeCents < totalCents;
+      applicationFeeAmountCents > 0 &&
+      applicationFeeAmountCents < totalCents;
 
     const paymentIntentData = shouldUseConnectRouting
       ? {
@@ -477,7 +564,7 @@ export async function POST(request: NextRequest) {
           },
           ...(shouldApplyApplicationFee
             ? {
-                application_fee_amount: platformFeeCents,
+                application_fee_amount: applicationFeeAmountCents,
               }
             : {}),
         }
@@ -487,13 +574,13 @@ export async function POST(request: NextRequest) {
 
     const successUrl = `${baseUrl}/m/${encodeURIComponent(
       tenantSlug,
-    )}/basket?merchandise=success&order=${encodeURIComponent(
+    )}/basket?merchandise=success&merchandise_success=true&order_reference=${encodeURIComponent(
       order.order_reference,
     )}&session_id={CHECKOUT_SESSION_ID}`;
 
     const cancelUrl = `${baseUrl}/m/${encodeURIComponent(
       tenantSlug,
-    )}/basket?merchandise=cancelled&order=${encodeURIComponent(
+    )}/basket?merchandise=cancelled&checkout=cancelled&order_reference=${encodeURIComponent(
       order.order_reference,
     )}`;
 
@@ -509,7 +596,10 @@ export async function POST(request: NextRequest) {
             currency: currency.toLowerCase(),
             product_data: {
               name: `Merchandise order ${order.order_reference}`,
-              description: buildStripeDescription(items),
+              description: buildStripeDescription({
+                items,
+                supporterContributionCents,
+              }),
             },
             unit_amount: totalCents,
           },
@@ -540,29 +630,49 @@ export async function POST(request: NextRequest) {
         customer_email: cleanText(order.customer_email),
 
         item_count: String(
-          items.reduce(
-            (total, item) => total + Number(item.quantity || 0),
-            0,
-          ),
+          items.reduce((total, item) => total + Number(item.quantity || 0), 0),
         ),
 
         subtotal_cents: String(subtotalCents),
+        checkout_total_cents: String(totalCents),
         total_cents: String(totalCents),
         gross_amount_cents: String(totalCents),
-        base_amount_cents: String(subtotalCents),
-        tenant_target_amount_cents: String(subtotalCents),
-        net_amount_cents: String(subtotalCents),
 
-        platform_commission_cents: String(platformFeeCents),
-        tier_platform_commission_cents: String(platformFeeCents),
-        platform_fee_cents: String(platformFeeCents),
+        base_amount_cents: String(subtotalCents),
+        ticket_subtotal_cents: String(subtotalCents),
+        tenant_target_amount_cents: String(tenantTargetAmountCents),
+        net_amount_cents: String(tenantTargetAmountCents),
+
+        platform_commission_cents: String(platformCommissionCents),
+        tier_platform_commission_cents: String(platformCommissionCents),
+        platform_fee_cents: String(platformCommissionCents),
+
+        stripe_processing_cover_cents: String(stripeProcessingCoverCents),
+        supporter_contribution_cents: String(supporterContributionCents),
+        donor_fee_cents: String(supporterContributionCents),
+        buyer_fee_cents: String(supporterContributionCents),
+
+        buyer_fee_contributions_enabled: buyerFeeContributionsEnabled
+          ? "true"
+          : "false",
+        buyer_requested_cover_fees: requestedCoverFees ? "true" : "false",
+        donor_covered_fees: supporterContributionCents > 0 ? "true" : "false",
 
         application_fee_amount: shouldApplyApplicationFee
-          ? String(platformFeeCents)
+          ? String(applicationFeeAmountCents)
           : "0",
         application_fee_amount_cents: shouldApplyApplicationFee
-          ? String(platformFeeCents)
+          ? String(applicationFeeAmountCents)
           : "0",
+
+        application_fee_includes_supporter_cover:
+          supporterContributionCents > 0 ? "true" : "false",
+
+        tenant_net_after_application_fee_cents: String(
+          tenantNetAfterApplicationFeeCents,
+        ),
+
+        stripe_fee_estimate_model: "uk_standard_card_1_5_percent_plus_20p",
 
         stripe_connect_routed: shouldUseConnectRouting ? "true" : "false",
         stripe_connect_account_id: shouldUseConnectRouting
@@ -589,7 +699,7 @@ export async function POST(request: NextRequest) {
       tenantSlug,
       orderId: order.id,
       stripeCheckoutSessionId: session.id,
-      platformFeeCents,
+      platformFeeCents: platformCommissionCents,
       totalCents,
     });
 
@@ -603,7 +713,8 @@ export async function POST(request: NextRequest) {
         status: "checkout_started",
         subtotalCents,
         totalCents,
-        platformFeeCents,
+        platformFeeCents: platformCommissionCents,
+        supporterContributionCents,
         currency,
       },
     });
