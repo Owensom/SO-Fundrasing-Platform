@@ -18,6 +18,16 @@ type TenantSettingsLike = {
   platform_owner_bypass?: boolean | null;
 };
 
+type TenantAccessResult =
+  | {
+      ok: true;
+      tenantSlug: string;
+    }
+  | {
+      ok: false;
+      response: Response;
+    };
+
 type MerchandiseOrderExportRow = {
   order_id: string;
   tenant_slug: string;
@@ -196,12 +206,14 @@ function safeFilenamePart(value: string) {
     .slice(0, 64);
 }
 
-async function requireTenantAccess(request: NextRequest) {
+async function requireTenantAccess(
+  request: NextRequest,
+): Promise<TenantAccessResult> {
   const session = await auth();
 
   if (!session?.user) {
     return {
-      tenantSlug: null,
+      ok: false,
       response: NextResponse.redirect(new URL("/admin/login", request.url)),
     };
   }
@@ -214,7 +226,7 @@ async function requireTenantAccess(request: NextRequest) {
 
   if (!tenantSlug || !sessionTenantSlugs.includes(tenantSlug)) {
     return {
-      tenantSlug: null,
+      ok: false,
       response: NextResponse.redirect(
         new URL("/admin/login?error=tenant_access_denied", request.url),
       ),
@@ -222,8 +234,8 @@ async function requireTenantAccess(request: NextRequest) {
   }
 
   return {
+    ok: true,
     tenantSlug,
-    response: null,
   };
 }
 
@@ -279,10 +291,10 @@ async function listMerchandiseOrderExportRows(tenantSlug: string) {
   );
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   const access = await requireTenantAccess(request);
 
-  if (access.response || !access.tenantSlug) {
+  if (!access.ok) {
     return access.response;
   }
 
