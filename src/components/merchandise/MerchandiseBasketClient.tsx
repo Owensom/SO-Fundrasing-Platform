@@ -1,4 +1,4 @@
-"use client"; 
+"use client";
 
 import type { CSSProperties, FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
@@ -20,6 +20,7 @@ type MerchandiseBasketClientProps = {
   shopHref: string;
   primaryColour: string;
   primaryTextColour: string;
+  buyerFeeContributionsEnabled?: boolean;
 };
 
 type ValidatedBasketLine = {
@@ -85,6 +86,7 @@ type StripeCheckoutResult = {
     subtotalCents: number;
     totalCents: number;
     platformFeeCents: number;
+    supporterContributionCents?: number;
     currency: string;
   };
 };
@@ -228,7 +230,8 @@ function getCheckoutCompleteStateFromUrl(): CheckoutCompleteState | null {
       params.get("orderReference") ||
       params.get("merchandise_order_reference") ||
       params.get("merchandiseOrderReference") ||
-      params.get("reference"),
+      params.get("reference") ||
+      params.get("order"),
   );
 
   const success =
@@ -237,6 +240,7 @@ function getCheckoutCompleteStateFromUrl(): CheckoutCompleteState | null {
     params.get("checkoutSuccess") === "true" ||
     params.get("merchandise_success") === "true" ||
     params.get("merchandiseSuccess") === "true" ||
+    params.get("merchandise") === "success" ||
     params.get("status") === "success" ||
     params.get("checkout") === "success" ||
     Boolean(sessionId);
@@ -260,6 +264,7 @@ function removeCheckoutParamsFromUrl() {
     "checkoutSuccess",
     "merchandise_success",
     "merchandiseSuccess",
+    "merchandise",
     "status",
     "checkout",
     "session_id",
@@ -271,6 +276,7 @@ function removeCheckoutParamsFromUrl() {
     "merchandise_order_reference",
     "merchandiseOrderReference",
     "reference",
+    "order",
   ].forEach((key) => url.searchParams.delete(key));
 
   const nextUrl = `${url.pathname}${url.search}${url.hash}`;
@@ -282,10 +288,12 @@ export default function MerchandiseBasketClient({
   shopHref,
   primaryColour,
   primaryTextColour,
+  buyerFeeContributionsEnabled = false,
 }: MerchandiseBasketClientProps) {
   const [items, setItems] = useState<BasketItem[]>([]);
   const [isCheckingBasket, setIsCheckingBasket] = useState(false);
   const [isStartingCheckout, setIsStartingCheckout] = useState(false);
+  const [coverFees, setCoverFees] = useState(false);
   const [checkoutComplete, setCheckoutComplete] =
     useState<CheckoutCompleteState | null>(null);
 
@@ -317,6 +325,7 @@ export default function MerchandiseBasketClient({
       setValidationResult(null);
       setLineDetails({});
       setCheckoutMessage(null);
+      setCoverFees(false);
       setCheckoutComplete(checkoutCompleteState);
       removeCheckoutParamsFromUrl();
       return;
@@ -471,6 +480,11 @@ export default function MerchandiseBasketClient({
     setCheckoutMessage(null);
   }
 
+  function updateCoverFees(value: boolean) {
+    setCoverFees(value);
+    setCheckoutMessage(null);
+  }
+
   function getDetailsError(
     lines: ValidatedBasketLine[],
     detailsByLine: Record<string, LineFulfilmentDetails>,
@@ -595,6 +609,10 @@ export default function MerchandiseBasketClient({
         tenantSlug,
         orderId: order.id,
         orderReference: order.orderReference,
+        coverFees,
+        cover_fees: coverFees,
+        buyerCoversFees: coverFees,
+        buyer_covers_fees: coverFees,
       }),
     });
 
@@ -1108,6 +1126,25 @@ export default function MerchandiseBasketClient({
             </div>
           </div>
 
+          {buyerFeeContributionsEnabled ? (
+            <label style={styles.coverFeesPanel}>
+              <input
+                type="checkbox"
+                checked={coverFees}
+                onChange={(event) => updateCoverFees(event.target.checked)}
+                style={styles.coverFeesCheckbox}
+              />
+
+              <span style={styles.coverFeesCopy}>
+                <strong>Help cover platform and payment fees</strong>
+                <span>
+                  Add a small contribution at checkout so more of the
+                  merchandise sale supports the organiser.
+                </span>
+              </span>
+            </label>
+          ) : null}
+
           {validationResult?.ok ? (
             <div style={{ ...styles.noticePanel, ...styles.noticeGood }}>
               <strong>Basket checked</strong>
@@ -1159,7 +1196,9 @@ export default function MerchandiseBasketClient({
           >
             {isStartingCheckout
               ? "Opening secure checkout..."
-              : "Continue to secure checkout"}
+              : coverFees && buyerFeeContributionsEnabled
+                ? "Continue and cover fees"
+                : "Continue to secure checkout"}
           </button>
 
           <a
@@ -1409,6 +1448,34 @@ const styles: Record<string, CSSProperties> = {
     gap: 10,
     color: "#475569",
     fontWeight: 850,
+  },
+
+  coverFeesPanel: {
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0, 1fr)",
+    gap: 10,
+    alignItems: "flex-start",
+    padding: 13,
+    borderRadius: 18,
+    background: "#fffbeb",
+    color: "#92400e",
+    border: "1px solid #fde68a",
+    cursor: "pointer",
+  },
+
+  coverFeesCheckbox: {
+    width: 20,
+    height: 20,
+    margin: "2px 0 0",
+    accentColor: "#0f172a",
+  },
+
+  coverFeesCopy: {
+    display: "grid",
+    gap: 4,
+    fontSize: 13,
+    lineHeight: 1.4,
+    fontWeight: 760,
   },
 
   noticePanel: {
