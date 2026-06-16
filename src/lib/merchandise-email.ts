@@ -14,18 +14,28 @@ type MerchandiseReceiptItem = {
 
 type MerchandiseEmailBranding = {
   [key: string]: unknown;
-  public_display_name?: string | null;
-  public_logo_url?: string | null;
-  public_logo_mark_url?: string | null;
-  public_primary_colour?: string | null;
-  public_accent_colour?: string | null;
-  public_footer_text?: string | null;
+
+  advancedBranding?: boolean | null;
+
+  name?: string | null;
   displayName?: string | null;
+  public_display_name?: string | null;
+
   logoUrl?: string | null;
   logoMarkUrl?: string | null;
+  public_logo_url?: string | null;
+  public_logo_mark_url?: string | null;
+
+  primaryColor?: string | null;
   primaryColour?: string | null;
+  public_primary_colour?: string | null;
+
+  accentColor?: string | null;
   accentColour?: string | null;
+  public_accent_colour?: string | null;
+
   footerText?: string | null;
+  public_footer_text?: string | null;
 };
 
 type SendMerchandiseReceiptEmailInput = {
@@ -58,6 +68,7 @@ const PLATFORM_URL =
   "https://so-fundraising-platform.vercel.app";
 
 const MERCHANDISE_EMAIL_LOGO_URL = `${PLATFORM_URL}/brand/merchandise-shop-gold.png`;
+const SO_POWERED_BY_LOGO_URL = `${PLATFORM_URL}/brand/so-logo-mark.png`;
 
 function cleanText(value: unknown, fallback = "") {
   const clean = String(value ?? "").trim();
@@ -71,6 +82,16 @@ function escapeHtml(value: unknown) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function normaliseHexColour(value: unknown, fallback: string) {
+  const clean = cleanText(value).toUpperCase();
+
+  if (/^#[0-9A-F]{6}$/.test(clean)) {
+    return clean;
+  }
+
+  return fallback;
 }
 
 function formatMoney(cents: number, currency = "GBP") {
@@ -113,33 +134,45 @@ function formatFulfilmentMethod(value: string | null | undefined) {
 
 function brandName(branding?: MerchandiseEmailBranding | null) {
   return (
-    cleanText(branding?.public_display_name) ||
+    cleanText(branding?.name) ||
     cleanText(branding?.displayName) ||
+    cleanText(branding?.public_display_name) ||
     "SO Fundraising Platform"
   );
 }
 
 function brandFooter(branding?: MerchandiseEmailBranding | null) {
   return (
-    cleanText(branding?.public_footer_text) ||
     cleanText(branding?.footerText) ||
+    cleanText(branding?.public_footer_text) ||
     "Thank you for supporting this fundraising campaign."
   );
 }
 
 function brandPrimary(branding?: MerchandiseEmailBranding | null) {
-  return (
-    cleanText(branding?.public_primary_colour) ||
-    cleanText(branding?.primaryColour) ||
-    "#0f172a"
+  return normaliseHexColour(
+    cleanText(branding?.primaryColor) ||
+      cleanText(branding?.primaryColour) ||
+      cleanText(branding?.public_primary_colour),
+    "#0f172a",
   );
 }
 
 function brandAccent(branding?: MerchandiseEmailBranding | null) {
+  return normaliseHexColour(
+    cleanText(branding?.accentColor) ||
+      cleanText(branding?.accentColour) ||
+      cleanText(branding?.public_accent_colour),
+    "#d4af37",
+  );
+}
+
+function brandLogo(branding?: MerchandiseEmailBranding | null) {
   return (
-    cleanText(branding?.public_accent_colour) ||
-    cleanText(branding?.accentColour) ||
-    "#d4af37"
+    cleanText(branding?.logoMarkUrl) ||
+    cleanText(branding?.logoUrl) ||
+    cleanText(branding?.public_logo_mark_url) ||
+    cleanText(branding?.public_logo_url)
   );
 }
 
@@ -223,6 +256,7 @@ function renderMerchandiseItems(
 function renderMerchandiseReceiptEmail(input: SendMerchandiseReceiptEmailInput) {
   const branding = input.branding || null;
   const tenantName = brandName(branding);
+  const tenantLogoUrl = brandLogo(branding);
   const primary = brandPrimary(branding);
   const accent = brandAccent(branding);
   const footer = brandFooter(branding);
@@ -262,12 +296,26 @@ function renderMerchandiseReceiptEmail(input: SendMerchandiseReceiptEmailInput) 
                     <td style="padding:34px 28px 30px;text-align:center;background:radial-gradient(circle at top right, rgba(255,255,255,0.14), transparent 34%),linear-gradient(135deg, ${escapeHtml(
                       primary,
                     )} 0%, #020617 100%);">
+                      ${
+                        tenantLogoUrl
+                          ? `
+                            <img
+                              src="${escapeHtml(tenantLogoUrl)}"
+                              alt="${escapeHtml(tenantName)}"
+                              width="82"
+                              height="82"
+                              style="display:block;margin:0 auto 16px;width:82px;height:82px;object-fit:contain;border-radius:22px;background:#ffffff;padding:10px;box-sizing:border-box;"
+                            />
+                          `
+                          : ""
+                      }
+
                       <img
                         src="${escapeHtml(MERCHANDISE_EMAIL_LOGO_URL)}"
                         alt="Merchandise"
-                        width="132"
-                        height="132"
-                        style="display:block;margin:0 auto 18px;width:132px;height:132px;object-fit:contain;border-radius:30px;"
+                        width="168"
+                        height="168"
+                        style="display:block;margin:0 auto 20px;width:168px;height:168px;object-fit:contain;border-radius:34px;"
                       />
 
                       <div style="display:inline-block;padding:7px 12px;border-radius:999px;background:rgba(255,255,255,0.08);border:1px solid ${escapeHtml(
@@ -361,14 +409,28 @@ function renderMerchandiseReceiptEmail(input: SendMerchandiseReceiptEmailInput) 
             </tr>
 
             <tr>
-              <td style="padding:20px 28px 26px;background:#f8fafc;border-top:1px solid #e2e8f0;text-align:center;">
+              <td style="padding:22px 28px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;text-align:center;">
                 <p style="margin:0;color:#64748b;font-size:13px;line-height:1.55;font-weight:750;">
                   ${escapeHtml(footer)}
                 </p>
 
-                <p style="margin:10px 0 0;color:#94a3b8;font-size:12px;line-height:1.45;font-weight:700;">
-                  Powered by SO Fundraising Platform
-                </p>
+                <table role="presentation" cellspacing="0" cellpadding="0" align="center" style="margin:18px auto 0;">
+                  <tr>
+                    <td align="center" style="padding:0;">
+                      <img
+                        src="${escapeHtml(SO_POWERED_BY_LOGO_URL)}"
+                        alt="SO Fundraising Platform"
+                        width="46"
+                        height="46"
+                        style="display:block;margin:0 auto 8px;width:46px;height:46px;object-fit:contain;border-radius:14px;"
+                      />
+
+                      <div style="color:#94a3b8;font-size:12px;line-height:1.45;font-weight:800;">
+                        Powered by SO Fundraising Platform
+                      </div>
+                    </td>
+                  </tr>
+                </table>
               </td>
             </tr>
           </table>
@@ -407,7 +469,10 @@ export async function sendMerchandiseReceiptEmail(
     orderReference,
     from: FROM_EMAIL,
     logoUrl: MERCHANDISE_EMAIL_LOGO_URL,
-    logoSize: "132px",
+    poweredByLogoUrl: SO_POWERED_BY_LOGO_URL,
+    tenantName: brandName(input.branding),
+    tenantLogoUrl: brandLogo(input.branding) || null,
+    logoSize: "168px",
   });
 
   const result = await resend.emails.send({
