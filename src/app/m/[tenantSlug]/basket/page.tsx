@@ -23,6 +23,7 @@ type TenantPublicSettings = {
   subscription_tier?: string | null;
   subscription_status?: string | null;
   platform_owner_bypass?: boolean | null;
+  buyer_fee_contributions_enabled?: boolean | null;
 };
 
 function cleanText(value: unknown, fallback = "") {
@@ -99,6 +100,9 @@ export default async function PublicMerchandiseBasketPage({ params }: PageProps)
     : "#FACC15";
 
   const primaryTextColour = getReadableTextColour(primaryColour);
+  const buyerFeeContributionsEnabled = Boolean(
+    tenantSettings?.buyer_fee_contributions_enabled,
+  );
 
   return (
     <main className="public-merchandise-basket-page" style={styles.page}>
@@ -124,9 +128,8 @@ export default async function PublicMerchandiseBasketPage({ params }: PageProps)
           </h1>
 
           <p style={styles.subtitle}>
-            Review selected merchandise for {displayName}. Checkout payment,
-            order creation, stock updates and receipts will be connected in the
-            next controlled phase.
+            Review selected merchandise for {displayName}, add any collection or
+            delivery details, and continue to secure Stripe checkout.
           </p>
         </div>
       </section>
@@ -137,6 +140,7 @@ export default async function PublicMerchandiseBasketPage({ params }: PageProps)
           shopHref={`/m/${tenantSlug}`}
           primaryColour={primaryColour}
           primaryTextColour={primaryTextColour}
+          buyerFeeContributionsEnabled={buyerFeeContributionsEnabled}
         />
       </section>
     </main>
