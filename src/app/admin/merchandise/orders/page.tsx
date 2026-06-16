@@ -275,11 +275,6 @@ export default async function AdminMerchandiseOrdersPage() {
       order.status === "part_fulfilled",
   );
 
-  const grossTotalCents = orders.reduce(
-    (sum, order) => sum + Number(order.total_cents || 0),
-    0,
-  );
-
   const paidTotalCents = paidOrders.reduce(
     (sum, order) => sum + Number(order.total_cents || 0),
     0,
@@ -371,10 +366,7 @@ export default async function AdminMerchandiseOrdersPage() {
           <StatCard label="Paid" value={paidOrders.length} />
           <StatCard label="Ready to fulfil" value={paidOrFulfilmentOrders.length} />
           <StatCard label="Fulfilled" value={fulfilledOrders.length} />
-          <StatCard
-            label="Paid recorded"
-            value={formatMoney(paidTotalCents)}
-          />
+          <StatCard label="Paid recorded" value={formatMoney(paidTotalCents)} />
         </div>
       </section>
 
@@ -402,9 +394,9 @@ export default async function AdminMerchandiseOrdersPage() {
 
         <ReadinessCard
           label="Receipts"
-          value="Planned"
-          detail="Customer merchandise receipt emails are still a later polish step."
-          tone="neutral"
+          value="Connected"
+          detail="Customer merchandise receipt emails are sent with tenant branding after successful payment."
+          tone="good"
         />
       </section>
 
@@ -451,6 +443,14 @@ export default async function AdminMerchandiseOrdersPage() {
                 ready for collection, delivery or organiser fulfilment planning.
               </p>
             </div>
+
+            <Link
+              href="/admin/merchandise/orders/export"
+              prefetch={false}
+              style={styles.exportButton}
+            >
+              Export CSV ↓
+            </Link>
           </div>
 
           <div style={styles.ordersList}>
@@ -954,6 +954,23 @@ const styles: Record<string, CSSProperties> = {
     whiteSpace: "nowrap",
   },
 
+  exportButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    minHeight: 44,
+    padding: "10px 15px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#ffffff",
+    border: "1px solid #0f172a",
+    textDecoration: "none",
+    fontWeight: 950,
+    textAlign: "center",
+    whiteSpace: "nowrap",
+  },
+
   readinessGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
@@ -1024,6 +1041,7 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "space-between",
     gap: 14,
     flexWrap: "wrap",
+    alignItems: "flex-start",
   },
 
   kicker: {
