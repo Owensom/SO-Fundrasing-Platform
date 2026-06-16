@@ -17,6 +17,12 @@ export const revalidate = 0;
 
 const DEFAULT_MERCHANDISE_IMAGE_SRC = "/brand/so-default-merchandise.png";
 
+const COMPLETED_FULFILMENT_STATUSES = new Set([
+  "collected",
+  "delivered",
+  "posted",
+]);
+
 type TenantSettingsLike = {
   subscription_tier?: string | null;
   subscription_status?: string | null;
@@ -118,6 +124,34 @@ function fulfilmentMethodLabel(method: string | null) {
   if (method === "post_after_event") return "Post after event";
   if (method === "arrange_with_organiser") return "Arrange with organiser";
   return "Not selected";
+}
+
+function isCompletedFulfilmentStatus(status: string | null | undefined) {
+  return COMPLETED_FULFILMENT_STATUSES.has(cleanText(status));
+}
+
+function fulfilmentTimestampLabel(order: MerchandiseOrder) {
+  if (isCompletedFulfilmentStatus(order.fulfilment_status)) {
+    return "Fulfilled at";
+  }
+
+  if (
+    order.fulfilment_status === "ready_for_collection" ||
+    order.fulfilment_status === "ready_for_delivery" ||
+    order.fulfilment_status === "arranged"
+  ) {
+    return "Fulfilment updated";
+  }
+
+  return "Last updated";
+}
+
+function fulfilmentTimestampValue(order: MerchandiseOrder) {
+  if (isCompletedFulfilmentStatus(order.fulfilment_status)) {
+    return formatDate(order.fulfilled_at);
+  }
+
+  return formatDate(order.updated_at);
 }
 
 function statusTone(status: string): "good" | "warning" | "neutral" | "danger" {
@@ -337,8 +371,8 @@ export default async function AdminMerchandiseOrdersPage() {
 
               <p style={styles.heroDescription}>
                 Review merchandise orders from the live basket and Stripe
-                checkout flow. Paid orders are marked by the Stripe webhook, and
-                sold quantities are updated after successful payment.
+                checkout flow. Buyer details, payment times and fulfilment
+                tracking are shown directly from the order record.
               </p>
             </div>
           </div>
@@ -439,8 +473,9 @@ export default async function AdminMerchandiseOrdersPage() {
               <p style={styles.kicker}>Order records</p>
               <h2 style={styles.sectionTitle}>Merchandise orders</h2>
               <p style={styles.sectionText}>
-                Live order records grouped by most recent first. Paid orders are
-                ready for collection, delivery or organiser fulfilment planning.
+                Live order records grouped by most recent first. Buyer details
+                are shown clearly, and fulfilment timing separates completed
+                fulfilment from last fulfilment update.
               </p>
             </div>
 
@@ -538,8 +573,8 @@ function OrderCard({ order }: { order: MerchandiseOrder }) {
           <h3 style={styles.orderTitle}>{order.order_reference}</h3>
 
           <p style={styles.orderSubtitle}>
-            {cleanText(order.customer_name, "No customer name")} ·{" "}
-            {cleanText(order.customer_email, "No email")} ·{" "}
+            Buyer: {cleanText(order.customer_name, "No customer name")} ·{" "}
+            {cleanText(order.customer_email, "No email")} · Ordered{" "}
             {formatDate(order.created_at)}
           </p>
         </div>
@@ -553,6 +588,25 @@ function OrderCard({ order }: { order: MerchandiseOrder }) {
       </div>
 
       <div className="order-info-grid" style={styles.orderInfoGrid}>
+        <InfoBlock
+          label="Buyer name"
+          value={cleanText(order.customer_name, "No customer name")}
+          tone={cleanText(order.customer_name) ? "good" : "warning"}
+        />
+
+        <InfoBlock
+          label="Buyer email"
+          value={cleanText(order.customer_email, "No buyer email")}
+          tone={cleanText(order.customer_email) ? "good" : "warning"}
+        />
+
+        <InfoBlock
+          label="Buyer phone"
+          value={cleanText(order.customer_phone, "Not provided")}
+        />
+
+        <InfoBlock label="Paid at" value={formatDate(order.paid_at)} />
+
         <InfoBlock
           label="Items"
           value={`${order.item_count} line item${
@@ -576,28 +630,45 @@ function OrderCard({ order }: { order: MerchandiseOrder }) {
         />
 
         <InfoBlock
+          label="Fulfilment status"
+          value={fulfilmentStatusLabel(order.fulfilment_status)}
+        />
+
+        <InfoBlock
+          label={fulfilmentTimestampLabel(order)}
+          value={fulfilmentTimestampValue(order)}
+        />
+
+        <InfoBlock label="Order updated" value={formatDate(order.updated_at)} />
+
+        <InfoBlock
           label="Booking reference"
           value={cleanText(order.booking_reference, "Not provided")}
         />
 
         <InfoBlock
           label="Table / seat"
-          value={[
-            cleanText(order.table_number),
-            cleanText(order.seat_number),
-          ]
-            .filter(Boolean)
-            .join(" / ") || "Not provided"}
+          value={
+            [
+              cleanText(order.table_number),
+              cleanText(order.seat_number),
+            ].filter(Boolean).join(" / ") || "Not provided"
+          }
         />
 
         <InfoBlock
-          label="Guest name"
+          label="Guest / recipient"
           value={cleanText(order.guest_name, "Not provided")}
         />
 
         <InfoBlock
           label="Customer note"
           value={cleanText(order.customer_note, "No customer note")}
+        />
+
+        <InfoBlock
+          label="Internal note"
+          value={cleanText(order.internal_note, "No internal note")}
         />
 
         <InfoBlock
@@ -617,18 +688,31 @@ function OrderCard({ order }: { order: MerchandiseOrder }) {
               : "Not stored"
           }
         />
-
-        <InfoBlock label="Paid at" value={formatDate(order.paid_at)} />
-
-        <InfoBlock label="Fulfilled at" value={formatDate(order.fulfilled_at)} />
       </div>
     </article>
   );
 }
 
-function InfoBlock({ label, value }: { label: string; value: ReactNode }) {
+function InfoBlock({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: ReactNode;
+  tone?: "good" | "warning" | "neutral";
+}) {
   return (
-    <div style={styles.infoBlock}>
+    <div
+      style={{
+        ...styles.infoBlock,
+        ...(tone === "good"
+          ? styles.infoBlockGood
+          : tone === "warning"
+            ? styles.infoBlockWarning
+            : null),
+      }}
+    >
       <span style={styles.infoLabel}>{label}</span>
       <strong style={styles.infoValue}>{value}</strong>
     </div>
@@ -1258,6 +1342,16 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 16,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
+  },
+
+  infoBlockGood: {
+    background: "linear-gradient(135deg, #ecfdf5 0%, #ffffff 82%)",
+    borderColor: "#bbf7d0",
+  },
+
+  infoBlockWarning: {
+    background: "linear-gradient(135deg, #fffbeb 0%, #ffffff 82%)",
+    borderColor: "#fde68a",
   },
 
   infoLabel: {
