@@ -24,6 +24,7 @@ type TenantPublicSettings = {
   subscription_status?: string | null;
   platform_owner_bypass?: boolean | null;
   buyer_fee_contributions_enabled?: boolean | null;
+  platform_fee_percent?: number | string | null;
 };
 
 function cleanText(value: unknown, fallback = "") {
@@ -60,6 +61,16 @@ function getReadableTextColour(background: string) {
 
 function getDisplayName(settings: TenantPublicSettings | null) {
   return cleanText(settings?.public_display_name) || "SO Fundraising Platform";
+}
+
+function safePlatformFeePercent(value: unknown) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number) || number < 0) {
+    return 0;
+  }
+
+  return Math.min(100, number);
 }
 
 export async function generateMetadata({
@@ -103,6 +114,9 @@ export default async function PublicMerchandiseBasketPage({ params }: PageProps)
   const buyerFeeContributionsEnabled = Boolean(
     tenantSettings?.buyer_fee_contributions_enabled,
   );
+  const platformFeePercent = safePlatformFeePercent(
+    tenantSettings?.platform_fee_percent,
+  );
 
   return (
     <main className="public-merchandise-basket-page" style={styles.page}>
@@ -141,6 +155,7 @@ export default async function PublicMerchandiseBasketPage({ params }: PageProps)
           primaryColour={primaryColour}
           primaryTextColour={primaryTextColour}
           buyerFeeContributionsEnabled={buyerFeeContributionsEnabled}
+          platformFeePercent={platformFeePercent}
         />
       </section>
     </main>
