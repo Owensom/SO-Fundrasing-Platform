@@ -18,6 +18,12 @@ export const revalidate = 0;
 
 const DEFAULT_MERCHANDISE_IMAGE_SRC = "/brand/so-default-merchandise.png";
 
+const COMPLETED_FULFILMENT_STATUSES = new Set([
+  "collected",
+  "delivered",
+  "posted",
+]);
+
 type TenantSettingsLike = {
   subscription_tier?: string | null;
   subscription_status?: string | null;
@@ -52,7 +58,6 @@ type MerchandiseProduct = {
   created_at: string;
   updated_at: string;
 };
-
 type MerchandiseFulfilmentOrder = {
   id: string;
   tenant_slug: string;
@@ -160,6 +165,34 @@ function fulfilmentMethodLabel(method: string | null) {
   if (method === "post_after_event") return "Post after event";
   if (method === "arrange_with_organiser") return "Arrange with organiser";
   return "Not selected";
+}
+
+function isCompletedFulfilmentStatus(status: string | null | undefined) {
+  return COMPLETED_FULFILMENT_STATUSES.has(cleanText(status));
+}
+
+function fulfilmentTimestampLabel(order: MerchandiseFulfilmentOrder) {
+  if (isCompletedFulfilmentStatus(order.fulfilment_status)) {
+    return "Fulfilled at";
+  }
+
+  if (
+    order.fulfilment_status === "ready_for_collection" ||
+    order.fulfilment_status === "ready_for_delivery" ||
+    order.fulfilment_status === "arranged"
+  ) {
+    return "Fulfilment updated";
+  }
+
+  return "Last updated";
+}
+
+function fulfilmentTimestampValue(order: MerchandiseFulfilmentOrder) {
+  if (isCompletedFulfilmentStatus(order.fulfilment_status)) {
+    return formatDate(order.fulfilled_at);
+  }
+
+  return formatDate(order.updated_at);
 }
 
 function fulfilmentStatusTone(status: string | null | undefined) {
@@ -359,7 +392,6 @@ async function requireTenantAccess() {
 
   return tenantSlug;
 }
-
 async function listMerchandiseProducts(tenantSlug: string) {
   return query<MerchandiseProduct>(
     `
@@ -507,20 +539,11 @@ export default async function AdminMerchandiseFulfilmentPage({
     "merchandise",
   );
 
-  const publishedProducts = products.filter(
-    (product) => product.status === "published",
-  );
   const eventLinkedProducts = products.filter((product) =>
     isEnabled(product.event_linking_enabled),
   );
   const fulfilmentConfiguredProducts = products.filter(
     (product) => getFulfilmentOptions(product).length > 0,
-  );
-  const needsFulfilmentProducts = products.filter(
-    (product) => getFulfilmentOptions(product).length === 0,
-  );
-  const requiresCheckoutDetailsProducts = products.filter(
-    (product) => getRequiredDetails(product).length > 0,
   );
 
   const readyOrders = fulfilmentOrders.filter((order) =>
@@ -539,8 +562,7 @@ export default async function AdminMerchandiseFulfilmentPage({
   );
 
   const eventGroups = groupProductsByEvent(products);
-
-  if (!merchandiseCapability.allowed) {
+    if (!merchandiseCapability.allowed) {
     return (
       <main className="admin-merchandise-fulfilment-page" style={styles.page}>
         <style>{responsiveStyles}</style>
@@ -612,9 +634,8 @@ export default async function AdminMerchandiseFulfilmentPage({
 
             <p style={styles.heroDescription}>
               Track paid merchandise orders for collection, delivery, posting or
-              organiser follow-up. This page only updates fulfilment tracking —
-              it does not create payments, resend receipts or change Stripe
-              checkout.
+              organiser follow-up. Ready statuses show the last fulfilment
+              update; completed statuses show the fulfilled time.
             </p>
           </div>
         </div>
@@ -660,7 +681,7 @@ export default async function AdminMerchandiseFulfilmentPage({
         <ReadinessCard
           label="Fulfilment status"
           value={`${completedOrders.length} completed`}
-          detail="Completed statuses set the fulfilled date while keeping checkout and payment history intact."
+          detail="Collected, delivered and posted statuses set the fulfilled date. Ready statuses use the order update time."
           tone={completedOrders.length ? "good" : "neutral"}
         />
 
@@ -678,8 +699,9 @@ export default async function AdminMerchandiseFulfilmentPage({
             <p style={styles.kicker}>Paid order fulfilment</p>
             <h2 style={styles.sectionTitle}>Orders to fulfil</h2>
             <p style={styles.sectionText}>
-              Update order-level fulfilment status and organiser notes. These
-              controls are admin-only and tenant-isolated.
+              Update order-level fulfilment status and organiser notes. Buyer
+              details and fulfilment update timing are shown directly on each
+              order card.
             </p>
           </div>
 
@@ -701,8 +723,7 @@ export default async function AdminMerchandiseFulfilmentPage({
           </div>
         )}
       </section>
-
-      <section style={styles.planningIntro}>
+            <section style={styles.planningIntro}>
         <div>
           <p style={styles.kicker}>Product fulfilment setup</p>
           <h2 style={styles.sectionTitle}>Product planning</h2>
@@ -806,7 +827,10 @@ function FulfilmentOrderCard({
       <div className="order-main-row" style={styles.orderMainRow}>
         <div style={styles.orderTitleBlock}>
           <div style={styles.productPillRow}>
-            <span style={styles.statusPill}>{orderStatusLabel(order.status)}</span>
+            <span style={styles.statusPill}>
+              {orderStatusLabel(order.status)}
+            </span>
+
             <span
               style={{
                 ...styles.fulfilmentPill,
@@ -824,59 +848,107 @@ function FulfilmentOrderCard({
           <h3 style={styles.productTitle}>{order.order_reference}</h3>
 
           <p style={styles.productSubtitle}>
-            {cleanText(order.customer_name, "No customer name")} ·{" "}
+            Buyer: {cleanText(order.customer_name, "No customer name")} ·{" "}
             {cleanText(order.customer_email, "No email")} ·{" "}
             {formatMoney(order.total_cents, order.currency)}
           </p>
         </div>
 
         <div style={styles.orderTotalBlock}>
-          <span style={styles.miniStatLabel}>Paid</span>
-          <strong style={styles.miniStatValue}>{formatDate(order.paid_at)}</strong>
+          <span style={styles.miniStatLabel}>
+            {fulfilmentTimestampLabel(order)}
+          </span>
+          <strong style={styles.miniStatValue}>
+            {fulfilmentTimestampValue(order)}
+          </strong>
         </div>
       </div>
 
       <div className="planning-grid" style={styles.planningGrid}>
         <InfoBlock
+          label="Buyer name"
+          value={cleanText(order.customer_name, "No customer name")}
+          tone={cleanText(order.customer_name) ? "good" : "warning"}
+        />
+
+        <InfoBlock
+          label="Buyer email"
+          value={cleanText(order.customer_email, "No buyer email")}
+          tone={cleanText(order.customer_email) ? "good" : "warning"}
+        />
+
+        <InfoBlock
+          label="Buyer phone"
+          value={cleanText(order.customer_phone, "Not provided")}
+        />
+
+        <InfoBlock label="Paid at" value={formatDate(order.paid_at)} />
+
+        <InfoBlock
           label="Products"
           value={cleanText(order.product_titles, "No items recorded")}
         />
+
         <InfoBlock
           label="Items"
           value={`${order.item_count} line item${
             order.item_count === 1 ? "" : "s"
           } · ${order.total_quantity} total`}
         />
+
         <InfoBlock
           label="Fulfilment method"
           value={fulfilmentMethodLabel(order.fulfilment_method)}
         />
+
+        <InfoBlock
+          label="Fulfilment status"
+          value={fulfilmentStatusLabel(order.fulfilment_status)}
+        />
+
+        <InfoBlock
+          label={fulfilmentTimestampLabel(order)}
+          value={fulfilmentTimestampValue(order)}
+        />
+
+        <InfoBlock label="Order updated" value={formatDate(order.updated_at)} />
+
         <InfoBlock
           label="Event"
           value={cleanText(order.linked_event_title, "No linked event")}
         />
+
         <InfoBlock
           label="Booking reference"
           value={cleanText(order.booking_reference, "Not provided")}
         />
+
         <InfoBlock
           label="Table / seat"
           value={
             [
               cleanText(order.table_number),
               cleanText(order.seat_number),
-            ].filter(Boolean).join(" / ") || "Not provided"
+            ]
+              .filter(Boolean)
+              .join(" / ") || "Not provided"
           }
         />
+
         <InfoBlock
-          label="Guest name"
+          label="Guest / recipient"
           value={cleanText(order.guest_name, "Not provided")}
         />
+
         <InfoBlock
           label="Customer note"
           value={cleanText(order.customer_note, "No customer note")}
         />
-        <InfoBlock label="Fulfilled at" value={formatDate(order.fulfilled_at)} />
+
+        <InfoBlock
+          label="Internal note"
+          value={cleanText(order.internal_note, "No internal note")}
+        />
       </div>
 
       <form action={updateMerchandiseOrderFulfilment} style={styles.updateForm}>
@@ -1052,15 +1124,31 @@ function ProductPlanningCard({ product }: { product: MerchandiseProduct }) {
   );
 }
 
-function InfoBlock({ label, value }: { label: string; value: ReactNode }) {
+function InfoBlock({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: ReactNode;
+  tone?: "good" | "warning" | "neutral";
+}) {
   return (
-    <div style={styles.infoBlock}>
+    <div
+      style={{
+        ...styles.infoBlock,
+        ...(tone === "good"
+          ? styles.infoBlockGood
+          : tone === "warning"
+            ? styles.infoBlockWarning
+            : null),
+      }}
+    >
       <span style={styles.infoLabel}>{label}</span>
       <strong style={styles.infoValue}>{value}</strong>
     </div>
   );
 }
-
 const responsiveStyles = `
 .admin-merchandise-fulfilment-page,
 .admin-merchandise-fulfilment-page * {
@@ -1407,6 +1495,26 @@ const styles: Record<string, CSSProperties> = {
     whiteSpace: "nowrap",
   },
 
+  successPanel: {
+    marginBottom: 14,
+    padding: "12px 14px",
+    borderRadius: 18,
+    background: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #86efac",
+    fontWeight: 900,
+  },
+
+  errorPanel: {
+    marginBottom: 14,
+    padding: "12px 14px",
+    borderRadius: 18,
+    background: "#fef2f2",
+    color: "#991b1b",
+    border: "1px solid #fecaca",
+    fontWeight: 900,
+  },
+
   readinessGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
@@ -1460,26 +1568,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     lineHeight: 1.4,
     fontWeight: 730,
-  },
-
-  successPanel: {
-    marginBottom: 14,
-    padding: "12px 14px",
-    borderRadius: 18,
-    background: "#dcfce7",
-    color: "#166534",
-    border: "1px solid #86efac",
-    fontWeight: 900,
-  },
-
-  errorPanel: {
-    marginBottom: 14,
-    padding: "12px 14px",
-    borderRadius: 18,
-    background: "#fef2f2",
-    color: "#991b1b",
-    border: "1px solid #fecaca",
-    fontWeight: 900,
   },
 
   ordersPanel: {
@@ -1575,7 +1663,7 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 18,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    minWidth: 150,
+    minWidth: 180,
   },
 
   updateForm: {
@@ -1837,6 +1925,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.35,
     fontWeight: 800,
+    overflowWrap: "anywhere",
   },
 
   productActions: {
@@ -1888,6 +1977,16 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 16,
     background: "#ffffff",
     border: "1px solid #e2e8f0",
+  },
+
+  infoBlockGood: {
+    background: "linear-gradient(135deg, #ecfdf5 0%, #ffffff 82%)",
+    borderColor: "#bbf7d0",
+  },
+
+  infoBlockWarning: {
+    background: "linear-gradient(135deg, #fffbeb 0%, #ffffff 82%)",
+    borderColor: "#fde68a",
   },
 
   infoLabel: {
