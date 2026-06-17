@@ -58,6 +58,7 @@ type MerchandiseProduct = {
   created_at: string;
   updated_at: string;
 };
+
 type MerchandiseFulfilmentOrder = {
   id: string;
   tenant_slug: string;
@@ -305,7 +306,6 @@ function getFulfilmentLabel(product: MerchandiseProduct) {
 
   return options.join(", ");
 }
-
 function getRequiredDetails(product: MerchandiseProduct) {
   const details: string[] = [];
 
@@ -392,6 +392,7 @@ async function requireTenantAccess() {
 
   return tenantSlug;
 }
+
 async function listMerchandiseProducts(tenantSlug: string) {
   return query<MerchandiseProduct>(
     `
@@ -439,7 +440,6 @@ async function listMerchandiseProducts(tenantSlug: string) {
     [tenantSlug],
   );
 }
-
 async function listMerchandiseFulfilmentOrders(tenantSlug: string) {
   return query<MerchandiseFulfilmentOrder>(
     `
@@ -723,7 +723,8 @@ export default async function AdminMerchandiseFulfilmentPage({
           </div>
         )}
       </section>
-            <section style={styles.planningIntro}>
+
+      <section style={styles.planningIntro}>
         <div>
           <p style={styles.kicker}>Product fulfilment setup</p>
           <h2 style={styles.sectionTitle}>Product planning</h2>
@@ -767,7 +768,6 @@ export default async function AdminMerchandiseFulfilmentPage({
     </main>
   );
 }
-
 function StatCard({ label, value }: { label: string; value: ReactNode }) {
   return (
     <article style={styles.statCard}>
@@ -845,7 +845,9 @@ function FulfilmentOrderCard({
             </span>
           </div>
 
-          <h3 style={styles.productTitle}>{order.order_reference}</h3>
+          <h3 style={styles.productTitle}>
+            Merchandise order {order.order_reference}
+          </h3>
 
           <p style={styles.productSubtitle}>
             Buyer: {cleanText(order.customer_name, "No customer name")} ·{" "}
@@ -919,7 +921,7 @@ function FulfilmentOrderCard({
         />
 
         <InfoBlock
-          label="Booking reference"
+          label="Event booking reference"
           value={cleanText(order.booking_reference, "Not provided")}
         />
 
