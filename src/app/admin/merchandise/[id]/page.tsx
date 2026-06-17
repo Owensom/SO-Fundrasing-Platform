@@ -249,7 +249,6 @@ async function getTenantEventOptions(tenantSlug: string) {
     [tenantSlug],
   );
 }
-
 export default async function EditMerchandiseProductPage({
   params,
   searchParams,
@@ -344,16 +343,16 @@ export default async function EditMerchandiseProductPage({
             ← Back to merchandise
           </Link>
 
-          <p style={styles.badge}>Phase 7C/7D setup</p>
+          <p style={styles.badge}>Merchandise setup</p>
 
           <h1 className="merchandise-form-title" style={styles.title}>
             Edit merchandise product
           </h1>
 
           <p style={styles.subtitle}>
-            Update the product record. Event linking and fulfilment setup are
-            now being prepared, while checkout remains intentionally
-            disconnected until a later phase.
+            Update product details, pricing, stock, event linking and
+            fulfilment requirements. Checkout, Stripe payment, receipt emails
+            and admin order fulfilment are live.
           </p>
 
           <p style={styles.tenantLine}>
@@ -481,8 +480,7 @@ export default async function EditMerchandiseProductPage({
             </Field>
           </div>
         </section>
-
-        <section style={styles.card}>
+                <section style={styles.card}>
           <p style={styles.kicker}>Size options</p>
 
           <p style={styles.sectionHelp}>
@@ -532,9 +530,9 @@ export default async function EditMerchandiseProductPage({
           <p style={styles.sectionHelp}>
             Optional setup for products connected to an event, such as ceilidh
             merchandise, table delivery, collection stands or post-event
-            fulfilment. This prepares the product record only. Checkout,
-            payments, orders and fulfilment automation are not enabled in this
-            phase.
+            fulfilment. These settings control what buyers see at checkout and
+            what details are passed into merchandise orders and fulfilment
+            tracking.
           </p>
 
           <div style={styles.readinessPanel}>
@@ -593,7 +591,7 @@ export default async function EditMerchandiseProductPage({
               </strong>
               <small style={styles.toggleHelp}>
                 Use this when merchandise is designed for a specific event or
-                may need table, seat or booking details later.
+                may need table, seat or booking details at checkout.
               </small>
             </span>
           </label>
@@ -602,7 +600,7 @@ export default async function EditMerchandiseProductPage({
             label="Linked event"
             helper={
               eventOptions.length
-                ? "Choose one of this tenant’s events. This only stores the product relationship for later checkout and fulfilment phases."
+                ? "Choose one of this tenant’s events. This connects the product to an event for buyer checkout details, admin orders and fulfilment tracking."
                 : "No tenant events found yet. Create an event first, then return here to link merchandise."
             }
           >
@@ -667,7 +665,7 @@ export default async function EditMerchandiseProductPage({
               <CheckboxCard
                 name="fulfilment_arrange_with_organiser_enabled"
                 title="Arrange with organiser"
-                helper="A safe fallback while fulfilment automation is not live."
+                helper="A safe fallback when the organiser wants to confirm details directly."
                 defaultChecked={arrangeWithOrganiserEnabled}
               />
             </div>
@@ -675,18 +673,18 @@ export default async function EditMerchandiseProductPage({
 
           <div style={styles.fulfilmentBox}>
             <span style={styles.fulfilmentTitle}>
-              Details to request later at checkout
+              Details to request at checkout
             </span>
 
             <p style={styles.sectionHelp}>
-              These settings only prepare the product. They do not currently
-              change checkout or create merchandise orders.
+              These settings control which event details buyers must provide in
+              the basket before secure checkout.
             </p>
 
             <div className="fulfilment-grid" style={styles.fulfilmentGrid}>
               <CheckboxCard
                 name="require_booking_reference"
-                title="Booking reference"
+                title="Event booking reference"
                 helper="Useful for event-linked collection or table delivery."
                 defaultChecked={isEnabled(product.require_booking_reference)}
               />
@@ -716,19 +714,18 @@ export default async function EditMerchandiseProductPage({
 
           <Field
             label="Fulfilment notes"
-            helper="Optional internal guidance for the organiser. This is setup-only and is not sent to customers yet."
+            helper="Internal guidance for organisers. Customer-entered event details are stored with the order for admin fulfilment."
           >
             <textarea
               name="fulfilment_notes"
               rows={4}
               defaultValue={product.fulfilment_notes || ""}
-              placeholder="Example: Collect from the merchandise table beside the entrance. Event-linked delivery may be added later."
+              placeholder="Example: Collect from the merchandise table beside the entrance. Table or seat delivery details will appear in admin order fulfilment."
               style={styles.textarea}
             />
           </Field>
         </section>
-
-        <section style={styles.card}>
+                <section style={styles.card}>
           <p style={styles.kicker}>Image setup</p>
 
           <ImageFocusUploadField
@@ -990,8 +987,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
     fontWeight: 740,
   },
-
-  formGrid: {
+    formGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 14,
