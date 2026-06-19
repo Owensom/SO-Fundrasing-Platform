@@ -270,7 +270,6 @@ async function listMerchandiseOrders(tenantSlug: string) {
     [tenantSlug],
   );
 }
-
 export default async function AdminMerchandiseOrdersPage() {
   const tenantSlug = await requireTenantAccess();
 
@@ -341,53 +340,51 @@ export default async function AdminMerchandiseOrdersPage() {
       <style>{responsiveStyles}</style>
 
       <section className="orders-hero" style={styles.hero}>
-        <div className="hero-main-row" style={styles.heroMainRow}>
-          <div className="hero-brand-row" style={styles.heroBrandRow}>
-            <div className="hero-logo-plate" style={styles.heroLogoPlate}>
-              <img
-                src={DEFAULT_MERCHANDISE_IMAGE_SRC}
-                alt=""
-                aria-hidden="true"
-                style={styles.heroLogo}
-              />
-            </div>
+        <div className="hero-brand-row" style={styles.heroBrandRow}>
+          <div className="hero-logo-plate" style={styles.heroLogoPlate}>
+            <img
+              src={DEFAULT_MERCHANDISE_IMAGE_SRC}
+              alt=""
+              aria-hidden="true"
+              style={styles.heroLogo}
+            />
+          </div>
 
-            <div style={styles.heroTitleBlock}>
-              <div style={styles.heroTopRow}>
-                <div style={styles.badgeRow}>
-                  <span style={styles.statusBadge}>Merchandise orders</span>
-                  <span style={styles.planBadge}>{getTierLabel(tier)} plan</span>
-                  <span style={styles.phaseBadge}>Checkout live</span>
-                </div>
+          <div style={styles.heroTitleBlock}>
+            <div style={styles.heroTopRow}>
+              <div style={styles.badgeRow}>
+                <span style={styles.statusBadge}>Merchandise orders</span>
+                <span style={styles.planBadge}>{getTierLabel(tier)} plan</span>
+                <span style={styles.phaseBadge}>Checkout live</span>
+              </div>
 
+              <div className="hero-actions-row" style={styles.heroActionsRow}>
                 <Link href="/admin/merchandise" style={styles.secondaryHeroButton}>
                   ← Merchandise
                 </Link>
+
+                <Link
+                  href="/admin/merchandise/fulfilment"
+                  style={styles.primaryHeroButton}
+                >
+                  Fulfilment planning →
+                </Link>
+
+                <Link href="/admin/merchandise" style={styles.secondaryHeroButton}>
+                  Product catalogue →
+                </Link>
               </div>
-
-              <h1 className="orders-title" style={styles.heroTitle}>
-                Orders
-              </h1>
-
-              <p style={styles.heroDescription}>
-                Review merchandise orders from the live basket and Stripe
-                checkout flow. Buyer details, payment times and fulfilment
-                tracking are shown directly from the order record.
-              </p>
             </div>
-          </div>
 
-          <div className="hero-actions-panel" style={styles.heroActionsPanel}>
-            <Link
-              href="/admin/merchandise/fulfilment"
-              style={styles.heroPrimaryActionButton}
-            >
-              Fulfilment planning →
-            </Link>
+            <h1 className="orders-title" style={styles.heroTitle}>
+              Orders
+            </h1>
 
-            <Link href="/admin/merchandise" style={styles.heroSecondaryActionButton}>
-              Product catalogue →
-            </Link>
+            <p style={styles.heroDescription}>
+              Review merchandise orders from the live basket and Stripe checkout
+              flow. Buyer details, payment times and fulfilment tracking are
+              shown directly from the order record.
+            </p>
           </div>
         </div>
 
@@ -449,8 +446,8 @@ export default async function AdminMerchandiseOrdersPage() {
 
           <p style={styles.emptyText}>
             Merchandise checkout is connected. Orders will appear here once a
-            customer adds products to their basket and starts or completes
-            secure checkout.
+            customer adds products to their basket and starts or completes secure
+            checkout.
           </p>
 
           <div className="empty-actions" style={styles.emptyActions}>
@@ -536,7 +533,6 @@ function ReadinessCard({
     </article>
   );
 }
-
 function OrderCard({ order }: { order: MerchandiseOrder }) {
   const tone = statusTone(order.status);
 
@@ -744,7 +740,6 @@ const responsiveStyles = `
 }
 
 @media (max-width: 920px) {
-  .admin-merchandise-orders-page .hero-main-row,
   .admin-merchandise-orders-page .hero-brand-row,
   .admin-merchandise-orders-page .order-main-row {
     grid-template-columns: 1fr !important;
@@ -756,16 +751,14 @@ const responsiveStyles = `
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
-  .admin-merchandise-orders-page .hero-actions-panel {
+  .admin-merchandise-orders-page .hero-actions-row {
     display: grid !important;
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
     width: 100% !important;
-    max-width: none !important;
-    justify-self: stretch !important;
-    align-items: stretch !important;
+    justify-content: stretch !important;
   }
 
-  .admin-merchandise-orders-page .hero-actions-panel a {
+  .admin-merchandise-orders-page .hero-actions-row a {
     width: 100% !important;
   }
 
@@ -799,7 +792,7 @@ const responsiveStyles = `
   .admin-merchandise-orders-page .hero-stats,
   .admin-merchandise-orders-page .readiness-grid,
   .admin-merchandise-orders-page .order-info-grid,
-  .admin-merchandise-orders-page .hero-actions-panel {
+  .admin-merchandise-orders-page .hero-actions-row {
     grid-template-columns: 1fr !important;
   }
 
@@ -839,14 +832,6 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 18,
     boxShadow: "0 24px 60px rgba(15,23,42,0.18)",
     overflow: "hidden",
-  },
-
-  heroMainRow: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) 220px",
-    gap: 16,
-    alignItems: "start",
-    minWidth: 0,
   },
 
   heroBrandRow: {
@@ -957,6 +942,53 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
+  heroActionsRow: {
+    display: "flex",
+    gap: 10,
+    alignItems: "center",
+    justifyContent: "flex-end",
+    flexWrap: "wrap",
+    minWidth: 0,
+  },
+
+  primaryHeroButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    minHeight: 40,
+    padding: "9px 15px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.16)",
+    textDecoration: "none",
+    fontWeight: 950,
+    fontSize: 13,
+    lineHeight: 1.2,
+    textAlign: "center",
+    whiteSpace: "nowrap",
+    boxShadow: "0 14px 30px rgba(22,131,248,0.30)",
+  },
+
+  secondaryHeroButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    minHeight: 40,
+    padding: "9px 13px",
+    borderRadius: 999,
+    background: "#ffffff",
+    color: "#0f172a",
+    border: "1px solid rgba(255,255,255,0.72)",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 950,
+    textAlign: "center",
+    whiteSpace: "nowrap",
+  },
+
   heroStats: {
     display: "grid",
     gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
@@ -991,59 +1023,6 @@ const styles: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
 
-  heroActionsPanel: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
-    alignItems: "stretch",
-    justifyContent: "flex-start",
-    justifySelf: "end",
-    alignSelf: "start",
-    width: "100%",
-    maxWidth: 220,
-    minWidth: 0,
-  },
-
-  heroPrimaryActionButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "100%",
-    minHeight: 48,
-    padding: "11px 16px",
-    borderRadius: 999,
-    background: "#1683f8",
-    color: "#ffffff",
-    border: "1px solid rgba(255,255,255,0.16)",
-    textDecoration: "none",
-    fontWeight: 950,
-    fontSize: 14,
-    lineHeight: 1.2,
-    textAlign: "center",
-    whiteSpace: "normal",
-    boxShadow: "0 14px 30px rgba(22,131,248,0.30)",
-  },
-
-  heroSecondaryActionButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "100%",
-    minHeight: 48,
-    padding: "11px 16px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
-    border: "1px solid rgba(255,255,255,0.72)",
-    textDecoration: "none",
-    fontWeight: 950,
-    fontSize: 14,
-    lineHeight: 1.2,
-    textAlign: "center",
-    whiteSpace: "normal",
-    boxShadow: "0 14px 30px rgba(15,23,42,0.18)",
-  },
-
   primaryButton: {
     display: "inline-flex",
     alignItems: "center",
@@ -1076,22 +1055,6 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "center",
   },
 
-  secondaryHeroButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "fit-content",
-    minHeight: 40,
-    padding: "9px 13px",
-    borderRadius: 999,
-    background: "#ffffff",
-    color: "#0f172a",
-    textDecoration: "none",
-    fontSize: 13,
-    fontWeight: 950,
-    whiteSpace: "nowrap",
-  },
-
   exportButton: {
     display: "inline-flex",
     alignItems: "center",
@@ -1108,8 +1071,7 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "center",
     whiteSpace: "nowrap",
   },
-
-  readinessGrid: {
+    readinessGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
     gap: 12,
