@@ -17,8 +17,10 @@ export const revalidate = 0;
 
 const DEFAULT_MERCHANDISE_IMAGE_SRC = "/brand/so-default-merchandise.png";
 const LOW_STOCK_THRESHOLD = 5;
+const CRITICAL_STOCK_THRESHOLD = 1;
 
 type MerchandiseProductStatus = "draft" | "published" | "closed";
+type HealthTone = "good" | "warning" | "critical" | "neutral";
 
 type MerchandiseOption = {
   type?: string | null;
@@ -171,10 +173,23 @@ function isSoldOut(product: MerchandiseProduct) {
   return remaining !== null && remaining <= 0;
 }
 
+function isCriticalStock(product: MerchandiseProduct) {
+  const remaining = getStockRemaining(product);
+
+  return (
+    remaining !== null &&
+    remaining > 0 &&
+    remaining <= CRITICAL_STOCK_THRESHOLD
+  );
+}
+
 function isLowStock(product: MerchandiseProduct) {
   const remaining = getStockRemaining(product);
+
   return (
-    remaining !== null && remaining > 0 && remaining <= LOW_STOCK_THRESHOLD
+    remaining !== null &&
+    remaining > CRITICAL_STOCK_THRESHOLD &&
+    remaining <= LOW_STOCK_THRESHOLD
   );
 }
 
@@ -208,9 +223,11 @@ function getStockDetailLabel(product: MerchandiseProduct) {
   )}`;
 }
 
-function getStockTone(product: MerchandiseProduct): "good" | "warning" | "neutral" {
+function getStockTone(product: MerchandiseProduct): HealthTone {
   if (product.status === "closed") return "neutral";
-  if (isSoldOut(product)) return "warning";
+  if (product.stock_quantity === null) return "neutral";
+  if (isSoldOut(product)) return "critical";
+  if (isCriticalStock(product)) return "critical";
   if (isLowStock(product)) return "warning";
   return "good";
 }
@@ -218,16 +235,25 @@ function getStockTone(product: MerchandiseProduct): "good" | "warning" | "neutra
 function getStockPillLabel(product: MerchandiseProduct) {
   if (product.stock_quantity === null) return "Stock unlimited";
   if (isSoldOut(product)) return "Sold out";
+  if (isCriticalStock(product)) return "Nearly empty";
   if (isLowStock(product)) return "Low stock";
   return "Stock available";
 }
 
-function stockPillStyle(tone: "good" | "warning" | "neutral") {
+function stockPillStyle(tone: HealthTone) {
   if (tone === "good") {
     return {
       background: "#ecfdf5",
       color: "#166534",
       borderColor: "#bbf7d0",
+    };
+  }
+
+  if (tone === "critical") {
+    return {
+      background: "#fef2f2",
+      color: "#991b1b",
+      borderColor: "#fecaca",
     };
   }
 
@@ -372,14 +398,21 @@ function needsEventDetailSetup(product: MerchandiseProduct) {
 
   if (!cleanText(product.linked_event_id)) return true;
 
-  return usesEventTableOrSeatFulfilment(product) && getCustomerDetailCount(product) === 0;
+  return (
+    usesEventTableOrSeatFulfilment(product) &&
+    getCustomerDetailCount(product) === 0
+  );
 }
 
 function getProductWarnings(product: MerchandiseProduct) {
   const warnings: string[] = [];
 
   if (product.status === "published" && isSoldOut(product)) {
-    warnings.push("Published but sold out");
+    warnings.push("Sold out while published");
+  }
+
+  if (product.status === "published" && isCriticalStock(product)) {
+    warnings.push("Nearly empty");
   }
 
   if (product.status === "published" && isLowStock(product)) {
@@ -401,9 +434,28 @@ function getProductWarnings(product: MerchandiseProduct) {
   return warnings;
 }
 
-function getProductReadinessTone(product: MerchandiseProduct) {
+function isCriticalWarning(warning: string) {
+  return warning === "Sold out while published" || warning === "Nearly empty";
+}
+
+function getWarningChipStyle(warning: string): CSSProperties {
+  if (isCriticalWarning(warning)) {
+    return {
+      ...styles.warningChip,
+      ...styles.criticalWarningChip,
+    };
+  }
+
+  return styles.warningChip;
+}
+
+function getProductReadinessTone(product: MerchandiseProduct): HealthTone {
   if (product.status === "closed") return "neutral";
   if (product.status !== "published") return "neutral";
+
+  if (isSoldOut(product) || isCriticalStock(product)) {
+    return "critical";
+  }
 
   if (getProductWarnings(product).length > 0) {
     return "warning";
@@ -425,6 +477,10 @@ function getProductReadinessLabel(product: MerchandiseProduct) {
     return "Sold out";
   }
 
+  if (isCriticalStock(product)) {
+    return "Nearly empty";
+  }
+
   if (getFulfilmentOptionCount(product) === 0) {
     return "Public, needs fulfilment";
   }
@@ -440,12 +496,20 @@ function getProductReadinessLabel(product: MerchandiseProduct) {
   return "Checkout ready";
 }
 
-function readinessPillStyle(tone: "good" | "warning" | "neutral") {
+function readinessPillStyle(tone: HealthTone) {
   if (tone === "good") {
     return {
       background: "#dcfce7",
       color: "#166534",
       borderColor: "#86efac",
+    };
+  }
+
+  if (tone === "critical") {
+    return {
+      background: "#fef2f2",
+      color: "#991b1b",
+      borderColor: "#fecaca",
     };
   }
 
@@ -586,9 +650,11 @@ export default async function AdminMerchandisePage() {
   const unlimitedStockProducts = products.filter(
     (product) => product.stock_quantity === null,
   );
-  const soldOutProducts = products.filter(isSoldOut);
   const publishedSoldOutProducts = products.filter(
     (product) => product.status === "published" && isSoldOut(product),
+  );
+  const criticalStockProducts = products.filter(
+    (product) => product.status === "published" && isCriticalStock(product),
   );
   const lowStockProducts = products.filter(
     (product) => product.status === "published" && isLowStock(product),
@@ -835,13 +901,20 @@ export default async function AdminMerchandisePage() {
                 label="Sold out while published"
                 value={publishedSoldOutProducts.length}
                 text="Published stock-limited products with no remaining stock."
-                tone={publishedSoldOutProducts.length ? "warning" : "good"}
+                tone={publishedSoldOutProducts.length ? "critical" : "good"}
+              />
+
+              <WatchCard
+                label="Nearly empty"
+                value={criticalStockProducts.length}
+                text={`Published products with ${CRITICAL_STOCK_THRESHOLD} remaining.`}
+                tone={criticalStockProducts.length ? "critical" : "good"}
               />
 
               <WatchCard
                 label="Low stock"
                 value={lowStockProducts.length}
-                text={`Published products with ${LOW_STOCK_THRESHOLD} or fewer remaining.`}
+                text={`Published products with ${LOW_STOCK_THRESHOLD} or fewer remaining, excluding critical stock.`}
                 tone={lowStockProducts.length ? "warning" : "good"}
               />
 
@@ -989,7 +1062,7 @@ function ReadinessItem({
   label: string;
   value: ReactNode;
   detail: string;
-  tone: "good" | "warning" | "neutral";
+  tone: HealthTone;
 }) {
   return (
     <article
@@ -997,9 +1070,11 @@ function ReadinessItem({
         ...styles.readinessItem,
         ...(tone === "good"
           ? styles.readinessItemGood
-          : tone === "warning"
-            ? styles.readinessItemWarning
-            : styles.readinessItemNeutral),
+          : tone === "critical"
+            ? styles.readinessItemCritical
+            : tone === "warning"
+              ? styles.readinessItemWarning
+              : styles.readinessItemNeutral),
       }}
     >
       <div style={styles.readinessContent}>
@@ -1020,7 +1095,7 @@ function WatchCard({
   label: string;
   value: ReactNode;
   text: string;
-  tone: "good" | "warning" | "neutral";
+  tone: HealthTone;
 }) {
   return (
     <article
@@ -1028,9 +1103,11 @@ function WatchCard({
         ...styles.watchCard,
         ...(tone === "good"
           ? styles.watchCardGood
-          : tone === "warning"
-            ? styles.watchCardWarning
-            : styles.watchCardNeutral),
+          : tone === "critical"
+            ? styles.watchCardCritical
+            : tone === "warning"
+              ? styles.watchCardWarning
+              : styles.watchCardNeutral),
       }}
     >
       <span style={styles.watchLabel}>{label}</span>
@@ -1066,6 +1143,7 @@ function ProductCard({ product }: { product: MerchandiseProduct }) {
   const linkedEventLabel = getLinkedEventLabel(product);
   const stockTone = getStockTone(product);
   const warnings = getProductWarnings(product);
+  const hasCriticalWarnings = warnings.some(isCriticalWarning);
 
   return (
     <article
@@ -1073,9 +1151,11 @@ function ProductCard({ product }: { product: MerchandiseProduct }) {
         ...styles.itemCard,
         ...(readinessTone === "good"
           ? styles.itemCardGood
-          : readinessTone === "warning"
-            ? styles.itemCardWarning
-            : styles.itemCardNeutral),
+          : readinessTone === "critical"
+            ? styles.itemCardCritical
+            : readinessTone === "warning"
+              ? styles.itemCardWarning
+              : styles.itemCardNeutral),
       }}
     >
       <div className="merchandise-item-layout" style={styles.itemLayout}>
@@ -1148,9 +1228,14 @@ function ProductCard({ product }: { product: MerchandiseProduct }) {
               </p>
 
               {warnings.length ? (
-                <div style={styles.warningStrip}>
+                <div
+                  style={{
+                    ...styles.warningStrip,
+                    ...(hasCriticalWarnings ? styles.warningStripCritical : {}),
+                  }}
+                >
                   {warnings.map((warning) => (
-                    <span key={warning} style={styles.warningChip}>
+                    <span key={warning} style={getWarningChipStyle(warning)}>
                       {warning}
                     </span>
                   ))}
@@ -1747,6 +1832,12 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 10px 24px rgba(22,163,74,0.09)",
   },
 
+  readinessItemCritical: {
+    background: "linear-gradient(135deg, #fef2f2 0%, #ffffff 78%)",
+    borderColor: "#fecaca",
+    boxShadow: "0 10px 24px rgba(220,38,38,0.09)",
+  },
+
   readinessItemWarning: {
     background: "linear-gradient(135deg, #fff7ed 0%, #ffffff 78%)",
     borderColor: "#fed7aa",
@@ -1802,7 +1893,7 @@ const styles: Record<string, CSSProperties> = {
 
   stockWatchGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(142px, 1fr))",
     gap: 10,
   },
 
@@ -1819,6 +1910,11 @@ const styles: Record<string, CSSProperties> = {
   watchCardGood: {
     background: "linear-gradient(135deg, #ecfdf5 0%, #ffffff 80%)",
     borderColor: "#bbf7d0",
+  },
+
+  watchCardCritical: {
+    background: "linear-gradient(135deg, #fef2f2 0%, #ffffff 80%)",
+    borderColor: "#fecaca",
   },
 
   watchCardWarning: {
@@ -1919,6 +2015,11 @@ const styles: Record<string, CSSProperties> = {
   itemCardGood: {
     background: "linear-gradient(135deg, #f0fdf4 0%, #ffffff 84%)",
     borderColor: "#bbf7d0",
+  },
+
+  itemCardCritical: {
+    background: "linear-gradient(135deg, #fef2f2 0%, #ffffff 84%)",
+    borderColor: "#fecaca",
   },
 
   itemCardWarning: {
@@ -2103,6 +2204,10 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #fde68a",
   },
 
+  warningStripCritical: {
+    borderColor: "#fecaca",
+  },
+
   warningChip: {
     display: "inline-flex",
     width: "fit-content",
@@ -2114,6 +2219,12 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 11,
     fontWeight: 950,
     whiteSpace: "nowrap",
+  },
+
+  criticalWarningChip: {
+    background: "#fef2f2",
+    color: "#991b1b",
+    borderColor: "#fecaca",
   },
 
   itemMetaGrid: {
