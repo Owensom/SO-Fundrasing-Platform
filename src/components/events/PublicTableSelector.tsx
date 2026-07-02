@@ -40,6 +40,13 @@ type TableShape = "round" | "square" | "rectangle";
 
 type SeatingLayoutJson = Record<string, unknown>;
 
+type TableEntry = {
+  tableNumber: string;
+  tableLabel: string;
+  seats: Seat[];
+  shape: TableShape;
+};
+
 const TICKET_PLACEHOLDER_IMAGE = "/brand/so-ticket-placeholder.png";
 const STRIPE_STANDARD_UK_PERCENT = 0.015;
 const STRIPE_STANDARD_UK_FIXED_CENTS = 20;
@@ -551,6 +558,36 @@ function getVisibleTableEntries<T extends { tableNumber: string }>(
   return tableEntries.slice(start, end);
 }
 
+function getTableSeatCounts(table: TableEntry, selectedSeatIds: string[]) {
+  const total = table.seats.length;
+  const available = table.seats.filter(
+    (seat) => seat.status === "available",
+  ).length;
+  const unavailable = table.seats.filter(
+    (seat) => seat.status !== "available",
+  ).length;
+  const selected = table.seats.filter((seat) =>
+    selectedSeatIds.includes(seat.id),
+  ).length;
+
+  return {
+    total,
+    available,
+    unavailable,
+    selected,
+  };
+}
+
+function scrollToSelectorTarget(id: string) {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  document.getElementById(id)?.scrollIntoView({
+    behavior: "smooth",
+    block: "start",
+  });
+}
 export default function PublicTableSelector({
   eventId,
   seats,
@@ -608,7 +645,7 @@ export default function PublicTableSelector({
     }, {});
   }, [tableSeats]);
 
-  const tableEntries = useMemo(() => {
+  const tableEntries = useMemo<TableEntry[]>(() => {
     return Object.entries(groupedTables)
       .sort(([a], [b]) => {
         const aSort = tableSortValue(a);
@@ -658,15 +695,27 @@ export default function PublicTableSelector({
   const canGoPreviousTable = resolvedActiveTableIndex > 0;
   const canGoNextTable = resolvedActiveTableIndex < tableEntries.length - 1;
 
-  const activeTableAvailableCount =
-    activeTable?.seats.filter((seat) => seat.status === "available").length || 0;
+  const activeTableCounts = activeTable
+    ? getTableSeatCounts(activeTable, selectedSeatIds)
+    : {
+        total: 0,
+        available: 0,
+        unavailable: 0,
+        selected: 0,
+      };
 
-  const activeTableSelectedCount =
-    activeTable?.seats.filter((seat) => selectedSeatIds.includes(seat.id))
-      .length || 0;
+  const overallAvailableSeats = tableEntries.reduce(
+    (sum, table) =>
+      sum + table.seats.filter((seat) => seat.status === "available").length,
+    0,
+  );
 
-  const activeTableUnavailableCount =
-    activeTable?.seats.filter((seat) => seat.status !== "available").length || 0;
+  const selectedTableLabels = useMemo(() => {
+    return cartItems
+      .map((item) => seats.find((seat) => seat.id === item.seatId))
+      .filter(Boolean)
+      .map((seat) => seatLabel(seat as Seat));
+  }, [cartItems, seats]);
 
   useEffect(() => {
     if (tableEntries.length === 0) {
@@ -694,6 +743,11 @@ export default function PublicTableSelector({
     }
 
     setSelectedTableNumber(table.tableNumber);
+  }
+
+  function chooseMobileTable(tableNumber: string) {
+    setSelectedTableNumber(tableNumber);
+    scrollToSelectorTarget("public-table-active-plan");
   }
 
   const cartSeats = useMemo(() => {
@@ -785,8 +839,7 @@ export default function PublicTableSelector({
     (sum, addOn) => sum + addOn.quantity,
     0,
   );
-
-  function updateGuestData(seatId: string, patch: Partial<GuestData>) {
+    function updateGuestData(seatId: string, patch: Partial<GuestData>) {
     setGuestData((current) => ({
       ...current,
       [seatId]: {
@@ -1017,8 +1070,7 @@ export default function PublicTableSelector({
       setIsCheckingOut(false);
     }
   }
-
-  return (
+    return (
     <>
       <style>
         {`
@@ -1040,6 +1092,10 @@ export default function PublicTableSelector({
           }
 
           @media (max-width: 620px) {
+            .public-table-selector-shell {
+              gap: 12px !important;
+            }
+
             .public-table-selector-map-panel,
             .public-table-selector-cart {
               padding: 12px !important;
@@ -1051,68 +1107,143 @@ export default function PublicTableSelector({
               font-size: 24px !important;
             }
 
+            .public-table-selector-workflow-guide {
+              grid-template-columns: 1fr !important;
+              gap: 10px !important;
+              padding: 12px !important;
+            }
+
+            .public-table-selector-workflow-badge {
+              width: fit-content !important;
+            }
+
+            .public-table-selector-map-header {
+              display: none !important;
+            }
+
+            .public-table-selector-mobile-table-cards {
+              display: grid !important;
+            }
+
+            .public-table-selector-desktop-table-picker {
+              display: none !important;
+            }
+
+            .public-table-selector-active-summary {
+              grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+              gap: 8px !important;
+            }
+
             .public-table-selector-table-scroll {
               padding: 10px !important;
-              border-radius: 14px !important;
-              overflow-x: auto !important;
+              border-radius: 16px !important;
+              overflow-x: hidden !important;
               overflow-y: visible !important;
-              -webkit-overflow-scrolling: touch;
             }
 
             .public-table-selector-table-card {
-              width: max-content !important;
-              min-width: min(100%, 560px) !important;
+              width: 100% !important;
+              min-width: 0 !important;
               padding: 12px !important;
               border-radius: 18px !important;
-              overflow: visible !important;
+              overflow: hidden !important;
             }
 
-            .public-table-selector-table-area {
-              transform: none !important;
-              transform-origin: center center !important;
-              margin-bottom: 0 !important;
+            .public-table-selector-desktop-table-plan {
+              display: none !important;
             }
 
-            .public-table-selector-table-select {
+            .public-table-selector-mobile-seat-panel {
+              display: grid !important;
+            }
+
+            .public-table-selector-mobile-seat-grid {
+              grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+            }
+
+            .public-table-selector-mobile-seat-button {
+              min-height: 54px !important;
+              min-width: 0 !important;
               width: 100% !important;
+              height: auto !important;
+              border-radius: 16px !important;
+              font-size: 15px !important;
             }
 
-            .public-table-selector-table-pills {
-              gap: 7px !important;
+            .public-table-selector-helper-notice {
+              display: none !important;
             }
 
-            .public-table-selector-table-pill {
-              min-height: 36px !important;
-              min-width: 40px !important;
-              padding: 0 10px !important;
+            .public-table-selector-mobile-summary {
+              display: flex !important;
+              position: sticky !important;
+              bottom: 10px !important;
+              z-index: 20 !important;
             }
 
-            .public-table-selector-nav-button {
+            .public-table-selector-mobile-locked-details {
+              display: none !important;
+            }
+
+            .public-table-selector-cart {
+              padding-bottom: 14px !important;
+            }
+
+            .public-table-selector-cart-item {
+              padding: 12px !important;
+              border-radius: 16px !important;
+            }
+
+            .public-table-selector-cart-item-header {
+              flex-direction: column !important;
+              gap: 8px !important;
+            }
+
+            .public-table-selector-remove-button {
               width: 100% !important;
+              min-height: 40px !important;
+              border-radius: 999px !important;
+              background: rgba(254,202,202,0.12) !important;
+              border: 1px solid rgba(254,202,202,0.22) !important;
             }
 
-            .public-table-selector-position-card {
-              text-align: center !important;
+            .public-table-selector-checkout {
+              border-radius: 18px !important;
+              min-height: 52px !important;
             }
           }
         `}
       </style>
 
       <div className="public-table-selector-shell" style={styles.shell}>
-        <div className="public-table-selector-map-panel" style={styles.mapPanel}>
-          <div style={styles.workflowGuide}>
-            <span style={styles.workflowBadge}>Step 1</span>
+        <div
+          className="public-table-selector-map-panel"
+          style={styles.mapPanel}
+        >
+          <div
+            className="public-table-selector-workflow-guide"
+            style={styles.workflowGuide}
+          >
+            <span
+              className="public-table-selector-workflow-badge"
+              style={styles.workflowBadge}
+            >
+              Step 1
+            </span>
             <div>
-              <h3 style={styles.workflowTitle}>Choose your table seat first</h3>
+              <h3 style={styles.workflowTitle}>Choose your table first</h3>
               <p style={styles.workflowText}>
-                Select at least one available table seat. Add-ons become
-                available after your seat choice because they are linked to your
-                event booking.
+                Pick a table, then choose available seats. Guest details,
+                optional extras and checkout appear once your seat choice has
+                started.
               </p>
             </div>
           </div>
 
-          <div style={styles.mapHeader}>
+          <div
+            className="public-table-selector-map-header"
+            style={styles.mapHeader}
+          >
             <div>
               <h3
                 className="public-table-selector-map-title"
@@ -1134,596 +1265,766 @@ export default function PublicTableSelector({
             </div>
           </div>
 
-          <div className="public-table-selector-table-scroll" style={styles.tableScroll}>
-            {tableEntries.length === 0 || !activeTable ? (
-              <div style={styles.emptyLight}>
-                <strong>No table seats available yet</strong>
-                <p>Tables may not have been released yet.</p>
-              </div>
-            ) : (
-              <div style={styles.singleTableStack}>
-                <section style={styles.tablePicker}>
-                  <div
-                    className="public-table-selector-picker-header"
-                    style={styles.tablePickerHeader}
-                  >
-                    <div>
-                      <p style={styles.tablePickerEyebrow}>Choose table</p>
-                      <h4 style={styles.tablePickerTitle}>
-                        {activeTable.tableLabel}
-                      </h4>
-                      <p style={styles.tablePickerText}>
-                        Showing one table at a time. Seats already selected from
-                        other tables remain in your booking summary.
-                      </p>
-                    </div>
-
-                    <label style={styles.tableSelectWrap}>
-                      <span style={styles.labelDark}>Current table</span>
-                      <select
-                        className="public-table-selector-table-select"
-                        value={activeTable.tableNumber}
-                        onChange={(event) =>
-                          setSelectedTableNumber(event.target.value)
-                        }
-                        style={styles.tableSelect}
-                      >
-                        {tableEntries.map((table, index) => (
-                          <option
-                            key={table.tableNumber}
-                            value={table.tableNumber}
-                          >
-                            Table {index + 1} of {tableEntries.length} ·{" "}
-                            {table.tableLabel} · {table.seats.length} seats
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-
-                  <div
-                    className="public-table-selector-nav-row"
-                    style={styles.tableNavRow}
-                  >
-                    <button
-                      type="button"
-                      className="public-table-selector-nav-button"
-                      onClick={() => goToTableByIndex(resolvedActiveTableIndex - 1)}
-                      disabled={!canGoPreviousTable}
-                      style={{
-                        ...styles.tableNavButton,
-                        opacity: canGoPreviousTable ? 1 : 0.45,
-                        cursor: canGoPreviousTable ? "pointer" : "not-allowed",
-                      }}
-                    >
-                      ← Previous table
-                    </button>
-
-                    <div
-                      className="public-table-selector-position-card"
-                      style={styles.tablePositionCard}
-                    >
-                      <span style={styles.tablePositionLabel}>
-                        {isLargeTableEvent ? "Large table event" : "Table"}
-                      </span>
-                      <strong style={styles.tablePositionValue}>
-                        Table {resolvedActiveTableIndex + 1} of{" "}
-                        {tableEntries.length}
-                      </strong>
-                      <span style={styles.tablePositionHint}>
-                        {isLargeTableEvent
-                          ? "Use the dropdown for direct access to any table."
-                          : "Use the table shortcuts below."}
-                      </span>
-                    </div>
-
-                    <button
-                      type="button"
-                      className="public-table-selector-nav-button"
-                      onClick={() => goToTableByIndex(resolvedActiveTableIndex + 1)}
-                      disabled={!canGoNextTable}
-                      style={{
-                        ...styles.tableNavButton,
-                        opacity: canGoNextTable ? 1 : 0.45,
-                        cursor: canGoNextTable ? "pointer" : "not-allowed",
-                      }}
-                    >
-                      Next table →
-                    </button>
-                  </div>
-
-                  <div
-                    className="public-table-selector-table-pills"
-                    style={styles.tablePills}
-                  >
-                    {isLargeTableEvent ? (
-                      <span style={styles.windowedPillsLabel}>
-                        Nearby tables
-                      </span>
-                    ) : null}
-
-                    {visibleTableEntries.map((table) => {
-                      const active =
-                        table.tableNumber === activeTable.tableNumber;
-                      const selectedCount = table.seats.filter((seat) =>
-                        selectedSeatIds.includes(seat.id),
-                      ).length;
-
-                      return (
-                        <button
-                          key={table.tableNumber}
-                          type="button"
-                          className="public-table-selector-table-pill"
-                          onClick={() => setSelectedTableNumber(table.tableNumber)}
-                          style={{
-                            ...styles.tablePill,
-                            ...(active ? styles.tablePillActive : {}),
-                          }}
-                        >
-                          <span>{table.tableNumber}</span>
-                          {selectedCount > 0 ? (
-                            <strong style={styles.tablePillBadge}>
-                              {selectedCount}
-                            </strong>
-                          ) : null}
-                        </button>
-                      );
-                    })}
-
-                    {isLargeTableEvent ? (
-                      <span style={styles.windowedPillsHint}>
-                        Showing {visibleTableEntries.length} of{" "}
-                        {tableEntries.length}
-                      </span>
-                    ) : null}
-                  </div>
-                </section>
-
-                <div
-                  className="public-table-selector-active-summary"
-                  style={styles.activeSummary}
-                >
-                  <div style={styles.activeSummaryCard}>
-                    <span style={styles.activeSummaryLabel}>Seats</span>
-                    <strong style={styles.activeSummaryValue}>
-                      {activeTable.seats.length}
-                    </strong>
-                  </div>
-
-                  <div style={styles.activeSummaryCard}>
-                    <span style={styles.activeSummaryLabel}>Available</span>
-                    <strong style={styles.activeSummaryValue}>
-                      {activeTableAvailableCount}
-                    </strong>
-                  </div>
-
-                  <div style={styles.activeSummaryCard}>
-                    <span style={styles.activeSummaryLabel}>Unavailable</span>
-                    <strong style={styles.activeSummaryValue}>
-                      {activeTableUnavailableCount}
-                    </strong>
-                  </div>
-
-                  <div style={styles.activeSummaryCard}>
-                    <span style={styles.activeSummaryLabel}>Selected</span>
-                    <strong style={styles.activeSummaryValue}>
-                      {activeTableSelectedCount}
-                    </strong>
-                  </div>
-                </div>
-
-                <section
-                  className="public-table-selector-table-card"
-                  style={styles.tableCard}
-                >
-                  <div style={styles.tableHeader}>
-                    <div>
-                      <h4 style={styles.tableTitle}>
-                        {activeTable.tableLabel}
-                      </h4>
-                      <p style={styles.tableMeta}>
-                        {activeTable.seats.length} seat
-                        {activeTable.seats.length === 1 ? "" : "s"} •{" "}
-                        {activeTable.shape === "round"
-                          ? "Round"
-                          : activeTable.shape === "square"
-                            ? "Square"
-                            : "Rectangle"}{" "}
-                        table
-                      </p>
-                    </div>
-                  </div>
-
-                  <div
-                    className="public-table-selector-table-area"
-                    style={tableAreaStyle(activeTable.shape)}
-                  >
-                    <div style={tablePlateStyle(activeTable.shape)}>
-                      <span style={styles.tablePlateLabel}>
-                        {activeTable.tableLabel}
-                      </span>
-                    </div>
-
-                    {activeTable.seats.map((seat, index) => {
-                      const selected = selectedSeatIds.includes(seat.id);
-                      const colours = seatColours(seat.status, selected);
-                      const ticketType = ticketTypes.find(
-                        (item) => item.id === seat.ticket_type_id,
-                      );
-
-                      return (
-                        <button
-                          key={seat.id}
-                          type="button"
-                          onClick={() => toggleSeat(seat)}
-                          disabled={seat.status !== "available"}
-                          title={seatHoverLabel(seat, ticketType, currency)}
-                          style={{
-                            ...styles.tableSeat,
-                            ...seatPosition(
-                              index,
-                              activeTable.seats.length,
-                              activeTable.shape,
-                            ),
-                            ...colours,
-                          }}
-                        >
-                          {seat.seat_number || index + 1}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </section>
-              </div>
-            )}
-          </div>
-
-          <div style={styles.helperNotice}>
-            <span style={styles.helperIcon}>ⓘ</span>
-            Use the table selector above to switch between tables. On smaller
-            screens, swipe across the table plan if needed.
-          </div>
-        </div>
-
-        <aside className="public-table-selector-cart" style={styles.cart}>
-          <div className="public-table-selector-cart-grid" style={styles.cartGrid}>
-            <div>
-              <BuyerDetailsFields
-                buyerName={buyerName}
-                buyerEmail={buyerEmail}
-                onBuyerNameChange={setBuyerName}
-                onBuyerEmailChange={setBuyerEmail}
-                dark
-              />
-
-              <div style={styles.summarySpacer} />
-
-              <label style={styles.accessCodeBox}>
-                <span style={styles.accessCodeLabel}>VIP / complimentary code</span>
-                <input
-                  value={accessCode}
-                  onChange={(event) => {
-                    setAccessCode(event.target.value);
-                    setCheckoutError("");
-                  }}
-                  placeholder="Enter access code"
-                  style={styles.accessCodeInput}
-                />
-                <small style={styles.accessCodeHelp}>
-                  Use this for VIP, sponsor, staff or complimentary bookings.
-                  Codes are validated securely before booking.
-                </small>
-              </label>
-
-              {checkoutAddOns.length > 0 ? (
-                <>
-                  <div style={styles.summarySpacer} />
-
-                  <div style={styles.addOnWorkflowBox}>
-                    <span style={styles.addOnWorkflowBadge}>Step 2</span>
-                    <strong style={styles.addOnWorkflowTitle}>
-                      Add event extras after your table seat
-                    </strong>
-                    <span style={styles.addOnWorkflowText}>
-                      Heads or Tails and Higher or Lower entries can be added
-                      once your table seat selection is started.
-                    </span>
-                  </div>
-
-                  <div style={styles.addOnStack}>
-                    {checkoutAddOns.map((addOn) => (
-                      <PublicEventCheckoutAddOnSelector
-                        key={addOn.type}
-                        addOn={addOn}
-                        currency={currency}
-                        quantity={safeAddOnQuantities[addOn.type] || 0}
-                        buyerAnswer={addOnBuyerAnswers[addOn.type] || ""}
-                        buyerName={buyerName}
-                        buyerEmail={buyerEmail}
-                        players={addOnPlayers[addOn.type] || []}
-                        disabled={addOnsLocked}
-                        disabledTitle={addOnLockedTitle}
-                        disabledReason={addOnLockedReason}
-                        onQuantityChange={(nextQuantity) =>
-                          updateAddOnQuantity(addOn, nextQuantity)
-                        }
-                        onBuyerAnswerChange={(answer) =>
-                          updateAddOnBuyerAnswer(addOn, answer)
-                        }
-                        onPlayersChange={(players) =>
-                          updateAddOnPlayers(addOn, players)
-                        }
-                      />
-                    ))}
-                  </div>
-                </>
-              ) : null}
+          {tableEntries.length === 0 || !activeTable ? (
+            <div style={styles.emptyLight}>
+              <strong>No table seats available yet</strong>
+              <p>Tables may not have been released yet.</p>
             </div>
-
-            <div>
-              <div style={styles.cartTop}>
-                <div>
-                  <p style={styles.cartEyebrow}>Booking summary</p>
-                  <h3
-                    className="public-table-selector-cart-title"
-                    style={styles.cartTitle}
-                  >
-                    Your table seats
-                  </h3>
+          ) : (
+            <>
+              <section
+                className="public-table-selector-mobile-table-cards"
+                style={styles.mobileTableCards}
+              >
+                <div style={styles.mobileTableCardsHeader}>
+                  <span style={styles.mobileStepPill}>Choose a table</span>
+                  <strong style={styles.mobileTableCardsTitle}>
+                    {overallAvailableSeats} seat
+                    {overallAvailableSeats === 1 ? "" : "s"} available
+                  </strong>
                 </div>
 
-                <div style={styles.countBadge}>{cartSeats.length}</div>
-              </div>
-
-              {cartSeats.length === 0 ? (
-                <div style={styles.emptyBox}>
-                  <img
-                    src={TICKET_PLACEHOLDER_IMAGE}
-                    alt="SO ticket"
-                    style={styles.emptyTicketImage}
-                  />
-
-                  <p style={styles.emptyTitle}>Select seats to begin</p>
-                  <p style={styles.emptyText}>
-                    Your selected table seats and guest details will appear here.
-                    Event add-ons unlock after you choose at least one table
-                    seat.
-                  </p>
-                </div>
-              ) : (
-                <div style={styles.cartList}>
-                  {cartSeats.map(({ seat, ticketType }) => {
-                    const data = guestData[seat.id] || getDefaultGuest();
-                    const availableTicketTypes = seat.ticket_type_id
-                      ? ticketTypes.filter(
-                          (currentTicketType) =>
-                            currentTicketType.id === seat.ticket_type_id,
-                        )
-                      : ticketTypes;
+                <div style={styles.mobileTableCardGrid}>
+                  {tableEntries.map((table, index) => {
+                    const counts = getTableSeatCounts(table, selectedSeatIds);
+                    const active =
+                      table.tableNumber === activeTable.tableNumber;
+                    const isSoldOut = counts.available === 0;
 
                     return (
-                      <div key={seat.id} style={styles.cartItem}>
-                        <div style={styles.cartItemHeader}>
-                          <div>
-                            <p style={styles.cartSeatLabel}>{seatLabel(seat)}</p>
-                            <p style={styles.cartPrice}>
-                              {currency} {moneyFromCents(ticketType.price)}
-                            </p>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => removeSeat(seat.id)}
-                            style={styles.removeButton}
-                          >
-                            Remove
-                          </button>
-                        </div>
-
-                        <label style={styles.field}>
-                          <span style={styles.label}>Ticket type</span>
-                          <select
-                            value={ticketType.id}
-                            onChange={(event) =>
-                              updateTicketType(seat.id, event.target.value)
-                            }
-                            disabled={Boolean(seat.ticket_type_id)}
-                            style={styles.input}
-                          >
-                            {availableTicketTypes.map((currentTicketType) => (
-                              <option
-                                key={currentTicketType.id}
-                                value={currentTicketType.id}
-                              >
-                                {currentTicketType.name} — {currency}{" "}
-                                {moneyFromCents(currentTicketType.price)}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-
-                        <label style={styles.field}>
-                          <span style={styles.label}>Guest name</span>
-                          <input
-                            value={data.guestName}
-                            onChange={(event) =>
-                              updateGuestData(seat.id, {
-                                guestName: event.target.value,
-                              })
-                            }
-                            placeholder="Guest name"
-                            style={styles.input}
-                          />
-                        </label>
-
-                        <label style={styles.field}>
-                          <span style={styles.label}>Dietary requirements</span>
-                          <textarea
-                            value={data.dietaryRequirements}
-                            onChange={(event) =>
-                              updateGuestData(seat.id, {
-                                dietaryRequirements: event.target.value,
-                              })
-                            }
-                            placeholder="None, vegetarian, gluten free, allergies..."
-                            rows={2}
-                            style={styles.textarea}
-                          />
-                        </label>
-
-                        <label style={styles.field}>
-                          <span style={styles.label}>Menu choice</span>
-                          {menuOptions.length > 0 ? (
-                            <select
-                              value={data.menuChoice}
-                              onChange={(event) =>
-                                updateGuestData(seat.id, {
-                                  menuChoice: event.target.value,
-                                })
-                              }
-                              style={styles.input}
-                            >
-                              <option value="">Select menu option</option>
-                              {menuOptions.map((option) => (
-                                <option key={option} value={option}>
-                                  {option}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
-                            <input
-                              value={data.menuChoice}
-                              onChange={(event) =>
-                                updateGuestData(seat.id, {
-                                  menuChoice: event.target.value,
-                                })
-                              }
-                              placeholder="Optional menu choice"
-                              style={styles.input}
-                            />
-                          )}
-                        </label>
-                      </div>
+                      <button
+                        key={table.tableNumber}
+                        type="button"
+                        onClick={() => chooseMobileTable(table.tableNumber)}
+                        style={{
+                          ...styles.mobileTableCard,
+                          ...(active ? styles.mobileTableCardActive : {}),
+                          opacity: isSoldOut && !active ? 0.68 : 1,
+                        }}
+                      >
+                        <span style={styles.mobileTableCardKicker}>
+                          Table {index + 1}
+                        </span>
+                        <strong style={styles.mobileTableCardTitle}>
+                          {table.tableLabel}
+                        </strong>
+                        <span style={styles.mobileTableCardMeta}>
+                          {counts.available > 0
+                            ? `${counts.available} available`
+                            : "Sold out / unavailable"}
+                        </span>
+                        {counts.selected > 0 ? (
+                          <span style={styles.mobileTableCardSelected}>
+                            {counts.selected} selected
+                          </span>
+                        ) : null}
+                      </button>
                     );
                   })}
                 </div>
-              )}
-
-              <div style={styles.totalBox}>
-                <span>
-                  Ticket total
-                  {totalAddOnQuantity > 0
-                    ? ` • ${totalAddOnQuantity} add-on entr${
-                        totalAddOnQuantity === 1 ? "y" : "ies"
-                      }`
-                    : ""}
-                </span>
-                <strong>
-                  {currency} {moneyFromCents(checkoutSubtotal)}
-                </strong>
-              </div>
-
-              {checkoutAddOns.map((addOn) => {
-                const quantity = safeAddOnQuantities[addOn.type] || 0;
-
-                if (quantity <= 0) {
-                  return null;
-                }
-
-                return (
-                  <div key={addOn.type} style={styles.addOnSummaryRow}>
-                    <span>
-                      {addOn.title || "Event add-on"} × {quantity}
-                    </span>
-                    <strong>
-                      {currency}{" "}
-                      {moneyFromCents(
-                        Number(addOn.entryPriceCents || 0) * quantity,
-                      )}
-                    </strong>
-                  </div>
-                );
-              })}
-
-              {hasAccessCode ? (
-                <div style={styles.accessCodeNotice}>
-                  <strong>Access code entered.</strong>
-                  <span>
-                    If valid, this booking will complete without Stripe payment.
-                  </span>
-                </div>
-              ) : (
-                <label style={styles.feeBox}>
-                  <input
-                    type="checkbox"
-                    checked={coverFees}
-                    onChange={(event) => setCoverFees(event.target.checked)}
-                    disabled={checkoutSubtotal <= 0}
-                  />
-                  <span>
-                    <strong>I’d like to cover platform and payment costs</strong>
-                    <small style={styles.feeSmall}>
-                      Adds approximately {currency}{" "}
-                      {moneyFromCents(estimatedCoverFeeCents)} so the organiser
-                      receives the full ticket value.
-                    </small>
-                  </span>
-                </label>
-              )}
+              </section>
 
               <div
-                style={
-                  hasAccessCode
-                    ? styles.totalBoxComplimentary
-                    : styles.totalBoxStrong
-                }
+                className="public-table-selector-table-scroll"
+                style={styles.tableScroll}
               >
-                <span>{hasAccessCode ? "Due after valid code" : "Total today"}</span>
-                <strong>
-                  {currency} {moneyFromCents(totalTodayCents)}
-                </strong>
+                <div style={styles.singleTableStack}>
+                                    <section
+                    className="public-table-selector-desktop-table-picker"
+                    style={styles.tablePicker}
+                  >
+                    <div
+                      className="public-table-selector-picker-header"
+                      style={styles.tablePickerHeader}
+                    >
+                      <div>
+                        <p style={styles.tablePickerEyebrow}>Choose table</p>
+                        <h4 style={styles.tablePickerTitle}>
+                          {activeTable.tableLabel}
+                        </h4>
+                        <p style={styles.tablePickerText}>
+                          Showing one table at a time. Seats already selected
+                          from other tables remain in your booking summary.
+                        </p>
+                      </div>
+
+                      <label style={styles.tableSelectWrap}>
+                        <span style={styles.labelDark}>Current table</span>
+                        <select
+                          className="public-table-selector-table-select"
+                          value={activeTable.tableNumber}
+                          onChange={(event) =>
+                            setSelectedTableNumber(event.target.value)
+                          }
+                          style={styles.tableSelect}
+                        >
+                          {tableEntries.map((table, index) => (
+                            <option
+                              key={table.tableNumber}
+                              value={table.tableNumber}
+                            >
+                              Table {index + 1} of {tableEntries.length} ·{" "}
+                              {table.tableLabel} · {table.seats.length} seats
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+
+                    <div
+                      className="public-table-selector-nav-row"
+                      style={styles.tableNavRow}
+                    >
+                      <button
+                        type="button"
+                        className="public-table-selector-nav-button"
+                        onClick={() =>
+                          goToTableByIndex(resolvedActiveTableIndex - 1)
+                        }
+                        disabled={!canGoPreviousTable}
+                        style={{
+                          ...styles.tableNavButton,
+                          opacity: canGoPreviousTable ? 1 : 0.45,
+                          cursor: canGoPreviousTable
+                            ? "pointer"
+                            : "not-allowed",
+                        }}
+                      >
+                        ← Previous table
+                      </button>
+
+                      <div
+                        className="public-table-selector-position-card"
+                        style={styles.tablePositionCard}
+                      >
+                        <span style={styles.tablePositionLabel}>
+                          {isLargeTableEvent ? "Large table event" : "Table"}
+                        </span>
+                        <strong style={styles.tablePositionValue}>
+                          Table {resolvedActiveTableIndex + 1} of{" "}
+                          {tableEntries.length}
+                        </strong>
+                        <span style={styles.tablePositionHint}>
+                          {isLargeTableEvent
+                            ? "Use the dropdown for direct access to any table."
+                            : "Use the table shortcuts below."}
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="public-table-selector-nav-button"
+                        onClick={() =>
+                          goToTableByIndex(resolvedActiveTableIndex + 1)
+                        }
+                        disabled={!canGoNextTable}
+                        style={{
+                          ...styles.tableNavButton,
+                          opacity: canGoNextTable ? 1 : 0.45,
+                          cursor: canGoNextTable ? "pointer" : "not-allowed",
+                        }}
+                      >
+                        Next table →
+                      </button>
+                    </div>
+
+                    <div
+                      className="public-table-selector-table-pills"
+                      style={styles.tablePills}
+                    >
+                      {isLargeTableEvent ? (
+                        <span style={styles.windowedPillsLabel}>
+                          Nearby tables
+                        </span>
+                      ) : null}
+
+                      {visibleTableEntries.map((table) => {
+                        const active =
+                          table.tableNumber === activeTable.tableNumber;
+                        const counts = getTableSeatCounts(
+                          table,
+                          selectedSeatIds,
+                        );
+
+                        return (
+                          <button
+                            key={table.tableNumber}
+                            type="button"
+                            className="public-table-selector-table-pill"
+                            onClick={() =>
+                              setSelectedTableNumber(table.tableNumber)
+                            }
+                            style={{
+                              ...styles.tablePill,
+                              ...(active ? styles.tablePillActive : {}),
+                            }}
+                          >
+                            <span>{table.tableNumber}</span>
+                            {counts.selected > 0 ? (
+                              <strong style={styles.tablePillBadge}>
+                                {counts.selected}
+                              </strong>
+                            ) : null}
+                          </button>
+                        );
+                      })}
+
+                      {isLargeTableEvent ? (
+                        <span style={styles.windowedPillsHint}>
+                          Showing {visibleTableEntries.length} of{" "}
+                          {tableEntries.length}
+                        </span>
+                      ) : null}
+                    </div>
+                  </section>
+
+                  <div
+                    className="public-table-selector-active-summary"
+                    style={styles.activeSummary}
+                  >
+                    <div style={styles.activeSummaryCard}>
+                      <span style={styles.activeSummaryLabel}>Seats</span>
+                      <strong style={styles.activeSummaryValue}>
+                        {activeTableCounts.total}
+                      </strong>
+                    </div>
+
+                    <div style={styles.activeSummaryCard}>
+                      <span style={styles.activeSummaryLabel}>Available</span>
+                      <strong style={styles.activeSummaryValue}>
+                        {activeTableCounts.available}
+                      </strong>
+                    </div>
+
+                    <div style={styles.activeSummaryCard}>
+                      <span style={styles.activeSummaryLabel}>Unavailable</span>
+                      <strong style={styles.activeSummaryValue}>
+                        {activeTableCounts.unavailable}
+                      </strong>
+                    </div>
+
+                    <div style={styles.activeSummaryCard}>
+                      <span style={styles.activeSummaryLabel}>Selected</span>
+                      <strong style={styles.activeSummaryValue}>
+                        {activeTableCounts.selected}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <section
+                    id="public-table-active-plan"
+                    className="public-table-selector-table-card"
+                    style={styles.tableCard}
+                  >
+                    <div style={styles.tableHeader}>
+                      <div>
+                        <h4 style={styles.tableTitle}>
+                          {activeTable.tableLabel}
+                        </h4>
+                        <p style={styles.tableMeta}>
+                          {activeTable.seats.length} seat
+                          {activeTable.seats.length === 1 ? "" : "s"} •{" "}
+                          {activeTable.shape === "round"
+                            ? "Round"
+                            : activeTable.shape === "square"
+                              ? "Square"
+                              : "Rectangle"}{" "}
+                          table
+                        </p>
+                      </div>
+                    </div>
+
+                    <div
+                      className="public-table-selector-desktop-table-plan"
+                      style={styles.desktopTablePlan}
+                    >
+                      <div
+                        className="public-table-selector-table-area"
+                        style={tableAreaStyle(activeTable.shape)}
+                      >
+                        <div style={tablePlateStyle(activeTable.shape)}>
+                          <span style={styles.tablePlateLabel}>
+                            {activeTable.tableLabel}
+                          </span>
+                        </div>
+
+                        {activeTable.seats.map((seat, index) => {
+                          const selected = selectedSeatIds.includes(seat.id);
+                          const colours = seatColours(seat.status, selected);
+                          const ticketType = ticketTypes.find(
+                            (item) => item.id === seat.ticket_type_id,
+                          );
+
+                          return (
+                            <button
+                              key={seat.id}
+                              type="button"
+                              onClick={() => toggleSeat(seat)}
+                              disabled={seat.status !== "available"}
+                              title={seatHoverLabel(seat, ticketType, currency)}
+                              style={{
+                                ...styles.tableSeat,
+                                ...seatPosition(
+                                  index,
+                                  activeTable.seats.length,
+                                  activeTable.shape,
+                                ),
+                                ...colours,
+                              }}
+                            >
+                              {seat.seat_number || index + 1}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <section
+                      className="public-table-selector-mobile-seat-panel"
+                      style={styles.mobileSeatPanel}
+                    >
+                      <div style={styles.mobileSeatPanelHeader}>
+                        <span style={styles.mobileStepPill}>Choose seats</span>
+                        <strong style={styles.mobileSeatPanelTitle}>
+                          {activeTable.tableLabel}
+                        </strong>
+                        <span style={styles.mobileSeatPanelText}>
+                          Tap available seats to add or remove them from your
+                          booking.
+                        </span>
+                      </div>
+
+                      <div
+                        className="public-table-selector-mobile-seat-grid"
+                        style={styles.mobileSeatGrid}
+                      >
+                        {activeTable.seats.map((seat, index) => {
+                          const selected = selectedSeatIds.includes(seat.id);
+                          const colours = seatColours(seat.status, selected);
+                          const ticketType = ticketTypes.find(
+                            (item) => item.id === seat.ticket_type_id,
+                          );
+
+                          return (
+                            <button
+                              key={seat.id}
+                              type="button"
+                              className="public-table-selector-mobile-seat-button"
+                              onClick={() => toggleSeat(seat)}
+                              disabled={seat.status !== "available"}
+                              title={seatHoverLabel(seat, ticketType, currency)}
+                              style={{
+                                ...styles.mobileSeatButton,
+                                ...colours,
+                                cursor:
+                                  seat.status === "available"
+                                    ? "pointer"
+                                    : "not-allowed",
+                              }}
+                            >
+                              <span style={styles.mobileSeatButtonLabel}>
+                                Seat
+                              </span>
+                              <strong style={styles.mobileSeatButtonValue}>
+                                {seat.seat_number || index + 1}
+                              </strong>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  </section>
+                </div>
               </div>
+            </>
+          )}
 
-              {checkoutError ? (
-                <div style={styles.errorBox}>{checkoutError}</div>
-              ) : null}
-
-              <button
-                type="button"
-                onClick={startCheckout}
-                disabled={cartSeats.length === 0 || isCheckingOut}
-                style={{
-                  ...styles.checkout,
-                  opacity: cartSeats.length === 0 || isCheckingOut ? 0.55 : 1,
-                  cursor:
-                    cartSeats.length === 0 || isCheckingOut
-                      ? "not-allowed"
-                      : "pointer",
-                }}
-              >
-                {isCheckingOut
-                  ? "Processing..."
-                  : hasAccessCode
-                    ? "Validate code and book"
-                    : "Continue to checkout"}
-              </button>
-            </div>
+          <div
+            className="public-table-selector-helper-notice"
+            style={styles.helperNotice}
+          >
+            <span style={styles.helperIcon}>ⓘ</span>
+            Use the table selector above to switch between tables. On smaller
+            screens, the table list appears first so you can choose seats with
+            fewer distractions.
           </div>
-        </aside>
-      </div>
-    </>
-  );
-}
 
-function Legend({ color, label }: { color: string; label: string }) {
-  return (
-    <span style={styles.legendItem}>
-      <span style={{ ...styles.legendDot, background: color }} />
-      {label}
-    </span>
-  );
-}
+          <div
+            className="public-table-selector-mobile-summary"
+            style={styles.mobileSummary}
+          >
+            <div style={styles.mobileSummaryText}>
+              <span style={styles.mobileSummaryLabel}>
+                {cartSeats.length} seat{cartSeats.length === 1 ? "" : "s"}{" "}
+                selected
+              </span>
+              <strong style={styles.mobileSummaryTotal}>
+                {currency} {moneyFromCents(checkoutSubtotal)}
+              </strong>
+            </div>
 
+            <button
+              type="button"
+              onClick={() => scrollToSelectorTarget("public-table-booking-details")}
+              disabled={cartSeats.length === 0}
+              style={{
+                ...styles.mobileSummaryButton,
+                opacity: cartSeats.length === 0 ? 0.55 : 1,
+                cursor: cartSeats.length === 0 ? "not-allowed" : "pointer",
+              }}
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+                          <section
+                    className="public-table-selector-desktop-table-picker"
+                    style={styles.tablePicker}
+                  >
+                    <div
+                      className="public-table-selector-picker-header"
+                      style={styles.tablePickerHeader}
+                    >
+                      <div>
+                        <p style={styles.tablePickerEyebrow}>Choose table</p>
+                        <h4 style={styles.tablePickerTitle}>
+                          {activeTable.tableLabel}
+                        </h4>
+                        <p style={styles.tablePickerText}>
+                          Showing one table at a time. Seats already selected
+                          from other tables remain in your booking summary.
+                        </p>
+                      </div>
+
+                      <label style={styles.tableSelectWrap}>
+                        <span style={styles.labelDark}>Current table</span>
+                        <select
+                          className="public-table-selector-table-select"
+                          value={activeTable.tableNumber}
+                          onChange={(event) =>
+                            setSelectedTableNumber(event.target.value)
+                          }
+                          style={styles.tableSelect}
+                        >
+                          {tableEntries.map((table, index) => (
+                            <option
+                              key={table.tableNumber}
+                              value={table.tableNumber}
+                            >
+                              Table {index + 1} of {tableEntries.length} ·{" "}
+                              {table.tableLabel} · {table.seats.length} seats
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+
+                    <div
+                      className="public-table-selector-nav-row"
+                      style={styles.tableNavRow}
+                    >
+                      <button
+                        type="button"
+                        className="public-table-selector-nav-button"
+                        onClick={() =>
+                          goToTableByIndex(resolvedActiveTableIndex - 1)
+                        }
+                        disabled={!canGoPreviousTable}
+                        style={{
+                          ...styles.tableNavButton,
+                          opacity: canGoPreviousTable ? 1 : 0.45,
+                          cursor: canGoPreviousTable
+                            ? "pointer"
+                            : "not-allowed",
+                        }}
+                      >
+                        ← Previous table
+                      </button>
+
+                      <div
+                        className="public-table-selector-position-card"
+                        style={styles.tablePositionCard}
+                      >
+                        <span style={styles.tablePositionLabel}>
+                          {isLargeTableEvent ? "Large table event" : "Table"}
+                        </span>
+                        <strong style={styles.tablePositionValue}>
+                          Table {resolvedActiveTableIndex + 1} of{" "}
+                          {tableEntries.length}
+                        </strong>
+                        <span style={styles.tablePositionHint}>
+                          {isLargeTableEvent
+                            ? "Use the dropdown for direct access to any table."
+                            : "Use the table shortcuts below."}
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="public-table-selector-nav-button"
+                        onClick={() =>
+                          goToTableByIndex(resolvedActiveTableIndex + 1)
+                        }
+                        disabled={!canGoNextTable}
+                        style={{
+                          ...styles.tableNavButton,
+                          opacity: canGoNextTable ? 1 : 0.45,
+                          cursor: canGoNextTable ? "pointer" : "not-allowed",
+                        }}
+                      >
+                        Next table →
+                      </button>
+                    </div>
+
+                    <div
+                      className="public-table-selector-table-pills"
+                      style={styles.tablePills}
+                    >
+                      {isLargeTableEvent ? (
+                        <span style={styles.windowedPillsLabel}>
+                          Nearby tables
+                        </span>
+                      ) : null}
+
+                      {visibleTableEntries.map((table) => {
+                        const active =
+                          table.tableNumber === activeTable.tableNumber;
+                        const counts = getTableSeatCounts(
+                          table,
+                          selectedSeatIds,
+                        );
+
+                        return (
+                          <button
+                            key={table.tableNumber}
+                            type="button"
+                            className="public-table-selector-table-pill"
+                            onClick={() =>
+                              setSelectedTableNumber(table.tableNumber)
+                            }
+                            style={{
+                              ...styles.tablePill,
+                              ...(active ? styles.tablePillActive : {}),
+                            }}
+                          >
+                            <span>{table.tableNumber}</span>
+                            {counts.selected > 0 ? (
+                              <strong style={styles.tablePillBadge}>
+                                {counts.selected}
+                              </strong>
+                            ) : null}
+                          </button>
+                        );
+                      })}
+
+                      {isLargeTableEvent ? (
+                        <span style={styles.windowedPillsHint}>
+                          Showing {visibleTableEntries.length} of{" "}
+                          {tableEntries.length}
+                        </span>
+                      ) : null}
+                    </div>
+                  </section>
+
+                  <div
+                    className="public-table-selector-active-summary"
+                    style={styles.activeSummary}
+                  >
+                    <div style={styles.activeSummaryCard}>
+                      <span style={styles.activeSummaryLabel}>Seats</span>
+                      <strong style={styles.activeSummaryValue}>
+                        {activeTableCounts.total}
+                      </strong>
+                    </div>
+
+                    <div style={styles.activeSummaryCard}>
+                      <span style={styles.activeSummaryLabel}>Available</span>
+                      <strong style={styles.activeSummaryValue}>
+                        {activeTableCounts.available}
+                      </strong>
+                    </div>
+
+                    <div style={styles.activeSummaryCard}>
+                      <span style={styles.activeSummaryLabel}>Unavailable</span>
+                      <strong style={styles.activeSummaryValue}>
+                        {activeTableCounts.unavailable}
+                      </strong>
+                    </div>
+
+                    <div style={styles.activeSummaryCard}>
+                      <span style={styles.activeSummaryLabel}>Selected</span>
+                      <strong style={styles.activeSummaryValue}>
+                        {activeTableCounts.selected}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <section
+                    id="public-table-active-plan"
+                    className="public-table-selector-table-card"
+                    style={styles.tableCard}
+                  >
+                    <div style={styles.tableHeader}>
+                      <div>
+                        <h4 style={styles.tableTitle}>
+                          {activeTable.tableLabel}
+                        </h4>
+                        <p style={styles.tableMeta}>
+                          {activeTable.seats.length} seat
+                          {activeTable.seats.length === 1 ? "" : "s"} •{" "}
+                          {activeTable.shape === "round"
+                            ? "Round"
+                            : activeTable.shape === "square"
+                              ? "Square"
+                              : "Rectangle"}{" "}
+                          table
+                        </p>
+                      </div>
+                    </div>
+
+                    <div
+                      className="public-table-selector-desktop-table-plan"
+                      style={styles.desktopTablePlan}
+                    >
+                      <div
+                        className="public-table-selector-table-area"
+                        style={tableAreaStyle(activeTable.shape)}
+                      >
+                        <div style={tablePlateStyle(activeTable.shape)}>
+                          <span style={styles.tablePlateLabel}>
+                            {activeTable.tableLabel}
+                          </span>
+                        </div>
+
+                        {activeTable.seats.map((seat, index) => {
+                          const selected = selectedSeatIds.includes(seat.id);
+                          const colours = seatColours(seat.status, selected);
+                          const ticketType = ticketTypes.find(
+                            (item) => item.id === seat.ticket_type_id,
+                          );
+
+                          return (
+                            <button
+                              key={seat.id}
+                              type="button"
+                              onClick={() => toggleSeat(seat)}
+                              disabled={seat.status !== "available"}
+                              title={seatHoverLabel(seat, ticketType, currency)}
+                              style={{
+                                ...styles.tableSeat,
+                                ...seatPosition(
+                                  index,
+                                  activeTable.seats.length,
+                                  activeTable.shape,
+                                ),
+                                ...colours,
+                              }}
+                            >
+                              {seat.seat_number || index + 1}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <section
+                      className="public-table-selector-mobile-seat-panel"
+                      style={styles.mobileSeatPanel}
+                    >
+                      <div style={styles.mobileSeatPanelHeader}>
+                        <span style={styles.mobileStepPill}>Choose seats</span>
+                        <strong style={styles.mobileSeatPanelTitle}>
+                          {activeTable.tableLabel}
+                        </strong>
+                        <span style={styles.mobileSeatPanelText}>
+                          Tap available seats to add or remove them from your
+                          booking.
+                        </span>
+                      </div>
+
+                      <div
+                        className="public-table-selector-mobile-seat-grid"
+                        style={styles.mobileSeatGrid}
+                      >
+                        {activeTable.seats.map((seat, index) => {
+                          const selected = selectedSeatIds.includes(seat.id);
+                          const colours = seatColours(seat.status, selected);
+                          const ticketType = ticketTypes.find(
+                            (item) => item.id === seat.ticket_type_id,
+                          );
+
+                          return (
+                            <button
+                              key={seat.id}
+                              type="button"
+                              className="public-table-selector-mobile-seat-button"
+                              onClick={() => toggleSeat(seat)}
+                              disabled={seat.status !== "available"}
+                              title={seatHoverLabel(seat, ticketType, currency)}
+                              style={{
+                                ...styles.mobileSeatButton,
+                                ...colours,
+                                cursor:
+                                  seat.status === "available"
+                                    ? "pointer"
+                                    : "not-allowed",
+                              }}
+                            >
+                              <span style={styles.mobileSeatButtonLabel}>
+                                Seat
+                              </span>
+                              <strong style={styles.mobileSeatButtonValue}>
+                                {seat.seat_number || index + 1}
+                              </strong>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  </section>
+                </div>
+              </div>
+            </>
+          )}
+
+          <div
+            className="public-table-selector-helper-notice"
+            style={styles.helperNotice}
+          >
+            <span style={styles.helperIcon}>ⓘ</span>
+            Use the table selector above to switch between tables. On smaller
+            screens, the table list appears first so you can choose seats with
+            fewer distractions.
+          </div>
+
+          <div
+            className="public-table-selector-mobile-summary"
+            style={styles.mobileSummary}
+          >
+            <div style={styles.mobileSummaryText}>
+              <span style={styles.mobileSummaryLabel}>
+                {cartSeats.length} seat{cartSeats.length === 1 ? "" : "s"}{" "}
+                selected
+              </span>
+              <strong style={styles.mobileSummaryTotal}>
+                {currency} {moneyFromCents(checkoutSubtotal)}
+              </strong>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => scrollToSelectorTarget("public-table-booking-details")}
+              disabled={cartSeats.length === 0}
+              style={{
+                ...styles.mobileSummaryButton,
+                opacity: cartSeats.length === 0 ? 0.55 : 1,
+                cursor: cartSeats.length === 0 ? "not-allowed" : "pointer",
+              }}
+            >
+              Continue
+            </button>
+          </div>
+        </div>
 const styles: Record<string, CSSProperties> = {
   shell: {
     display: "grid",
@@ -1857,6 +2158,106 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gap: 14,
     minWidth: 0,
+  },
+
+  mobileTableCards: {
+    display: "none",
+    gap: 12,
+    marginBottom: 12,
+  },
+
+  mobileTableCardsHeader: {
+    display: "grid",
+    gap: 6,
+    padding: 12,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+
+  mobileStepPill: {
+    display: "inline-flex",
+    width: "fit-content",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 30,
+    padding: "0 10px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  mobileTableCardsTitle: {
+    color: "#0f172a",
+    fontSize: 18,
+    lineHeight: 1.15,
+    letterSpacing: "-0.025em",
+    fontWeight: 950,
+  },
+
+  mobileTableCardGrid: {
+    display: "grid",
+    gap: 10,
+  },
+
+  mobileTableCard: {
+    display: "grid",
+    gap: 5,
+    width: "100%",
+    padding: 14,
+    borderRadius: 18,
+    border: "1px solid #e2e8f0",
+    background: "#ffffff",
+    color: "#0f172a",
+    textAlign: "left",
+    boxShadow: "0 10px 24px rgba(15,23,42,0.06)",
+  },
+
+  mobileTableCardActive: {
+    borderColor: "#1683f8",
+    background: "linear-gradient(135deg, #eff6ff 0%, #ffffff 78%)",
+    boxShadow: "0 12px 28px rgba(22,131,248,0.14)",
+  },
+
+  mobileTableCardKicker: {
+    color: "#2563eb",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  mobileTableCardTitle: {
+    color: "#0f172a",
+    fontSize: 18,
+    lineHeight: 1.15,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
+  mobileTableCardMeta: {
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.35,
+    fontWeight: 850,
+  },
+
+  mobileTableCardSelected: {
+    display: "inline-flex",
+    width: "fit-content",
+    marginTop: 2,
+    padding: "6px 9px",
+    borderRadius: 999,
+    background: "#dbeafe",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 11,
+    fontWeight: 950,
   },
 
   tablePicker: {
@@ -2092,6 +2493,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #e2e8f0",
     minWidth: 0,
     overflow: "visible",
+    scrollMarginTop: 16,
   },
 
   tableHeader: {
@@ -2118,6 +2520,12 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.4,
     fontWeight: 800,
+  },
+
+  desktopTablePlan: {
+    display: "block",
+    minWidth: 0,
+    overflow: "visible",
   },
 
   tableArea: {
@@ -2165,6 +2573,62 @@ const styles: Record<string, CSSProperties> = {
     zIndex: 2,
   },
 
+  mobileSeatPanel: {
+    display: "none",
+    gap: 12,
+  },
+
+  mobileSeatPanelHeader: {
+    display: "grid",
+    gap: 6,
+  },
+
+  mobileSeatPanelTitle: {
+    color: "#0f172a",
+    fontSize: 18,
+    lineHeight: 1.15,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
+  mobileSeatPanelText: {
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.4,
+    fontWeight: 750,
+  },
+
+  mobileSeatGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
+    gap: 8,
+  },
+
+  mobileSeatButton: {
+    display: "grid",
+    justifyItems: "center",
+    alignContent: "center",
+    gap: 1,
+    minHeight: 50,
+    borderRadius: 16,
+    boxSizing: "border-box",
+  },
+
+  mobileSeatButtonLabel: {
+    fontSize: 9,
+    lineHeight: 1,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    fontWeight: 950,
+    opacity: 0.78,
+  },
+
+  mobileSeatButtonValue: {
+    fontSize: 16,
+    lineHeight: 1.05,
+    fontWeight: 950,
+  },
+
   helperNotice: {
     display: "flex",
     gap: 8,
@@ -2193,6 +2657,53 @@ const styles: Record<string, CSSProperties> = {
     flexShrink: 0,
   },
 
+  mobileSummary: {
+    display: "none",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    width: "100%",
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 20,
+    background: "rgba(15,23,42,0.94)",
+    color: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.12)",
+    boxShadow: "0 18px 40px rgba(15,23,42,0.26)",
+    backdropFilter: "blur(14px)",
+  },
+
+  mobileSummaryText: {
+    display: "grid",
+    gap: 2,
+    minWidth: 0,
+  },
+
+  mobileSummaryLabel: {
+    color: "#cbd5e1",
+    fontSize: 11,
+    fontWeight: 900,
+  },
+
+  mobileSummaryTotal: {
+    color: "#fef3c7",
+    fontSize: 17,
+    lineHeight: 1.1,
+    fontWeight: 950,
+  },
+
+  mobileSummaryButton: {
+    minHeight: 44,
+    padding: "0 14px",
+    borderRadius: 999,
+    border: "none",
+    background: "#1683f8",
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: 950,
+    flexShrink: 0,
+  },
+
   cart: {
     position: "sticky",
     top: 18,
@@ -2202,12 +2713,37 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     boxShadow: "0 18px 45px rgba(15,23,42,0.24)",
     minWidth: 0,
+    scrollMarginTop: 16,
   },
 
   cartGrid: {
     display: "grid",
     gap: 18,
     minWidth: 0,
+  },
+
+  mobileBeforeDetailsNotice: {
+    display: "grid",
+    gap: 7,
+    marginBottom: 14,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.14)",
+  },
+
+  mobileBeforeDetailsTitle: {
+    color: "#ffffff",
+    fontSize: 17,
+    lineHeight: 1.2,
+    fontWeight: 950,
+  },
+
+  mobileBeforeDetailsText: {
+    color: "#cbd5e1",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 750,
   },
 
   cartTop: {
@@ -2337,6 +2873,32 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
   },
 
+  selectedSeatRibbon: {
+    display: "grid",
+    gap: 4,
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 16,
+    background: "rgba(96,165,250,0.14)",
+    border: "1px solid rgba(147,197,253,0.22)",
+  },
+
+  selectedSeatRibbonLabel: {
+    color: "#bfdbfe",
+    fontSize: 10,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  selectedSeatRibbonText: {
+    color: "#ffffff",
+    fontSize: 13,
+    lineHeight: 1.35,
+    fontWeight: 900,
+    overflowWrap: "anywhere",
+  },
+
   cartList: {
     display: "grid",
     gap: 12,
@@ -2363,6 +2925,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     fontSize: 15,
     fontWeight: 950,
+    overflowWrap: "anywhere",
   },
 
   cartPrice: {
