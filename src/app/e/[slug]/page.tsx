@@ -312,7 +312,6 @@ async function getTenantBrandingSettings(tenantSlug: string) {
 function Card({ children }: { children: ReactNode }) {
   return <section style={styles.card}>{children}</section>;
 }
-
 export default async function EventSlugPage({
   params,
   searchParams,
@@ -506,7 +505,7 @@ export default async function EventSlugPage({
 
   const brandedHeroOverlayStyle: CSSProperties = {
     ...styles.heroOverlay,
-    background: `linear-gradient(180deg, rgba(15,23,42,0.12) 0%, rgba(15,23,42,0.50) 44%, rgba(15,23,42,0.94) 100%), radial-gradient(circle at bottom left, ${primaryColour}36, transparent 42%), radial-gradient(circle at top right, ${accentColour}18, transparent 32%)`,
+    background: `linear-gradient(180deg, rgba(15,23,42,0.18) 0%, rgba(15,23,42,0.52) 42%, rgba(15,23,42,0.96) 100%), radial-gradient(circle at bottom left, ${primaryColour}36, transparent 42%), radial-gradient(circle at top right, ${accentColour}18, transparent 32%)`,
   };
 
   const brandedBadgeStyle: CSSProperties = {
@@ -598,59 +597,60 @@ export default async function EventSlugPage({
         <div style={brandedHeroOverlayStyle} />
 
         <div style={styles.heroInner}>
-          <Link href={backToCampaignsHref} style={styles.backLink}>
-            ← Back to campaigns
-          </Link>
+          <div className="heroContentCard" style={styles.heroContentCard}>
+            <Link href={backToCampaignsHref} style={styles.backLink}>
+              ← Back to campaigns
+            </Link>
 
-          <div style={styles.badgeRow}>
-            <span style={brandedBadgeStyle}>
-              {eventTypeLabel(event.event_type)}
-            </span>
-            <span style={styles.statusPill}>Open for bookings</span>
-          </div>
-
-          <h1 style={styles.title}>{event.title}</h1>
-
-          {event.description ? (
-            <p style={styles.description}>{event.description}</p>
-          ) : null}
-
-          <div style={styles.heroMeta}>
-            <div style={styles.metaCard}>
-              <span style={styles.metaLabel}>Date</span>
-              <strong>{formatDate(event.starts_at)}</strong>
+            <div style={styles.badgeRow}>
+              <span style={brandedBadgeStyle}>
+                {eventTypeLabel(event.event_type)}
+              </span>
+              <span style={styles.statusPill}>Open for bookings</span>
             </div>
 
-            <div style={styles.metaCard}>
-              <span style={styles.metaLabel}>Location</span>
-              <strong>{event.location || "Location to be confirmed"}</strong>
+            <h1 style={styles.title}>{event.title}</h1>
+
+            {event.description ? (
+              <p style={styles.description}>{event.description}</p>
+            ) : null}
+
+            <div style={styles.heroMeta}>
+              <div style={styles.metaCard}>
+                <span style={styles.metaLabel}>Date</span>
+                <strong>{formatDate(event.starts_at)}</strong>
+              </div>
+
+              <div style={styles.metaCard}>
+                <span style={styles.metaLabel}>Location</span>
+                <strong>{event.location || "Location to be confirmed"}</strong>
+              </div>
+
+              {lowestTicketPrice > 0 && (
+                <div style={styles.metaCard}>
+                  <span style={styles.metaLabel}>Tickets from</span>
+                  <strong>
+                    {event.currency} {moneyFromCents(lowestTicketPrice)}
+                  </strong>
+                </div>
+              )}
+
+              {event.event_type !== "general_admission" && (
+                <div style={styles.metaCard}>
+                  <span style={styles.metaLabel}>Available</span>
+                  <strong>{availableSeats}</strong>
+                </div>
+              )}
             </div>
 
-            {lowestTicketPrice > 0 && (
-              <div style={styles.metaCard}>
-                <span style={styles.metaLabel}>Tickets from</span>
-                <strong>
-                  {event.currency} {moneyFromCents(lowestTicketPrice)}
-                </strong>
-              </div>
-            )}
-
-            {event.event_type !== "general_admission" && (
-              <div style={styles.metaCard}>
-                <span style={styles.metaLabel}>Available</span>
-                <strong>{availableSeats}</strong>
-              </div>
-            )}
-          </div>
-
-          <div style={styles.heroFooter}>
-            <span>Supporting {publicDisplayName}</span>
-            <strong>Secure event booking</strong>
+            <div style={styles.heroFooter}>
+              <span>Supporting {publicDisplayName}</span>
+              <strong>Secure event booking</strong>
+            </div>
           </div>
         </div>
       </section>
-
-      <div style={styles.contentWrap}>
+            <div style={styles.contentWrap}>
         {resolvedSearchParams.checkout === "success" && (
           <section style={styles.successCard}>
             <strong>Payment successful.</strong>
@@ -750,10 +750,11 @@ export default async function EventSlugPage({
             </div>
           </section>
         </div>
-                {publicDisplayAddOns.map((addOn) => (
+
+        {publicDisplayAddOns.map((addOn) => (
           <details
             key={addOn.type}
-            className="addOnDisclosure"
+            className="addOnDisclosure mobileEventPromo"
             style={{
               ...styles.addOnDisclosure,
               borderColor: `${accentColour}66`,
@@ -1008,8 +1009,7 @@ export default async function EventSlugPage({
             </div>
           </details>
         ))}
-
-        {prizeRevealAddOns.map((addOn) => {
+                      {prizeRevealAddOns.map((addOn) => {
           const revealedPrizes = addOn.prizeRevealPrizes.filter(
             (prize) => prize.isRevealed,
           ).length;
@@ -1023,7 +1023,7 @@ export default async function EventSlugPage({
           return (
             <section
               key={`${addOn.type}-prize-reveal`}
-              className="prizeRevealPublicPanel"
+              className="prizeRevealPublicPanel mobileEventPromo"
               style={{
                 ...styles.prizeRevealPublicPanel,
                 borderColor: `${accentColour}66`,
@@ -1290,6 +1290,7 @@ function InfoRow({ label, value }: { label: string; value: ReactNode }) {
     </p>
   );
 }
+
 const responsiveStyles = `
 .public-event-page,
 .public-event-page * {
@@ -1436,6 +1437,40 @@ const responsiveStyles = `
     font-size: 14px !important;
   }
 
+  .public-event-page .hero {
+    min-height: auto !important;
+    padding: 84px 12px 18px !important;
+    align-items: flex-end !important;
+  }
+
+  .public-event-page .heroInner {
+    padding: 0 !important;
+  }
+
+  .public-event-page .heroContentCard {
+    width: 100% !important;
+    padding: 16px !important;
+    border-radius: 24px !important;
+    background: rgba(15, 23, 42, 0.84) !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    box-shadow: 0 22px 48px rgba(15, 23, 42, 0.34) !important;
+    backdrop-filter: blur(16px) !important;
+  }
+
+  .public-event-page .heroContentCard h1 {
+    font-size: clamp(36px, 12vw, 52px) !important;
+    line-height: 0.98 !important;
+  }
+
+  .public-event-page .heroContentCard p {
+    font-size: 15px !important;
+    line-height: 1.45 !important;
+  }
+
+  .public-event-page .mobileEventPromo {
+    display: none !important;
+  }
+
   .public-event-page .addOnDisclosure,
   .public-event-page .addOnSafeguardsPanel,
   .public-event-page .prizeRevealPublicPanel {
@@ -1492,7 +1527,6 @@ const responsiveStyles = `
   }
 }
 `;
-
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
@@ -1657,8 +1691,23 @@ const styles: Record<string, CSSProperties> = {
     boxSizing: "border-box",
   },
 
+  heroContentCard: {
+    display: "grid",
+    gap: 0,
+    width: "min(100%, 980px)",
+    padding: 18,
+    borderRadius: 28,
+    background: "rgba(15,23,42,0.46)",
+    border: "1px solid rgba(255,255,255,0.16)",
+    boxShadow:
+      "0 28px 64px rgba(15,23,42,0.28), inset 0 1px 0 rgba(255,255,255,0.10)",
+    backdropFilter: "blur(14px)",
+    minWidth: 0,
+  },
+
   backLink: {
     display: "inline-flex",
+    width: "fit-content",
     marginBottom: 14,
     padding: "10px 14px",
     borderRadius: 999,
@@ -1734,8 +1783,8 @@ const styles: Record<string, CSSProperties> = {
   metaCard: {
     padding: 14,
     borderRadius: 18,
-    background: "rgba(255,255,255,0.1)",
-    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.13)",
+    border: "1px solid rgba(255,255,255,0.16)",
     display: "grid",
     gap: 6,
     backdropFilter: "blur(12px)",
@@ -1757,7 +1806,7 @@ const styles: Record<string, CSSProperties> = {
     maxWidth: "100%",
     padding: "14px 16px",
     borderRadius: 18,
-    background: "rgba(15,23,42,0.74)",
+    background: "rgba(15,23,42,0.72)",
     color: "#ffffff",
     display: "grid",
     gap: 4,
