@@ -1,239 +1,1116 @@
-"use client";
+const styles: Record<string, CSSProperties> = {
+  root: {
+    width: "100%",
+    minWidth: 0,
+  },
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import BuyerDetailsFields from "@/components/events/BuyerDetailsFields";
-import PublicEventCheckoutAddOnSelector, {
-  type PublicEventCheckoutAddOn,
-  type PublicEventCheckoutAddOnPlayer,
-  type PublicEventCheckoutAddOnSelection,
-} from "@/components/events/PublicEventCheckoutAddOnSelector";
+  shell: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.2fr) minmax(340px, 0.8fr)",
+    gap: 18,
+    alignItems: "start",
+    width: "100%",
+    minWidth: 0,
+  },
 
-type Seat = {
-  id: string;
-  ticket_type_id: string | null;
-  section: string | null;
-  row_label: string | null;
-  seat_number: string | null;
-  table_number: string | null;
-  table_name?: string | null;
-  status: string;
+  mapPanel: {
+    padding: "clamp(14px, 4vw, 18px)",
+    borderRadius: 24,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+    overflow: "hidden",
+  },
+
+  workflowGuide: {
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0, 1fr)",
+    gap: 12,
+    alignItems: "start",
+    marginBottom: 16,
+    padding: 14,
+    borderRadius: 18,
+    background: "linear-gradient(135deg, #ffffff 0%, #eff6ff 100%)",
+    border: "1px solid #bfdbfe",
+  },
+
+  workflowBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 34,
+    padding: "0 12px",
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    whiteSpace: "nowrap",
+  },
+
+  workflowTitle: {
+    margin: 0,
+    color: "#0f172a",
+    fontSize: 18,
+    lineHeight: 1.15,
+    fontWeight: 950,
+  },
+
+  workflowText: {
+    margin: "5px 0 0",
+    color: "#475569",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 750,
+  },
+
+  mapHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    flexWrap: "wrap",
+    alignItems: "flex-start",
+    marginBottom: 14,
+  },
+
+  mapTitle: {
+    margin: 0,
+    color: "#111827",
+    fontSize: "clamp(24px, 5vw, 30px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+    fontWeight: 950,
+  },
+
+  mapText: {
+    margin: "6px 0 0",
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.45,
+    fontWeight: 700,
+  },
+
+  legend: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "flex-end",
+  },
+
+  legendItem: {
+    display: "inline-flex",
+    gap: 6,
+    alignItems: "center",
+    padding: "7px 9px",
+    borderRadius: 999,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    color: "#334155",
+    fontSize: 12,
+    fontWeight: 850,
+    whiteSpace: "nowrap",
+  },
+
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    border: "1px solid rgba(15,23,42,0.14)",
+  },
+
+  emptyLight: {
+    display: "grid",
+    gap: 8,
+    padding: 18,
+    borderRadius: 18,
+    border: "1px dashed #cbd5e1",
+    background: "#f8fafc",
+    color: "#0f172a",
+    textAlign: "center",
+  },
+
+  mobileRowCards: {
+    display: "none",
+    gap: 12,
+    marginBottom: 12,
+  },
+
+  mobileRowCardsHeader: {
+    display: "grid",
+    gap: 6,
+    padding: 12,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+
+  mobileStepPill: {
+    display: "inline-flex",
+    width: "fit-content",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 30,
+    padding: "0 10px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  mobileRowCardsTitle: {
+    color: "#0f172a",
+    fontSize: 18,
+    lineHeight: 1.15,
+    letterSpacing: "-0.025em",
+    fontWeight: 950,
+  },
+
+  mobileRowCardGrid: {
+    display: "grid",
+    gap: 10,
+  },
+
+  mobileRowCard: {
+    display: "grid",
+    gap: 5,
+    width: "100%",
+    padding: 14,
+    borderRadius: 18,
+    border: "1px solid #e2e8f0",
+    background: "#ffffff",
+    color: "#0f172a",
+    textAlign: "left",
+    boxShadow: "0 10px 24px rgba(15,23,42,0.06)",
+  },
+
+  mobileRowCardActive: {
+    borderColor: "#1683f8",
+    background: "linear-gradient(135deg, #eff6ff 0%, #ffffff 78%)",
+    boxShadow: "0 12px 28px rgba(22,131,248,0.14)",
+  },
+
+  mobileRowCardKicker: {
+    color: "#2563eb",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  mobileRowCardTitle: {
+    color: "#0f172a",
+    fontSize: 18,
+    lineHeight: 1.15,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
+  mobileRowCardMeta: {
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.35,
+    fontWeight: 850,
+  },
+
+  mobileRowCardSelected: {
+    display: "inline-flex",
+    width: "fit-content",
+    marginTop: 2,
+    padding: "6px 9px",
+    borderRadius: 999,
+    background: "#dbeafe",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 11,
+    fontWeight: 950,
+  },
+
+  seatScroll: {
+    width: "100%",
+    overflowX: "auto",
+    overflowY: "visible",
+    padding: 14,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75)",
+  },
+
+  singleRowStack: {
+    display: "grid",
+    gap: 14,
+    minWidth: 0,
+  },
+
+  rowPicker: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    borderRadius: 22,
+    background:
+      "linear-gradient(135deg, #f8fafc 0%, #ffffff 58%, #eff6ff 100%)",
+    border: "1px solid #dbeafe",
+    minWidth: 0,
+  },
+
+  rowPickerHeader: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(220px, 0.36fr)",
+    gap: 12,
+    alignItems: "end",
+    minWidth: 0,
+  },
+
+  rowPickerEyebrow: {
+    margin: "0 0 6px",
+    color: "#2563eb",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  rowPickerTitle: {
+    margin: 0,
+    color: "#111827",
+    fontSize: "clamp(22px, 5vw, 28px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
+  rowPickerText: {
+    margin: "7px 0 0",
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  rowSelectWrap: {
+    display: "grid",
+    gap: 6,
+    minWidth: 0,
+  },
+
+  labelDark: {
+    color: "#334155",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+
+  rowSelect: {
+    width: "100%",
+    minHeight: 42,
+    padding: "9px 10px",
+    borderRadius: 13,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 14,
+    fontWeight: 850,
+    boxSizing: "border-box",
+  },
+
+  rowNavRow: {
+    display: "grid",
+    gridTemplateColumns:
+      "minmax(0, 0.25fr) minmax(220px, 0.5fr) minmax(0, 0.25fr)",
+    gap: 10,
+    alignItems: "stretch",
+  },
+
+  rowNavButton: {
+    minHeight: 48,
+    borderRadius: 16,
+    border: "1px solid #bfdbfe",
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    fontSize: 13,
+    fontWeight: 950,
+    padding: "10px 12px",
+    boxShadow: "0 8px 18px rgba(37,99,235,0.08)",
+  },
+
+  rowPositionCard: {
+    display: "grid",
+    gap: 4,
+    alignContent: "center",
+    padding: 12,
+    borderRadius: 16,
+    border: "1px solid #e2e8f0",
+    background: "#ffffff",
+    minWidth: 0,
+    textAlign: "center",
+  },
+
+  rowPositionLabel: {
+    color: "#64748b",
+    fontSize: 10,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  rowPositionValue: {
+    color: "#0f172a",
+    fontSize: 16,
+    lineHeight: 1.15,
+    fontWeight: 950,
+  },
+
+  rowPositionHint: {
+    color: "#64748b",
+    fontSize: 12,
+    lineHeight: 1.35,
+    fontWeight: 750,
+  },
+
+  rowPills: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
+
+  windowedPillsLabel: {
+    display: "inline-flex",
+    width: "100%",
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  windowedPillsHint: {
+    display: "inline-flex",
+    alignItems: "center",
+    minHeight: 38,
+    padding: "0 10px",
+    borderRadius: 999,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 850,
+  },
+
+  rowPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    minWidth: 44,
+    minHeight: 38,
+    padding: "0 12px",
+    borderRadius: 999,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: 950,
+    cursor: "pointer",
+  },
+
+  rowPillActive: {
+    borderColor: "#1683f8",
+    background: "#1683f8",
+    color: "#ffffff",
+    boxShadow: "0 10px 20px rgba(22,131,248,0.16)",
+  },
+
+  rowPillBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 20,
+    height: 20,
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.22)",
+    color: "inherit",
+    fontSize: 11,
+    fontWeight: 950,
+  },
+
+  activeSummary: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  activeSummaryCard: {
+    display: "grid",
+    gap: 4,
+    padding: 12,
+    borderRadius: 16,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+
+  activeSummaryLabel: {
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+
+  activeSummaryValue: {
+    color: "#0f172a",
+    fontSize: 22,
+    lineHeight: 1,
+    fontWeight: 950,
+  },
+
+  rowCard: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    borderRadius: 22,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+    overflow: "visible",
+    scrollMarginTop: 16,
+  },
+
+  rowHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+
+  rowTitle: {
+    margin: 0,
+    color: "#111827",
+    fontSize: 18,
+    lineHeight: 1.15,
+    fontWeight: 950,
+    letterSpacing: "-0.02em",
+    overflowWrap: "break-word",
+  },
+
+  rowMeta: {
+    margin: "5px 0 0",
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.4,
+    fontWeight: 800,
+  },
+
+  desktopSeatRowWrap: {
+    display: "block",
+    overflowX: "auto",
+    overflowY: "visible",
+    padding: 10,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+
+  desktopSeatRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    width: "fit-content",
+    padding: 12,
+    borderRadius: 14,
+    background:
+      "linear-gradient(135deg, rgba(22,131,248,0.05), rgba(255,255,255,1))",
+  },
+
+  rowLabelPlate: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 72,
+    minHeight: 36,
+    padding: "0 12px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#fef3c7",
+    fontSize: 12,
+    fontWeight: 950,
+    marginRight: 4,
+    whiteSpace: "nowrap",
+  },
+
+  seatWithAisle: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+  },
+
+  aisleGap: {
+    display: "inline-flex",
+    width: 30,
+    height: 36,
+    borderRadius: 10,
+    background:
+      "repeating-linear-gradient(45deg, #e2e8f0 0, #e2e8f0 4px, #f8fafc 4px, #f8fafc 8px)",
+    border: "1px dashed #cbd5e1",
+  },
+
+  mobileSeatPanel: {
+    display: "none",
+    gap: 12,
+  },
+
+  mobileSeatPanelHeader: {
+    display: "grid",
+    gap: 6,
+  },
+
+  mobileSeatPanelTitle: {
+    color: "#0f172a",
+    fontSize: 18,
+    lineHeight: 1.15,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
+  mobileSeatPanelText: {
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.4,
+    fontWeight: 750,
+  },
+
+  mobileSeatGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
+    gap: 8,
+  },
+
+  mobileSeatButton: {
+    display: "grid",
+    justifyItems: "center",
+    alignContent: "center",
+    gap: 1,
+    minHeight: 50,
+    borderRadius: 16,
+    boxSizing: "border-box",
+  },
+
+  mobileSeatButtonLabel: {
+    fontSize: 9,
+    lineHeight: 1,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    fontWeight: 950,
+    opacity: 0.78,
+  },
+
+  mobileSeatButtonValue: {
+    fontSize: 16,
+    lineHeight: 1.05,
+    fontWeight: 950,
+  },
+
+  helperNotice: {
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 16,
+    background: "#eff6ff",
+    color: "#1e3a8a",
+    border: "1px solid #bfdbfe",
+    fontSize: 13,
+    lineHeight: 1.4,
+    fontWeight: 800,
+  },
+
+  helperIcon: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 22,
+    height: 22,
+    borderRadius: 999,
+    background: "#dbeafe",
+    color: "#1d4ed8",
+    fontWeight: 950,
+    flexShrink: 0,
+  },
+
+  mobileSummary: {
+    display: "none",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    width: "100%",
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 20,
+    background: "rgba(15,23,42,0.94)",
+    color: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.12)",
+    boxShadow: "0 18px 40px rgba(15,23,42,0.26)",
+    backdropFilter: "blur(14px)",
+  },
+
+  mobileSummaryText: {
+    display: "grid",
+    gap: 2,
+    minWidth: 0,
+  },
+
+  mobileSummaryLabel: {
+    color: "#cbd5e1",
+    fontSize: 11,
+    fontWeight: 900,
+  },
+
+  mobileSummaryTotal: {
+    color: "#fef3c7",
+    fontSize: 17,
+    lineHeight: 1.1,
+    fontWeight: 950,
+  },
+
+  mobileSummaryButton: {
+    minHeight: 44,
+    padding: "0 14px",
+    borderRadius: 999,
+    border: "none",
+    background: "#1683f8",
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: 950,
+    flexShrink: 0,
+  },
+
+  cart: {
+    position: "sticky",
+    top: 18,
+    padding: "clamp(14px, 4vw, 18px)",
+    borderRadius: 24,
+    background: "#111827",
+    color: "#ffffff",
+    boxShadow: "0 18px 45px rgba(15,23,42,0.24)",
+    minWidth: 0,
+    scrollMarginTop: 16,
+  },
+
+  cartGrid: {
+    display: "grid",
+    gap: 18,
+    minWidth: 0,
+  },
+
+  mobileBeforeDetailsNotice: {
+    display: "grid",
+    gap: 7,
+    marginBottom: 14,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.14)",
+  },
+
+  mobileBeforeDetailsTitle: {
+    color: "#ffffff",
+    fontSize: 17,
+    lineHeight: 1.2,
+    fontWeight: 950,
+  },
+
+  mobileBeforeDetailsText: {
+    color: "#cbd5e1",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 750,
+  },
+
+  summarySpacer: {
+    height: 16,
+  },
+
+  accessCodeBox: {
+    display: "grid",
+    gap: 7,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.14)",
+  },
+
+  accessCodeLabel: {
+    color: "#facc15",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  accessCodeInput: {
+    width: "100%",
+    minHeight: 44,
+    padding: "10px 12px",
+    borderRadius: 13,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 15,
+    fontWeight: 850,
+    boxSizing: "border-box",
+    textTransform: "uppercase",
+  },
+
+  accessCodeHelp: {
+    color: "#cbd5e1",
+    lineHeight: 1.4,
+    fontSize: 12,
+    fontWeight: 750,
+  },
+
+  addOnWorkflowBox: {
+    display: "grid",
+    gap: 6,
+    marginBottom: 12,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(250,204,21,0.12)",
+    border: "1px solid rgba(250,204,21,0.22)",
+  },
+
+  addOnWorkflowBadge: {
+    display: "inline-flex",
+    width: "fit-content",
+    padding: "5px 8px",
+    borderRadius: 999,
+    background: "rgba(250,204,21,0.18)",
+    color: "#fde68a",
+    border: "1px solid rgba(250,204,21,0.24)",
+    fontSize: 10,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  addOnWorkflowTitle: {
+    color: "#ffffff",
+    fontSize: 15,
+    lineHeight: 1.25,
+    fontWeight: 950,
+  },
+
+  addOnWorkflowText: {
+    color: "#dbeafe",
+    fontSize: 12,
+    lineHeight: 1.45,
+    fontWeight: 800,
+  },
+
+  addOnStack: {
+    display: "grid",
+    gap: 12,
+  },
+
+  cartTop: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 14,
+  },
+
+  cartEyebrow: {
+    margin: 0,
+    color: "#facc15",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.14em",
+  },
+
+  cartTitle: {
+    margin: "5px 0 0",
+    fontSize: "clamp(23px, 5vw, 28px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+    fontWeight: 950,
+  },
+
+  countBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 42,
+    height: 42,
+    borderRadius: 999,
+    background: "rgba(250,204,21,0.16)",
+    color: "#fde68a",
+    border: "1px solid rgba(250,204,21,0.24)",
+    fontWeight: 950,
+  },
+
+  emptyBox: {
+    display: "grid",
+    justifyItems: "center",
+    gap: 8,
+    padding: 18,
+    borderRadius: 18,
+    border: "1px dashed rgba(255,255,255,0.22)",
+    background: "rgba(255,255,255,0.05)",
+    textAlign: "center",
+  },
+
+  emptyTicketImage: {
+    width: 78,
+    height: 78,
+    objectFit: "contain",
+    opacity: 0.82,
+  },
+
+  emptyTitle: {
+    margin: 0,
+    color: "#ffffff",
+    fontWeight: 950,
+  },
+
+  emptyText: {
+    margin: 0,
+    color: "#94a3b8",
+    fontSize: 13,
+    lineHeight: 1.45,
+  },
+
+  selectedSeatRibbon: {
+    display: "grid",
+    gap: 4,
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 16,
+    background: "rgba(96,165,250,0.14)",
+    border: "1px solid rgba(147,197,253,0.22)",
+  },
+
+  selectedSeatRibbonLabel: {
+    color: "#bfdbfe",
+    fontSize: 10,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  selectedSeatRibbonText: {
+    color: "#ffffff",
+    fontSize: 13,
+    lineHeight: 1.35,
+    fontWeight: 900,
+    overflowWrap: "anywhere",
+  },
+
+  cartList: {
+    display: "grid",
+    gap: 12,
+  },
+
+  cartItem: {
+    display: "grid",
+    gap: 11,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.12)",
+  },
+
+  cartItemHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+  },
+
+  cartSeatLabel: {
+    margin: 0,
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
+  cartPrice: {
+    margin: "5px 0 0",
+    color: "#fde68a",
+    fontSize: 13,
+    fontWeight: 900,
+  },
+
+  removeButton: {
+    border: "none",
+    background: "transparent",
+    color: "#fecaca",
+    fontWeight: 950,
+    cursor: "pointer",
+  },
+
+  field: {
+    display: "grid",
+    gap: 6,
+  },
+
+  label: {
+    color: "#cbd5e1",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+
+  input: {
+    width: "100%",
+    minHeight: 42,
+    padding: "10px 11px",
+    borderRadius: 13,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 15,
+    boxSizing: "border-box",
+  },
+
+  textarea: {
+    width: "100%",
+    minHeight: 72,
+    padding: "10px 11px",
+    borderRadius: 13,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 15,
+    boxSizing: "border-box",
+    resize: "vertical",
+  },
+
+  totalBox: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    marginTop: 14,
+    padding: 15,
+    borderRadius: 18,
+    background: "rgba(250,204,21,0.14)",
+    color: "#fde68a",
+    fontWeight: 950,
+    fontSize: 18,
+  },
+
+  addOnSummaryRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 14,
+    background: "rgba(255,255,255,0.06)",
+    color: "#e2e8f0",
+    fontWeight: 850,
+  },
+
+  accessCodeNotice: {
+    display: "grid",
+    gap: 4,
+    marginTop: 10,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(96,165,250,0.16)",
+    border: "1px solid rgba(147,197,253,0.2)",
+    color: "#dbeafe",
+    fontSize: 13,
+    lineHeight: 1.4,
+    fontWeight: 800,
+  },
+
+  feeBox: {
+    display: "flex",
+    gap: 10,
+    alignItems: "flex-start",
+    marginTop: 10,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.14)",
+    color: "#ffffff",
+    cursor: "pointer",
+    lineHeight: 1.35,
+  },
+
+  feeSmall: {
+    display: "block",
+    marginTop: 4,
+    color: "#cbd5e1",
+    lineHeight: 1.4,
+  },
+
+  totalBoxStrong: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    marginTop: 10,
+    padding: 15,
+    borderRadius: 18,
+    background: "rgba(34,197,94,0.16)",
+    color: "#bbf7d0",
+    fontWeight: 950,
+    fontSize: 18,
+    border: "1px solid rgba(187,247,208,0.18)",
+  },
+
+  totalBoxComplimentary: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    marginTop: 10,
+    padding: 15,
+    borderRadius: 18,
+    background: "rgba(96,165,250,0.18)",
+    color: "#bfdbfe",
+    fontWeight: 950,
+    fontSize: 18,
+    border: "1px solid rgba(147,197,253,0.22)",
+  },
+
+  errorBox: {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 14,
+    background: "#fee2e2",
+    color: "#991b1b",
+    fontWeight: 900,
+  },
+
+  checkout: {
+    marginTop: 14,
+    width: "100%",
+    padding: 15,
+    borderRadius: 999,
+    background: "#1683f8",
+    color: "#ffffff",
+    border: "none",
+    fontWeight: 950,
+    fontSize: 15,
+    boxShadow: "0 16px 30px rgba(22,131,248,0.25)",
+  },
 };
-
-type TicketType = {
-  id: string;
-  name: string;
-  price: number;
-};
-
-type CartItem = {
-  seatId: string;
-  ticketTypeId: string;
-};
-
-type GuestData = {
-  guestName: string;
-  dietaryRequirements: string;
-  menuChoice: string;
-};
-
-type TableShape = "round" | "square" | "rectangle";
-
-type SeatingLayoutJson = Record<string, unknown>;
-
-type TableEntry = {
-  tableNumber: string;
-  tableLabel: string;
-  seats: Seat[];
-  shape: TableShape;
-};
-
-const TICKET_PLACEHOLDER_IMAGE = "/brand/so-ticket-placeholder.png";
-const STRIPE_STANDARD_UK_PERCENT = 0.015;
-const STRIPE_STANDARD_UK_FIXED_CENTS = 20;
-
-function moneyFromCents(cents: number | null | undefined) {
-  return (Number(cents || 0) / 100).toFixed(2);
-}
-
-function safePercent(value: unknown) {
-  const number = Number(value);
-
-  if (!Number.isFinite(number) || number < 0) {
-    return 0;
-  }
-
-  return Math.min(100, number);
-}
-
-function cleanAccessCode(value: string) {
-  return value
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-function cleanAnswer(value: unknown) {
-  return String(value || "").trim();
-}
-
-function cleanPlayer(value: unknown) {
-  return String(value || "").trim();
-}
-
-function livePlayerText(value: unknown) {
-  return String(value || "");
-}
-
-function isValidEmail(value: unknown) {
-  const email = cleanPlayer(value).toLowerCase();
-
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-function normalisePlayerRows(input: {
-  quantity: number;
-  players?: PublicEventCheckoutAddOnPlayer[];
-  buyerName: string;
-  buyerEmail: string;
-}) {
-  const quantity = Math.max(0, Math.floor(Number(input.quantity || 0)));
-  const existingPlayers = Array.isArray(input.players) ? input.players : [];
-
-  return Array.from({ length: quantity }).map((_, index) => {
-    const existing = existingPlayers[index];
-
-    if (existing) {
-      return {
-        name: livePlayerText(existing.name),
-        email: livePlayerText(existing.email),
-      };
-    }
-
-    if (index === 0) {
-      return {
-        name: livePlayerText(input.buyerName),
-        email: livePlayerText(input.buyerEmail),
-      };
-    }
-
-    return {
-      name: "",
-      email: "",
-    };
-  });
-}
-
-function calculatePlatformCommissionCents(
-  subtotalCents: number,
-  platformFeePercent: number,
-) {
-  const subtotal = Math.max(0, Math.round(Number(subtotalCents || 0)));
-  const percent = safePercent(platformFeePercent);
-
-  if (!subtotal || !percent) return 0;
-
-  return Math.max(0, Math.ceil(subtotal * (percent / 100)));
-}
-
-function calculatePlatformFeeCents(
-  subtotalCents: number,
-  platformFeePercent: number,
-) {
-  const subtotal = Math.max(0, Math.round(Number(subtotalCents || 0)));
-
-  if (!subtotal || subtotal <= 0) return 0;
-
-  const platformCommissionCents = calculatePlatformCommissionCents(
-    subtotal,
-    platformFeePercent,
-  );
-
-  const grossTotalCents = Math.ceil(
-    (subtotal + platformCommissionCents + STRIPE_STANDARD_UK_FIXED_CENTS) /
-      (1 - STRIPE_STANDARD_UK_PERCENT),
-  );
-
-  return Math.max(0, grossTotalCents - subtotal);
-}
-
-function normaliseAddOnQuantity(
-  quantity: number,
-  addOn?: PublicEventCheckoutAddOn | null,
-) {
-  const cleanQuantity = Math.max(0, Math.floor(Number(quantity || 0)));
-  const max = Number(addOn?.maxEntriesPerBooking || 0);
-
-  if (Number.isFinite(max) && max > 0) {
-    return Math.min(cleanQuantity, Math.floor(max));
-  }
-
-  return cleanQuantity;
-}
-
-function normaliseAddOnQuantities(input: {
-  checkoutAddOns: PublicEventCheckoutAddOn[];
-  addOnQuantities: Record<string, number>;
-  hasAccessCode: boolean;
-  hasSeatSelection: boolean;
-}) {
-  if (input.hasAccessCode || !input.hasSeatSelection) {
-    return {};
-  }
-
-  return Object.fromEntries(
-    input.checkoutAddOns.map((addOn) => [
-      addOn.type,
-      normaliseAddOnQuantity(input.addOnQuantities[addOn.type] || 0, addOn),
-    ]),
-  );
-}
-
-function addOnNeedsBuyerAnswer(addOn: PublicEventCheckoutAddOn) {
-  return Boolean(
-    addOn.type === "higher_or_lower" &&
-      addOn.legalQuestionEnabled &&
-      cleanAnswer(addOn.legalQuestionText),
-  );
-}
-
-function tableSortValue(value: string | null | undefined) {
-  const number = Number(value);
-  if (Number.isFinite(number)) return number;
-  return Number.MAX_SAFE_INTEGER;
-}
-
-function normaliseShape(value: unknown): TableShape | null {
-  const raw = String(value || "").trim().toLowerCase();
-
-  if (raw === "round" || raw === "circle" || raw === "circular") return "round";
-  if (raw === "square") return "square";
-  if (raw === "rectangle" || raw === "rectangular" || raw === "long") {
-    return "rectangle";
-  }
-
-  return null;
-}
-
-function readShapeFromObject(
-  value: unknown,
-  tableNumber: string,
-  tableLabel: string,
-): TableShape | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-
-  const objectValue = value as Record<string, unknown>;
-
-  return (
-    normaliseShape(objectValue[tableNumber]) ||
-    normaliseShape(objectValue[tableLabel]) ||
-    normaliseShape(objectValue[`Table ${tableNumber}`]) ||
-    normaliseShape(objectValue.shape) ||
-    normaliseShape(objectValue.tableShape) ||
-    normaliseShape(objectValue.table_shape)
-  );
-}
-
 function getTableShapeForGroup({
   seatingLayoutJson,
   tableNumber,
@@ -300,6 +1177,7 @@ function seatHoverLabel(
 ${priceLine}
 Status: ${statusLabel(seat.status)}`;
 }
+
 function groupLabel(seat: Seat) {
   if (seat.table_name) return seat.table_name;
   return `Table ${seat.table_number || "Unassigned"}`;
@@ -534,7 +1412,6 @@ function tablePlateStyle(shape: TableShape): CSSProperties {
     borderRadius: 999,
   };
 }
-
 function getVisibleTableEntries<T extends { tableNumber: string }>(
   tableEntries: T[],
   activeIndex: number,
@@ -671,7 +1548,8 @@ export default function PublicTableSelector({
         };
       });
   }, [groupedTables, seatingLayoutJson]);
-    const activeTable =
+
+  const activeTable =
     tableEntries.find((table) => table.tableNumber === selectedTableNumber) ||
     tableEntries[0] ||
     null;
@@ -769,8 +1647,7 @@ export default function PublicTableSelector({
 
   const hasSeatSelection = cartItems.length > 0;
   const addOnsLocked = hasAccessCode || !hasSeatSelection;
-
-  const addOnLockedTitle = hasAccessCode
+    const addOnLockedTitle = hasAccessCode
     ? "Add-ons are not used with access-code bookings"
     : "Choose at least one table seat first";
 
@@ -849,7 +1726,8 @@ export default function PublicTableSelector({
       },
     }));
   }
-    function updateAddOnQuantity(
+
+  function updateAddOnQuantity(
     addOn: PublicEventCheckoutAddOn,
     nextQuantity: number,
   ) {
@@ -1275,52 +2153,143 @@ export default function PublicTableSelector({
                 className="public-table-selector-mobile-table-cards"
                 style={styles.mobileTableCards}
               >
-                <div style={styles.mobileTableCardsHeader}>
-                  <span style={styles.mobileStepPill}>Choose a table</span>
-                  <strong style={styles.mobileTableCardsTitle}>
-                    {overallAvailableSeats} seat
-                    {overallAvailableSeats === 1 ? "" : "s"} available
-                  </strong>
-                </div>
+                {isLargeTableEvent ? (
+                  <div style={styles.mobileLargeTableFinder}>
+                    <span style={styles.mobileStepPill}>Find your table</span>
 
-                <div style={styles.mobileTableCardGrid}>
-                  {tableEntries.map((table, index) => {
-                    const counts = getTableSeatCounts(table, selectedSeatIds);
-                    const active =
-                      table.tableNumber === activeTable.tableNumber;
-                    const isSoldOut = counts.available === 0;
+                    <strong style={styles.mobileTableCardsTitle}>
+                      {tableEntries.length} tables · {overallAvailableSeats}{" "}
+                      seat{overallAvailableSeats === 1 ? "" : "s"} available
+                    </strong>
 
-                    return (
+                    <span style={styles.mobileLargeTableFinderText}>
+                      Use the selector to jump straight to a table. This keeps
+                      large gala and ballroom events easy to use on mobile.
+                    </span>
+
+                    <label style={styles.mobileFinderField}>
+                      <span style={styles.mobileFinderLabel}>Select table</span>
+                      <select
+                        value={activeTable.tableNumber}
+                        onChange={(event) =>
+                          chooseMobileTable(event.target.value)
+                        }
+                        style={styles.mobileFinderSelect}
+                      >
+                        {tableEntries.map((table, index) => {
+                          const counts = getTableSeatCounts(
+                            table,
+                            selectedSeatIds,
+                          );
+
+                          return (
+                            <option
+                              key={table.tableNumber}
+                              value={table.tableNumber}
+                            >
+                              Table {index + 1} of {tableEntries.length} ·{" "}
+                              {table.tableLabel} · {counts.available} available
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </label>
+
+                    <div style={styles.mobileFinderNav}>
                       <button
-                        key={table.tableNumber}
                         type="button"
-                        onClick={() => chooseMobileTable(table.tableNumber)}
+                        onClick={() =>
+                          goToTableByIndex(resolvedActiveTableIndex - 1)
+                        }
+                        disabled={!canGoPreviousTable}
                         style={{
-                          ...styles.mobileTableCard,
-                          ...(active ? styles.mobileTableCardActive : {}),
-                          opacity: isSoldOut && !active ? 0.68 : 1,
+                          ...styles.mobileFinderNavButton,
+                          opacity: canGoPreviousTable ? 1 : 0.45,
+                          cursor: canGoPreviousTable
+                            ? "pointer"
+                            : "not-allowed",
                         }}
                       >
-                        <span style={styles.mobileTableCardKicker}>
-                          Table {index + 1}
-                        </span>
-                        <strong style={styles.mobileTableCardTitle}>
-                          {table.tableLabel}
-                        </strong>
-                        <span style={styles.mobileTableCardMeta}>
-                          {counts.available > 0
-                            ? `${counts.available} available`
-                            : "Sold out / unavailable"}
-                        </span>
-                        {counts.selected > 0 ? (
-                          <span style={styles.mobileTableCardSelected}>
-                            {counts.selected} selected
-                          </span>
-                        ) : null}
+                        ← Previous
                       </button>
-                    );
-                  })}
-                </div>
+
+                      <div style={styles.mobileFinderPosition}>
+                        <span>Current table</span>
+                        <strong>
+                          {resolvedActiveTableIndex + 1} of{" "}
+                          {tableEntries.length}
+                        </strong>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          goToTableByIndex(resolvedActiveTableIndex + 1)
+                        }
+                        disabled={!canGoNextTable}
+                        style={{
+                          ...styles.mobileFinderNavButton,
+                          opacity: canGoNextTable ? 1 : 0.45,
+                          cursor: canGoNextTable ? "pointer" : "not-allowed",
+                        }}
+                      >
+                        Next →
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div style={styles.mobileTableCardsHeader}>
+                      <span style={styles.mobileStepPill}>Choose a table</span>
+                      <strong style={styles.mobileTableCardsTitle}>
+                        {overallAvailableSeats} seat
+                        {overallAvailableSeats === 1 ? "" : "s"} available
+                      </strong>
+                    </div>
+
+                    <div style={styles.mobileTableCardGrid}>
+                      {tableEntries.map((table, index) => {
+                        const counts = getTableSeatCounts(
+                          table,
+                          selectedSeatIds,
+                        );
+                        const active =
+                          table.tableNumber === activeTable.tableNumber;
+                        const isSoldOut = counts.available === 0;
+
+                        return (
+                          <button
+                            key={table.tableNumber}
+                            type="button"
+                            onClick={() => chooseMobileTable(table.tableNumber)}
+                            style={{
+                              ...styles.mobileTableCard,
+                              ...(active ? styles.mobileTableCardActive : {}),
+                              opacity: isSoldOut && !active ? 0.68 : 1,
+                            }}
+                          >
+                            <span style={styles.mobileTableCardKicker}>
+                              Table {index + 1}
+                            </span>
+                            <strong style={styles.mobileTableCardTitle}>
+                              {table.tableLabel}
+                            </strong>
+                            <span style={styles.mobileTableCardMeta}>
+                              {counts.available > 0
+                                ? `${counts.available} available`
+                                : "Sold out / unavailable"}
+                            </span>
+                            {counts.selected > 0 ? (
+                              <span style={styles.mobileTableCardSelected}>
+                                {counts.selected} selected
+                              </span>
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
               </section>
 
               <div
@@ -1369,8 +2338,7 @@ export default function PublicTableSelector({
                         </select>
                       </label>
                     </div>
-
-                    <div
+                                        <div
                       className="public-table-selector-nav-row"
                       style={styles.tableNavRow}
                     >
@@ -1476,7 +2444,8 @@ export default function PublicTableSelector({
                       ) : null}
                     </div>
                   </section>
-                                    <div
+
+                  <div
                     className="public-table-selector-active-summary"
                     style={styles.activeSummary}
                   >
@@ -2311,6 +3280,82 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #bfdbfe",
     fontSize: 11,
     fontWeight: 950,
+  },
+
+  mobileLargeTableFinder: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    borderRadius: 20,
+    background:
+      "linear-gradient(135deg, #ffffff 0%, #eff6ff 58%, #dbeafe 100%)",
+    border: "1px solid #bfdbfe",
+    boxShadow: "0 12px 28px rgba(37,99,235,0.10)",
+  },
+
+  mobileLargeTableFinderText: {
+    color: "#475569",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 750,
+  },
+
+  mobileFinderField: {
+    display: "grid",
+    gap: 6,
+    minWidth: 0,
+  },
+
+  mobileFinderLabel: {
+    color: "#334155",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+
+  mobileFinderSelect: {
+    width: "100%",
+    minHeight: 48,
+    padding: "10px 12px",
+    borderRadius: 15,
+    border: "1px solid #93c5fd",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 15,
+    fontWeight: 850,
+    boxSizing: "border-box",
+  },
+
+  mobileFinderNav: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(100px, 0.9fr) minmax(0, 1fr)",
+    gap: 8,
+    alignItems: "stretch",
+  },
+
+  mobileFinderNavButton: {
+    minHeight: 44,
+    borderRadius: 14,
+    border: "1px solid #bfdbfe",
+    background: "#ffffff",
+    color: "#1d4ed8",
+    fontSize: 12,
+    fontWeight: 950,
+    padding: "8px 10px",
+  },
+
+  mobileFinderPosition: {
+    display: "grid",
+    gap: 2,
+    alignContent: "center",
+    justifyItems: "center",
+    minHeight: 44,
+    padding: "8px 10px",
+    borderRadius: 14,
+    background: "#0f172a",
+    color: "#fef3c7",
+    fontSize: 11,
+    fontWeight: 850,
+    textAlign: "center",
   },
 
   tablePicker: {
