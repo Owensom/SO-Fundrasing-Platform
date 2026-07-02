@@ -1449,6 +1449,7 @@ const responsiveStyles = `
 
   .public-event-page .heroContentCard {
     width: 100% !important;
+    max-width: 100% !important;
     padding: 16px !important;
     border-radius: 24px !important;
     background: rgba(15, 23, 42, 0.84) !important;
@@ -1694,10 +1695,11 @@ const styles: Record<string, CSSProperties> = {
   heroContentCard: {
     display: "grid",
     gap: 0,
-    width: "min(100%, 980px)",
+    width: "100%",
+    maxWidth: "100%",
     padding: 18,
     borderRadius: 28,
-    background: "rgba(15,23,42,0.46)",
+    background: "rgba(15,23,42,0.42)",
     border: "1px solid rgba(255,255,255,0.16)",
     boxShadow:
       "0 28px 64px rgba(15,23,42,0.28), inset 0 1px 0 rgba(255,255,255,0.10)",
