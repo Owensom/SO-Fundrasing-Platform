@@ -402,11 +402,13 @@ export default function PublicReservedSeatSelector({
   checkoutAddOns = [],
 }: {
   eventId: string;
+  eventType?: string;
   seats: Seat[];
   ticketTypes: TicketType[];
   currency: string;
   platformFeePercent?: number;
   menuOptions?: string[];
+  initialSeatingLayout?: Record<string, unknown> | null;
   checkoutAddOns?: PublicEventCheckoutAddOn[];
 }) {
   const [buyerName, setBuyerName] = useState("");
