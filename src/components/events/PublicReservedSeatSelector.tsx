@@ -37,6 +37,16 @@ type GuestData = {
   tableName: string;
 };
 
+type RowEntry = {
+  section: string;
+  row: string;
+  rowKey: string;
+  seats: Seat[];
+  available: number;
+  unavailable: number;
+  selected: number;
+};
+
 const TICKET_PLACEHOLDER_IMAGE = "/brand/so-ticket-placeholder.png";
 const STRIPE_STANDARD_UK_PERCENT = 0.015;
 const STRIPE_STANDARD_UK_FIXED_CENTS = 20;
@@ -328,6 +338,59 @@ function publicSeatStyle({
     cursor: "pointer",
   };
 }
+function statusLabel(status: string) {
+  if (status === "reserved") return "Reserved";
+  if (status === "sold") return "Sold";
+  if (status === "blocked") return "Blocked";
+  return "Available";
+}
+
+function seatHoverLabel(
+  seat: Seat,
+  ticketType: TicketType | undefined,
+  currency: string,
+) {
+  const priceLine = ticketType
+    ? `${ticketType.name} — ${currency} ${moneyFromCents(ticketType.price)}`
+    : "Ticket price unavailable";
+
+  return `${seatLabel(seat)}
+${priceLine}
+Status: ${statusLabel(seat.status)}`;
+}
+
+function scrollToSelectorTarget(id: string) {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  document.getElementById(id)?.scrollIntoView({
+    behavior: "smooth",
+    block: "start",
+  });
+}
+
+function getVisibleRowEntries<T extends { rowKey: string }>(
+  rowEntries: T[],
+  activeIndex: number,
+) {
+  if (rowEntries.length <= 12) {
+    return rowEntries;
+  }
+
+  const windowSize = 7;
+  const sideCount = Math.floor(windowSize / 2);
+  const start = Math.max(
+    0,
+    Math.min(
+      activeIndex - sideCount,
+      Math.max(0, rowEntries.length - windowSize),
+    ),
+  );
+  const end = Math.min(rowEntries.length, start + windowSize);
+
+  return rowEntries.slice(start, end);
+}
 
 export default function PublicReservedSeatSelector({
   eventId,
@@ -336,23 +399,21 @@ export default function PublicReservedSeatSelector({
   currency,
   platformFeePercent = 0,
   menuOptions = [],
-  initialSeatingLayout = {},
   checkoutAddOns = [],
 }: {
   eventId: string;
-  eventType?: string;
   seats: Seat[];
   ticketTypes: TicketType[];
   currency: string;
   platformFeePercent?: number;
   menuOptions?: string[];
-  initialSeatingLayout?: Record<string, number>;
   checkoutAddOns?: PublicEventCheckoutAddOn[];
 }) {
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [guestData, setGuestData] = useState<Record<string, GuestData>>({});
+  const [selectedRowKey, setSelectedRowKey] = useState("");
   const [addOnQuantities, setAddOnQuantities] = useState<Record<string, number>>(
     {},
   );
@@ -372,14 +433,92 @@ export default function PublicReservedSeatSelector({
 
   const selectedSeatIds = cartItems.map((item) => item.seatId);
 
-  const rowSeats = useMemo(
-    () => seats.filter((seat) => seat.row_label && !seat.table_number),
+  const publicSeats = useMemo(
+    () =>
+      seats
+        .filter((seat) => seat.row_label || seat.seat_number || seat.section)
+        .slice()
+        .sort((a, b) => {
+          const sectionSort = String(a.section || "").localeCompare(
+            String(b.section || ""),
+          );
+
+          if (sectionSort !== 0) return sectionSort;
+
+          const rowSort = numericSort(a.row_label, b.row_label);
+
+          if (rowSort !== 0) return rowSort;
+
+          return numericSort(a.seat_number, b.seat_number);
+        }),
     [seats],
   );
 
-  const groupedSections = useMemo(() => {
-    return groupBy(rowSeats, (seat) => seat.section || "Main");
-  }, [rowSeats]);
+  const rowEntries = useMemo<RowEntry[]>(() => {
+    const grouped = groupBy(publicSeats, rowKeyForSeat);
+
+    return Object.entries(grouped)
+      .map(([rowKey, rowSeats]) => {
+        const sortedSeats = rowSeats.slice().sort((a, b) => {
+          return numericSort(a.seat_number, b.seat_number);
+        });
+
+        return {
+          section: sortedSeats[0]?.section || "General",
+          row: sortedSeats[0]?.row_label || "Unassigned",
+          rowKey,
+          seats: sortedSeats,
+          available: sortedSeats.filter((seat) => seat.status === "available")
+            .length,
+          unavailable: sortedSeats.filter(
+            (seat) => seat.status !== "available",
+          ).length,
+          selected: sortedSeats.filter((seat) =>
+            selectedSeatIds.includes(seat.id),
+          ).length,
+        };
+      })
+      .sort((a, b) => {
+        const sectionSort = a.section.localeCompare(b.section);
+
+        if (sectionSort !== 0) return sectionSort;
+
+        return numericSort(a.row, b.row);
+      });
+  }, [publicSeats, selectedSeatIds]);
+
+  const activeRow =
+    rowEntries.find((row) => row.rowKey === selectedRowKey) ||
+    rowEntries[0] ||
+    null;
+
+  const resolvedActiveRowIndex = activeRow
+    ? Math.max(
+        0,
+        rowEntries.findIndex((row) => row.rowKey === activeRow.rowKey),
+      )
+    : 0;
+
+  const visibleRowEntries = getVisibleRowEntries(
+    rowEntries,
+    resolvedActiveRowIndex,
+  );
+
+  const isLargeSeatEvent = rowEntries.length > 12;
+  const canGoPreviousRow = resolvedActiveRowIndex > 0;
+  const canGoNextRow = resolvedActiveRowIndex < rowEntries.length - 1;
+
+  const totalAvailableSeats = rowEntries.reduce(
+    (sum, row) => sum + row.available,
+    0,
+  );
+
+  const selectedSeatLabels = useMemo(() => {
+    return cartItems
+      .map((item) => seats.find((seat) => seat.id === item.seatId))
+      .filter(Boolean)
+      .map((seat) => seatLabel(seat as Seat));
+  }, [cartItems, seats]);
 
   const cartSeats = useMemo(() => {
     return cartItems
@@ -438,8 +577,7 @@ export default function PublicReservedSeatSelector({
       };
     })
     .filter((addOn) => addOn.quantity > 0);
-
-  const ticketTotal = cartSeats.reduce(
+    const ticketTotal = cartSeats.reduce(
     (sum, item) => sum + Number(item.ticketType.price || 0),
     0,
   );
@@ -470,6 +608,21 @@ export default function PublicReservedSeatSelector({
     (sum, addOn) => sum + addOn.quantity,
     0,
   );
+
+  function goToRowByIndex(nextIndex: number) {
+    const row = rowEntries[nextIndex];
+
+    if (!row) {
+      return;
+    }
+
+    setSelectedRowKey(row.rowKey);
+  }
+
+  function chooseMobileRow(rowKey: string) {
+    setSelectedRowKey(rowKey);
+    scrollToSelectorTarget("public-reserved-active-row");
+  }
 
   function updateGuestData(seatId: string, patch: Partial<GuestData>) {
     setGuestData((current) => ({
@@ -606,9 +759,9 @@ export default function PublicReservedSeatSelector({
     if (seat.status !== "available") return;
 
     setCartItems((current) => {
-      const exists = current.find((item) => item.seatId === seat.id);
+      const existing = current.find((item) => item.seatId === seat.id);
 
-      if (exists) {
+      if (existing) {
         return current.filter((item) => item.seatId !== seat.id);
       }
 
@@ -670,6 +823,9 @@ export default function PublicReservedSeatSelector({
           accessCode: cleanedAccessCode || null,
           addOns: selectedAddOns,
           items: cartItems.map((item) => {
+            const seat = seats.find(
+              (currentSeat) => currentSeat.id === item.seatId,
+            );
             const data = guestData[item.seatId] || getDefaultGuestData();
 
             return {
@@ -679,7 +835,7 @@ export default function PublicReservedSeatSelector({
               dietary: data.dietaryRequirements,
               dietaryRequirements: data.dietaryRequirements,
               menuChoice: data.menuChoice,
-              tableName: data.tableName,
+              tableName: data.tableName || seat?.table_number || "",
             };
           }),
         }),
@@ -699,9 +855,8 @@ export default function PublicReservedSeatSelector({
       setIsCheckingOut(false);
     }
   }
-
-  return (
-    <>
+    return (
+    <div className="public-reserved-selector-root" style={styles.root}>
       <style>
         {`
           @media (max-width: 980px) {
@@ -709,21 +864,23 @@ export default function PublicReservedSeatSelector({
               grid-template-columns: 1fr !important;
             }
 
-            .public-reserved-selector-map-panel,
-            .public-reserved-selector-cart {
-              min-height: auto !important;
-            }
-
             .public-reserved-selector-cart {
               position: static !important;
             }
 
-            .public-reserved-selector-cart-grid {
+            .public-reserved-selector-cart-grid,
+            .public-reserved-selector-picker-header,
+            .public-reserved-selector-active-summary,
+            .public-reserved-selector-nav-row {
               grid-template-columns: 1fr !important;
             }
           }
 
           @media (max-width: 620px) {
+            .public-reserved-selector-shell {
+              gap: 12px !important;
+            }
+
             .public-reserved-selector-map-panel,
             .public-reserved-selector-cart {
               padding: 12px !important;
@@ -735,188 +892,601 @@ export default function PublicReservedSeatSelector({
               font-size: 24px !important;
             }
 
+            .public-reserved-selector-workflow-guide {
+              grid-template-columns: 1fr !important;
+              gap: 10px !important;
+              padding: 12px !important;
+            }
+
+            .public-reserved-selector-workflow-badge {
+              width: fit-content !important;
+            }
+
+            .public-reserved-selector-map-header {
+              display: none !important;
+            }
+
+            .public-reserved-selector-mobile-row-cards {
+              display: grid !important;
+            }
+
+            .public-reserved-selector-desktop-row-picker {
+              display: none !important;
+            }
+
+            .public-reserved-selector-active-summary {
+              grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+              gap: 8px !important;
+            }
+
             .public-reserved-selector-seat-scroll {
               padding: 10px !important;
-              border-radius: 14px !important;
+              border-radius: 16px !important;
+              overflow-x: hidden !important;
+              overflow-y: visible !important;
             }
 
-            .public-reserved-selector-row-line {
-              grid-template-columns: 58px 1fr !important;
-              gap: 7px !important;
+            .public-reserved-selector-row-card {
+              width: 100% !important;
+              min-width: 0 !important;
+              padding: 12px !important;
+              border-radius: 18px !important;
+              overflow: hidden !important;
             }
 
-            .public-reserved-selector-row-label {
-              font-size: 10px !important;
-              min-height: 34px !important;
+            .public-reserved-selector-desktop-seat-row {
+              display: none !important;
             }
 
-            .public-reserved-selector-stage {
-              min-width: 620px !important;
+            .public-reserved-selector-mobile-seat-panel {
+              display: grid !important;
+            }
+
+            .public-reserved-selector-mobile-seat-grid {
+              grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+            }
+
+            .public-reserved-selector-mobile-seat-button {
+              min-height: 54px !important;
+              min-width: 0 !important;
+              width: 100% !important;
+              height: auto !important;
+              border-radius: 16px !important;
+              font-size: 15px !important;
+            }
+
+            .public-reserved-selector-helper-notice {
+              display: none !important;
+            }
+
+            .public-reserved-selector-mobile-summary {
+              display: flex !important;
+              position: sticky !important;
+              bottom: 10px !important;
+              z-index: 20 !important;
+            }
+
+            .public-reserved-selector-mobile-locked-details {
+              display: none !important;
+            }
+
+            .public-reserved-selector-cart {
+              padding-bottom: 14px !important;
+            }
+
+            .public-reserved-selector-cart-item {
+              padding: 12px !important;
+              border-radius: 16px !important;
+            }
+
+            .public-reserved-selector-cart-item-header {
+              flex-direction: column !important;
+              gap: 8px !important;
+            }
+
+            .public-reserved-selector-remove-button {
+              width: 100% !important;
+              min-height: 40px !important;
+              border-radius: 999px !important;
+              background: rgba(254,202,202,0.12) !important;
+              border: 1px solid rgba(254,202,202,0.22) !important;
+            }
+
+            .public-reserved-selector-checkout {
+              border-radius: 18px !important;
+              min-height: 52px !important;
             }
           }
         `}
       </style>
 
       <div className="public-reserved-selector-shell" style={styles.shell}>
-        <div className="public-reserved-selector-map-panel" style={styles.mapPanel}>
-          <div style={styles.workflowGuide}>
-            <span style={styles.workflowBadge}>Step 1</span>
+        <div
+          className="public-reserved-selector-map-panel"
+          style={styles.mapPanel}
+        >
+          <div
+            className="public-reserved-selector-workflow-guide"
+            style={styles.workflowGuide}
+          >
+            <span
+              className="public-reserved-selector-workflow-badge"
+              style={styles.workflowBadge}
+            >
+              Step 1
+            </span>
             <div>
-              <h3 style={styles.workflowTitle}>Choose your seat first</h3>
+              <h3 style={styles.workflowTitle}>Choose your row first</h3>
               <p style={styles.workflowText}>
-                Select at least one available seat. Add-ons become available
-                after your seat choice because they are linked to your event
-                booking.
+                Pick a row, then choose available seats. Guest details, optional
+                extras and checkout appear once your seat choice has started.
               </p>
             </div>
           </div>
 
-          <div style={styles.mapHeader}>
+          <div
+            className="public-reserved-selector-map-header"
+            style={styles.mapHeader}
+          >
             <div>
-              <h3 className="public-reserved-selector-map-title" style={styles.mapTitle}>
-                Seat map
+              <h3
+                className="public-reserved-selector-map-title"
+                style={styles.mapTitle}
+              >
+                Seat plan
               </h3>
               <p style={styles.mapText}>
-                Choose your preferred seats from the layout below.
+                Choose a row, then select available seats from that row.
               </p>
             </div>
 
             <div style={styles.legend}>
-              <Legend color="#dcfce7" label="Available" />
-              <Legend color="#bae6fd" label="Selected" />
-              <Legend color="#334155" label="Blocked" />
-              <Legend color="#fef3c7" label="Reserved" />
-              <Legend color="#fecaca" label="Sold" />
+              <SeatLegend color="#dcfce7" label="Available" />
+              <SeatLegend color="#bae6fd" label="Selected" />
+              <SeatLegend color="#334155" label="Blocked" />
+              <SeatLegend color="#fef3c7" label="Reserved" />
+              <SeatLegend color="#fecaca" label="Sold" />
             </div>
           </div>
 
-          <div style={styles.stageWrap}>
-            <div className="public-reserved-selector-stage" style={styles.stage}>
-              STAGE
+          {rowEntries.length === 0 || !activeRow ? (
+            <div style={styles.emptyLight}>
+              <strong>No reserved seats available yet</strong>
+              <p>Seats may not have been released yet.</p>
             </div>
-          </div>
+          ) : (
+            <>
+              <section
+                className="public-reserved-selector-mobile-row-cards"
+                style={styles.mobileRowCards}
+              >
+                <div style={styles.mobileRowCardsHeader}>
+                  <span style={styles.mobileStepPill}>Choose a row</span>
+                  <strong style={styles.mobileRowCardsTitle}>
+                    {totalAvailableSeats} seat
+                    {totalAvailableSeats === 1 ? "" : "s"} available
+                  </strong>
+                </div>
 
-          <div className="public-reserved-selector-seat-scroll" style={styles.seatMapScroll}>
-            {Object.entries(groupedSections)
-              .sort(([a], [b]) => numericSort(a, b))
-              .map(([section, sectionSeats]) => {
-                const rows = groupBy(
-                  sectionSeats,
-                  (seat) => seat.row_label || "No row",
-                );
+                <div style={styles.mobileRowCardGrid}>
+                  {rowEntries.map((row, index) => {
+                    const active = row.rowKey === activeRow.rowKey;
+                    const isSoldOut = row.available === 0;
 
-                const rowEntries = Object.entries(rows).sort(([a], [b]) =>
-                  numericSort(a, b),
-                );
+                    return (
+                      <button
+                        key={row.rowKey}
+                        type="button"
+                        onClick={() => chooseMobileRow(row.rowKey)}
+                        style={{
+                          ...styles.mobileRowCard,
+                          ...(active ? styles.mobileRowCardActive : {}),
+                          opacity: isSoldOut && !active ? 0.68 : 1,
+                        }}
+                      >
+                        <span style={styles.mobileRowCardKicker}>
+                          Row {index + 1}
+                        </span>
+                        <strong style={styles.mobileRowCardTitle}>
+                          {row.section} · Row {row.row}
+                        </strong>
+                        <span style={styles.mobileRowCardMeta}>
+                          {row.available > 0
+                            ? `${row.available} available`
+                            : "Sold out / unavailable"}
+                        </span>
+                        {row.selected > 0 ? (
+                          <span style={styles.mobileRowCardSelected}>
+                            {row.selected} selected
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
 
-                const maxUnits = Math.max(
-                  1,
-                  ...rowEntries.map(([, currentRowSeats]) =>
-                    rowVisualUnits(currentRowSeats),
-                  ),
-                );
+              <div
+                className="public-reserved-selector-seat-scroll"
+                style={styles.seatScroll}
+              >
+                <div style={styles.singleRowStack}>
+                  <section
+                    className="public-reserved-selector-desktop-row-picker"
+                    style={styles.rowPicker}
+                  >
+                    <div
+                      className="public-reserved-selector-picker-header"
+                      style={styles.rowPickerHeader}
+                    >
+                      <div>
+                        <p style={styles.rowPickerEyebrow}>Choose row</p>
+                        <h4 style={styles.rowPickerTitle}>
+                          {activeRow.section} · Row {activeRow.row}
+                        </h4>
+                        <p style={styles.rowPickerText}>
+                          Showing one row at a time. Seats already selected from
+                          other rows remain in your booking summary.
+                        </p>
+                      </div>
 
-                return (
-                  <div key={section} style={styles.groupBlock}>
-                    <h4 style={styles.groupTitle}>{section}</h4>
-
-                    {rowEntries.map(([row, currentRowSeats]) => {
-                      const actualKey =
-                        currentRowSeats.length > 0
-                          ? rowKeyForSeat(currentRowSeats[0])
-                          : `${section === "Main" ? "" : section}|${row}`;
-
-                      const sortedRowSeats = currentRowSeats
-                        .slice()
-                        .sort((a, b) => numericSort(a.seat_number, b.seat_number));
-
-                      const autoOffset = Math.max(
-                        0,
-                        Math.floor(
-                          (maxUnits - rowVisualUnits(currentRowSeats)) / 2,
-                        ),
-                      );
-
-                      const manualOffset = initialSeatingLayout[actualKey] || 0;
-                      const totalOffset = Math.max(0, autoOffset + manualOffset);
-
-                      return (
-                        <div
-                          key={`${section}-${row}`}
-                          className="public-reserved-selector-row-line"
-                          style={styles.rowLine}
+                      <label style={styles.rowSelectWrap}>
+                        <span style={styles.labelDark}>Current row</span>
+                        <select
+                          className="public-reserved-selector-row-select"
+                          value={activeRow.rowKey}
+                          onChange={(event) =>
+                            setSelectedRowKey(event.target.value)
+                          }
+                          style={styles.rowSelect}
                         >
-                          <div
-                            className="public-reserved-selector-row-label"
-                            style={styles.rowButton}
-                          >
-                            Row {row}
-                          </div>
+                          {rowEntries.map((row, index) => (
+                            <option key={row.rowKey} value={row.rowKey}>
+                              Row {index + 1} of {rowEntries.length} ·{" "}
+                              {row.section} · Row {row.row} ·{" "}
+                              {row.seats.length} seats
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
 
-                          <div
+                    <div
+                      className="public-reserved-selector-nav-row"
+                      style={styles.rowNavRow}
+                    >
+                      <button
+                        type="button"
+                        className="public-reserved-selector-nav-button"
+                        onClick={() =>
+                          goToRowByIndex(resolvedActiveRowIndex - 1)
+                        }
+                        disabled={!canGoPreviousRow}
+                        style={{
+                          ...styles.rowNavButton,
+                          opacity: canGoPreviousRow ? 1 : 0.45,
+                          cursor: canGoPreviousRow
+                            ? "pointer"
+                            : "not-allowed",
+                        }}
+                      >
+                        ← Previous row
+                      </button>
+
+                      <div
+                        className="public-reserved-selector-position-card"
+                        style={styles.rowPositionCard}
+                      >
+                        <span style={styles.rowPositionLabel}>
+                          {isLargeSeatEvent ? "Large seat event" : "Row"}
+                        </span>
+                        <strong style={styles.rowPositionValue}>
+                          Row {resolvedActiveRowIndex + 1} of{" "}
+                          {rowEntries.length}
+                        </strong>
+                        <span style={styles.rowPositionHint}>
+                          {isLargeSeatEvent
+                            ? "Use the dropdown for direct access to any row."
+                            : "Use the row shortcuts below."}
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="public-reserved-selector-nav-button"
+                        onClick={() =>
+                          goToRowByIndex(resolvedActiveRowIndex + 1)
+                        }
+                        disabled={!canGoNextRow}
+                        style={{
+                          ...styles.rowNavButton,
+                          opacity: canGoNextRow ? 1 : 0.45,
+                          cursor: canGoNextRow ? "pointer" : "not-allowed",
+                        }}
+                      >
+                        Next row →
+                      </button>
+                    </div>
+                                        <div
+                      className="public-reserved-selector-row-pills"
+                      style={styles.rowPills}
+                    >
+                      {isLargeSeatEvent ? (
+                        <span style={styles.windowedPillsLabel}>
+                          Nearby rows
+                        </span>
+                      ) : null}
+
+                      {visibleRowEntries.map((row) => {
+                        const active = row.rowKey === activeRow.rowKey;
+
+                        return (
+                          <button
+                            key={row.rowKey}
+                            type="button"
+                            className="public-reserved-selector-row-pill"
+                            onClick={() => setSelectedRowKey(row.rowKey)}
                             style={{
-                              ...styles.seatLine,
-                              paddingLeft: totalOffset * 42,
+                              ...styles.rowPill,
+                              ...(active ? styles.rowPillActive : {}),
                             }}
                           >
-                            {sortedRowSeats.map((seat) => {
-                              const ticketType = ticketTypes.find(
-                                (item) => item.id === seat.ticket_type_id,
-                              );
+                            <span>{row.row}</span>
+                            {row.selected > 0 ? (
+                              <strong style={styles.rowPillBadge}>
+                                {row.selected}
+                              </strong>
+                            ) : null}
+                          </button>
+                        );
+                      })}
 
-                              const selected = selectedSeatIds.includes(seat.id);
-                              const unavailable = seat.status !== "available";
+                      {isLargeSeatEvent ? (
+                        <span style={styles.windowedPillsHint}>
+                          Showing {visibleRowEntries.length} of{" "}
+                          {rowEntries.length}
+                        </span>
+                      ) : null}
+                    </div>
+                  </section>
 
-                              return (
-                                <span key={seat.id} style={styles.seatWrap}>
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleSeat(seat)}
-                                    disabled={unavailable}
-                                    title={
-                                      seat.status === "blocked"
-                                        ? `${seatLabel(seat)} — Blocked`
-                                        : seat.status === "reserved"
-                                          ? `${seatLabel(seat)} — Reserved`
-                                          : seat.status === "sold"
-                                            ? `${seatLabel(seat)} — Sold`
-                                            : ticketType?.name
-                                              ? `${seatLabel(seat)} — ${ticketType.name}`
-                                              : seatLabel(seat)
-                                    }
-                                    style={publicSeatStyle({
-                                      selected,
-                                      ticketType,
-                                      ticketTypes,
-                                      status: seat.status,
-                                    })}
-                                  >
-                                    {seat.seat_number}
-                                  </button>
+                  <div
+                    className="public-reserved-selector-active-summary"
+                    style={styles.activeSummary}
+                  >
+                    <div style={styles.activeSummaryCard}>
+                      <span style={styles.activeSummaryLabel}>Seats</span>
+                      <strong style={styles.activeSummaryValue}>
+                        {activeRow.seats.length}
+                      </strong>
+                    </div>
 
-                                  {seat.aisle_after ? (
-                                    <span style={styles.aisle}>Aisle</span>
-                                  ) : null}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
+                    <div style={styles.activeSummaryCard}>
+                      <span style={styles.activeSummaryLabel}>Available</span>
+                      <strong style={styles.activeSummaryValue}>
+                        {activeRow.available}
+                      </strong>
+                    </div>
+
+                    <div style={styles.activeSummaryCard}>
+                      <span style={styles.activeSummaryLabel}>Unavailable</span>
+                      <strong style={styles.activeSummaryValue}>
+                        {activeRow.unavailable}
+                      </strong>
+                    </div>
+
+                    <div style={styles.activeSummaryCard}>
+                      <span style={styles.activeSummaryLabel}>Selected</span>
+                      <strong style={styles.activeSummaryValue}>
+                        {activeRow.selected}
+                      </strong>
+                    </div>
                   </div>
-                );
-              })}
+
+                  <section
+                    id="public-reserved-active-row"
+                    className="public-reserved-selector-row-card"
+                    style={styles.rowCard}
+                  >
+                    <div style={styles.rowHeader}>
+                      <div>
+                        <h4 style={styles.rowTitle}>
+                          {activeRow.section} · Row {activeRow.row}
+                        </h4>
+                        <p style={styles.rowMeta}>
+                          {activeRow.seats.length} seat
+                          {activeRow.seats.length === 1 ? "" : "s"} •{" "}
+                          {activeRow.available} available
+                        </p>
+                      </div>
+                    </div>
+
+                    <div
+                      className="public-reserved-selector-desktop-seat-row"
+                      style={styles.desktopSeatRowWrap}
+                    >
+                      <div
+                        style={{
+                          ...styles.desktopSeatRow,
+                          minWidth: Math.max(
+                            420,
+                            rowVisualUnits(activeRow.seats) * 42,
+                          ),
+                        }}
+                      >
+                        <span style={styles.rowLabelPlate}>
+                          Row {activeRow.row}
+                        </span>
+
+                        {activeRow.seats.map((seat, index) => {
+                          const selected = selectedSeatIds.includes(seat.id);
+                          const ticketType = ticketTypes.find(
+                            (item) => item.id === seat.ticket_type_id,
+                          );
+
+                          return (
+                            <span key={seat.id} style={styles.seatWithAisle}>
+                              <button
+                                type="button"
+                                onClick={() => toggleSeat(seat)}
+                                disabled={seat.status !== "available"}
+                                title={seatHoverLabel(
+                                  seat,
+                                  ticketType,
+                                  currency,
+                                )}
+                                style={publicSeatStyle({
+                                  selected,
+                                  ticketType,
+                                  ticketTypes,
+                                  status: seat.status,
+                                })}
+                              >
+                                {seat.seat_number || index + 1}
+                              </button>
+
+                              {seat.aisle_after ? (
+                                <span
+                                  aria-hidden="true"
+                                  style={styles.aisleGap}
+                                />
+                              ) : null}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <section
+                      className="public-reserved-selector-mobile-seat-panel"
+                      style={styles.mobileSeatPanel}
+                    >
+                      <div style={styles.mobileSeatPanelHeader}>
+                        <span style={styles.mobileStepPill}>Choose seats</span>
+                        <strong style={styles.mobileSeatPanelTitle}>
+                          {activeRow.section} · Row {activeRow.row}
+                        </strong>
+                        <span style={styles.mobileSeatPanelText}>
+                          Tap available seats to add or remove them from your
+                          booking.
+                        </span>
+                      </div>
+
+                      <div
+                        className="public-reserved-selector-mobile-seat-grid"
+                        style={styles.mobileSeatGrid}
+                      >
+                        {activeRow.seats.map((seat, index) => {
+                          const selected = selectedSeatIds.includes(seat.id);
+                          const ticketType = ticketTypes.find(
+                            (item) => item.id === seat.ticket_type_id,
+                          );
+
+                          return (
+                            <button
+                              key={seat.id}
+                              type="button"
+                              className="public-reserved-selector-mobile-seat-button"
+                              onClick={() => toggleSeat(seat)}
+                              disabled={seat.status !== "available"}
+                              title={seatHoverLabel(seat, ticketType, currency)}
+                              style={{
+                                ...styles.mobileSeatButton,
+                                ...publicSeatStyle({
+                                  selected,
+                                  ticketType,
+                                  ticketTypes,
+                                  status: seat.status,
+                                }),
+                                minWidth: 0,
+                                width: "100%",
+                                height: "auto",
+                              }}
+                            >
+                              <span style={styles.mobileSeatButtonLabel}>
+                                Seat
+                              </span>
+                              <strong style={styles.mobileSeatButtonValue}>
+                                {seat.seat_number || index + 1}
+                              </strong>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  </section>
+                </div>
+              </div>
+            </>
+          )}
+
+          <div
+            className="public-reserved-selector-helper-notice"
+            style={styles.helperNotice}
+          >
+            <span style={styles.helperIcon}>ⓘ</span>
+            Use the row selector above to switch between rows. On smaller
+            screens, the row list appears first so you can choose seats with
+            fewer distractions.
           </div>
 
-          <div style={styles.helperNotice}>
-            <span style={styles.helperIcon}>ⓘ</span>
-            On smaller screens, swipe across the seat map to view all seats.
+          <div
+            className="public-reserved-selector-mobile-summary"
+            style={styles.mobileSummary}
+          >
+            <div style={styles.mobileSummaryText}>
+              <span style={styles.mobileSummaryLabel}>
+                {cartSeats.length} seat{cartSeats.length === 1 ? "" : "s"}{" "}
+                selected
+              </span>
+              <strong style={styles.mobileSummaryTotal}>
+                {currency} {moneyFromCents(checkoutSubtotal)}
+              </strong>
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                scrollToSelectorTarget("public-reserved-booking-details")
+              }
+              disabled={cartSeats.length === 0}
+              style={{
+                ...styles.mobileSummaryButton,
+                opacity: cartSeats.length === 0 ? 0.55 : 1,
+                cursor: cartSeats.length === 0 ? "not-allowed" : "pointer",
+              }}
+            >
+              Continue
+            </button>
           </div>
         </div>
 
-        <aside className="public-reserved-selector-cart" style={styles.cart}>
-          <div className="public-reserved-selector-cart-grid" style={styles.cartGrid}>
+        <aside
+          id="public-reserved-booking-details"
+          className="public-reserved-selector-cart"
+          style={styles.cart}
+        >
+          {!hasSeatSelection ? (
+            <div style={styles.mobileBeforeDetailsNotice}>
+              <span style={styles.mobileStepPill}>Next step</span>
+              <strong style={styles.mobileBeforeDetailsTitle}>
+                Choose at least one seat first
+              </strong>
+              <span style={styles.mobileBeforeDetailsText}>
+                Guest details, optional extras and checkout will unlock after a
+                seat is selected.
+              </span>
+            </div>
+          ) : null}
+
+          <div
+            className={
+              hasSeatSelection
+                ? "public-reserved-selector-cart-grid"
+                : "public-reserved-selector-cart-grid public-reserved-selector-mobile-locked-details"
+            }
+            style={styles.cartGrid}
+          >
             <div>
               <BuyerDetailsFields
                 buyerName={buyerName}
@@ -929,7 +1499,9 @@ export default function PublicReservedSeatSelector({
               <div style={styles.summarySpacer} />
 
               <label style={styles.accessCodeBox}>
-                <span style={styles.accessCodeLabel}>VIP / complimentary code</span>
+                <span style={styles.accessCodeLabel}>
+                  VIP / complimentary code
+                </span>
                 <input
                   value={accessCode}
                   onChange={(event) => {
@@ -944,15 +1516,14 @@ export default function PublicReservedSeatSelector({
                   Codes are validated securely before booking.
                 </small>
               </label>
-
-              {checkoutAddOns.length > 0 ? (
+                            {checkoutAddOns.length > 0 ? (
                 <>
                   <div style={styles.summarySpacer} />
 
                   <div style={styles.addOnWorkflowBox}>
-                    <span style={styles.addOnWorkflowBadge}>Step 2</span>
+                    <span style={styles.addOnWorkflowBadge}>Step 3</span>
                     <strong style={styles.addOnWorkflowTitle}>
-                      Add event extras after your seat
+                      Add event extras
                     </strong>
                     <span style={styles.addOnWorkflowText}>
                       Heads or Tails and Higher or Lower entries can be added
@@ -994,8 +1565,11 @@ export default function PublicReservedSeatSelector({
               <div style={styles.cartTop}>
                 <div>
                   <p style={styles.cartEyebrow}>Booking summary</p>
-                  <h3 className="public-reserved-selector-cart-title" style={styles.cartTitle}>
-                    Your tickets
+                  <h3
+                    className="public-reserved-selector-cart-title"
+                    style={styles.cartTitle}
+                  >
+                    Your seats
                   </h3>
                 </div>
 
@@ -1017,122 +1591,164 @@ export default function PublicReservedSeatSelector({
                   </p>
                 </div>
               ) : (
-                <div style={styles.cartList}>
-                  {cartSeats.map(({ seat, ticketType }) => {
-                    const data = guestData[seat.id] || getDefaultGuestData();
-                    const availableTicketTypes = seat.ticket_type_id
-                      ? ticketTypes.filter(
-                          (currentTicketType) =>
-                            currentTicketType.id === seat.ticket_type_id,
-                        )
-                      : ticketTypes;
+                <>
+                  <div style={styles.selectedSeatRibbon}>
+                    <span style={styles.selectedSeatRibbonLabel}>
+                      Selected seats
+                    </span>
+                    <strong style={styles.selectedSeatRibbonText}>
+                      {selectedSeatLabels.slice(0, 2).join(" • ")}
+                      {selectedSeatLabels.length > 2
+                        ? ` • +${selectedSeatLabels.length - 2} more`
+                        : ""}
+                    </strong>
+                  </div>
 
-                    return (
-                      <div key={seat.id} style={styles.cartItem}>
-                        <div style={styles.cartItemHeader}>
-                          <div>
-                            <p style={styles.cartSeatLabel}>{seatLabel(seat)}</p>
-                            <p style={styles.cartPrice}>
-                              {currency} {moneyFromCents(ticketType.price)}
-                            </p>
+                  <div style={styles.cartList}>
+                    {cartSeats.map(({ seat, ticketType }) => {
+                      const data = guestData[seat.id] || getDefaultGuestData();
+                      const availableTicketTypes = seat.ticket_type_id
+                        ? ticketTypes.filter(
+                            (currentTicketType) =>
+                              currentTicketType.id === seat.ticket_type_id,
+                          )
+                        : ticketTypes;
+
+                      return (
+                        <div
+                          key={seat.id}
+                          className="public-reserved-selector-cart-item"
+                          style={styles.cartItem}
+                        >
+                          <div
+                            className="public-reserved-selector-cart-item-header"
+                            style={styles.cartItemHeader}
+                          >
+                            <div>
+                              <p style={styles.cartSeatLabel}>
+                                {seatLabel(seat)}
+                              </p>
+                              <p style={styles.cartPrice}>
+                                {currency} {moneyFromCents(ticketType.price)}
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              className="public-reserved-selector-remove-button"
+                              onClick={() => removeSeat(seat.id)}
+                              style={styles.removeButton}
+                            >
+                              Remove
+                            </button>
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={() => removeSeat(seat.id)}
-                            style={styles.removeButton}
-                          >
-                            Remove
-                          </button>
-                        </div>
-
-                        <label style={styles.field}>
-                          <span style={styles.label}>Ticket type</span>
-                          <select
-                            value={ticketType.id}
-                            onChange={(event) =>
-                              updateTicketType(seat.id, event.target.value)
-                            }
-                            disabled={Boolean(seat.ticket_type_id)}
-                            style={styles.input}
-                          >
-                            {availableTicketTypes.map((currentTicketType) => (
-                              <option
-                                key={currentTicketType.id}
-                                value={currentTicketType.id}
-                              >
-                                {currentTicketType.name} — {currency}{" "}
-                                {moneyFromCents(currentTicketType.price)}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-
-                        <label style={styles.field}>
-                          <span style={styles.label}>Guest name</span>
-                          <input
-                            value={data.guestName}
-                            onChange={(event) =>
-                              updateGuestData(seat.id, {
-                                guestName: event.target.value,
-                              })
-                            }
-                            placeholder="Guest name"
-                            style={styles.input}
-                          />
-                        </label>
-
-                        <label style={styles.field}>
-                          <span style={styles.label}>Dietary requirements</span>
-                          <textarea
-                            value={data.dietaryRequirements}
-                            onChange={(event) =>
-                              updateGuestData(seat.id, {
-                                dietaryRequirements: event.target.value,
-                              })
-                            }
-                            placeholder="None, vegetarian, gluten free, allergies..."
-                            rows={2}
-                            style={styles.textarea}
-                          />
-                        </label>
-
-                        <label style={styles.field}>
-                          <span style={styles.label}>Menu choice</span>
-                          {menuOptions.length > 0 ? (
+                          <label style={styles.field}>
+                            <span style={styles.label}>Ticket type</span>
                             <select
-                              value={data.menuChoice}
+                              value={ticketType.id}
                               onChange={(event) =>
-                                updateGuestData(seat.id, {
-                                  menuChoice: event.target.value,
-                                })
+                                updateTicketType(seat.id, event.target.value)
                               }
+                              disabled={Boolean(seat.ticket_type_id)}
                               style={styles.input}
                             >
-                              <option value="">Select menu option</option>
-                              {menuOptions.map((option) => (
-                                <option key={option} value={option}>
-                                  {option}
+                              {availableTicketTypes.map((currentTicketType) => (
+                                <option
+                                  key={currentTicketType.id}
+                                  value={currentTicketType.id}
+                                >
+                                  {currentTicketType.name} — {currency}{" "}
+                                  {moneyFromCents(currentTicketType.price)}
                                 </option>
                               ))}
                             </select>
-                          ) : (
+                          </label>
+
+                          <label style={styles.field}>
+                            <span style={styles.label}>Guest name</span>
                             <input
-                              value={data.menuChoice}
+                              value={data.guestName}
                               onChange={(event) =>
                                 updateGuestData(seat.id, {
-                                  menuChoice: event.target.value,
+                                  guestName: event.target.value,
                                 })
                               }
-                              placeholder="Optional menu choice"
+                              placeholder="Guest name"
                               style={styles.input}
                             />
-                          )}
-                        </label>
-                      </div>
-                    );
-                  })}
-                </div>
+                          </label>
+
+                          <label style={styles.field}>
+                            <span style={styles.label}>
+                              Dietary requirements
+                            </span>
+                            <textarea
+                              value={data.dietaryRequirements}
+                              onChange={(event) =>
+                                updateGuestData(seat.id, {
+                                  dietaryRequirements: event.target.value,
+                                })
+                              }
+                              placeholder="None, vegetarian, gluten free, allergies..."
+                              rows={2}
+                              style={styles.textarea}
+                            />
+                          </label>
+
+                          <label style={styles.field}>
+                            <span style={styles.label}>Menu choice</span>
+                            {menuOptions.length > 0 ? (
+                              <select
+                                value={data.menuChoice}
+                                onChange={(event) =>
+                                  updateGuestData(seat.id, {
+                                    menuChoice: event.target.value,
+                                  })
+                                }
+                                style={styles.input}
+                              >
+                                <option value="">Select menu option</option>
+                                {menuOptions.map((option) => (
+                                  <option key={option} value={option}>
+                                    {option}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input
+                                value={data.menuChoice}
+                                onChange={(event) =>
+                                  updateGuestData(seat.id, {
+                                    menuChoice: event.target.value,
+                                  })
+                                }
+                                placeholder="Optional menu choice"
+                                style={styles.input}
+                              />
+                            )}
+                          </label>
+
+                          <label style={styles.field}>
+                            <span style={styles.label}>
+                              Table, group or note
+                            </span>
+                            <input
+                              value={data.tableName}
+                              onChange={(event) =>
+                                updateGuestData(seat.id, {
+                                  tableName: event.target.value,
+                                })
+                              }
+                              placeholder="Optional"
+                              style={styles.input}
+                            />
+                          </label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
               )}
 
               <div style={styles.totalBox}>
@@ -1187,7 +1803,9 @@ export default function PublicReservedSeatSelector({
                     disabled={checkoutSubtotal <= 0}
                   />
                   <span>
-                    <strong>I’d like to cover platform and payment costs</strong>
+                    <strong>
+                      I’d like to cover platform and payment costs
+                    </strong>
                     <small style={styles.feeSmall}>
                       Adds approximately {currency}{" "}
                       {moneyFromCents(estimatedCoverFeeCents)} so the organiser
@@ -1204,7 +1822,9 @@ export default function PublicReservedSeatSelector({
                     : styles.totalBoxStrong
                 }
               >
-                <span>{hasAccessCode ? "Due after valid code" : "Total today"}</span>
+                <span>
+                  {hasAccessCode ? "Due after valid code" : "Total today"}
+                </span>
                 <strong>
                   {currency} {moneyFromCents(totalTodayCents)}
                 </strong>
@@ -1216,6 +1836,7 @@ export default function PublicReservedSeatSelector({
 
               <button
                 type="button"
+                className="public-reserved-selector-checkout"
                 onClick={startCheckout}
                 disabled={cartSeats.length === 0 || isCheckingOut}
                 style={{
@@ -1237,11 +1858,11 @@ export default function PublicReservedSeatSelector({
           </div>
         </aside>
       </div>
-    </>
+    </div>
   );
 }
 
-function Legend({ color, label }: { color: string; label: string }) {
+function SeatLegend({ color, label }: { color: string; label: string }) {
   return (
     <span style={styles.legendItem}>
       <span style={{ ...styles.legendDot, background: color }} />
@@ -1249,8 +1870,12 @@ function Legend({ color, label }: { color: string; label: string }) {
     </span>
   );
 }
-
 const styles: Record<string, CSSProperties> = {
+  root: {
+    width: "100%",
+    minWidth: 0,
+  },
+
   shell: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1.2fr) minmax(340px, 0.8fr)",
@@ -1368,34 +1993,121 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(15,23,42,0.14)",
   },
 
-  stageWrap: {
-    display: "flex",
-    justifyContent: "center",
-    margin: "12px 0 14px",
-    minWidth: 0,
+  emptyLight: {
+    display: "grid",
+    gap: 8,
+    padding: 18,
+    borderRadius: 18,
+    border: "1px dashed #cbd5e1",
+    background: "#f8fafc",
+    color: "#0f172a",
+    textAlign: "center",
   },
 
-  stage: {
-    width: "min(100%, 620px)",
-    minWidth: 320,
-    padding: "10px 14px",
-    borderRadius: "16px 16px 34px 34px",
-    background:
-      "linear-gradient(135deg, #0f172a 0%, #1e293b 58%, #020617 100%)",
-    color: "#fef3c7",
-    border: "1px solid rgba(250,204,21,0.28)",
-    textAlign: "center",
-    fontSize: 12,
+  mobileRowCards: {
+    display: "none",
+    gap: 12,
+    marginBottom: 12,
+  },
+
+  mobileRowCardsHeader: {
+    display: "grid",
+    gap: 6,
+    padding: 12,
+    borderRadius: 18,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+
+  mobileStepPill: {
+    display: "inline-flex",
+    width: "fit-content",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 30,
+    padding: "0 10px",
+    borderRadius: 999,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 11,
     fontWeight: 950,
     textTransform: "uppercase",
-    letterSpacing: "0.16em",
-    boxShadow: "0 12px 28px rgba(15,23,42,0.16)",
+    letterSpacing: "0.08em",
   },
 
-  seatMapScroll: {
+  mobileRowCardsTitle: {
+    color: "#0f172a",
+    fontSize: 18,
+    lineHeight: 1.15,
+    letterSpacing: "-0.025em",
+    fontWeight: 950,
+  },
+
+  mobileRowCardGrid: {
+    display: "grid",
+    gap: 10,
+  },
+
+  mobileRowCard: {
+    display: "grid",
+    gap: 5,
+    width: "100%",
+    padding: 14,
+    borderRadius: 18,
+    border: "1px solid #e2e8f0",
+    background: "#ffffff",
+    color: "#0f172a",
+    textAlign: "left",
+    boxShadow: "0 10px 24px rgba(15,23,42,0.06)",
+  },
+
+  mobileRowCardActive: {
+    borderColor: "#1683f8",
+    background: "linear-gradient(135deg, #eff6ff 0%, #ffffff 78%)",
+    boxShadow: "0 12px 28px rgba(22,131,248,0.14)",
+  },
+
+  mobileRowCardKicker: {
+    color: "#2563eb",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  mobileRowCardTitle: {
+    color: "#0f172a",
+    fontSize: 18,
+    lineHeight: 1.15,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
+  mobileRowCardMeta: {
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.35,
+    fontWeight: 850,
+  },
+
+  mobileRowCardSelected: {
+    display: "inline-flex",
+    width: "fit-content",
+    marginTop: 2,
+    padding: "6px 9px",
+    borderRadius: 999,
+    background: "#dbeafe",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
+    fontSize: 11,
+    fontWeight: 950,
+  },
+
+  seatScroll: {
     width: "100%",
     overflowX: "auto",
-    overflowY: "hidden",
+    overflowY: "visible",
     padding: 14,
     borderRadius: 18,
     background: "#ffffff",
@@ -1403,74 +2115,381 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75)",
   },
 
-  groupBlock: {
+  singleRowStack: {
     display: "grid",
-    gap: 10,
-    minWidth: 620,
+    gap: 14,
+    minWidth: 0,
   },
 
-  groupTitle: {
-    margin: "8px 0 2px",
-    color: "#334155",
-    fontSize: 13,
+  rowPicker: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    borderRadius: 22,
+    background:
+      "linear-gradient(135deg, #f8fafc 0%, #ffffff 58%, #eff6ff 100%)",
+    border: "1px solid #dbeafe",
+    minWidth: 0,
+  },
+
+  rowPickerHeader: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(220px, 0.36fr)",
+    gap: 12,
+    alignItems: "end",
+    minWidth: 0,
+  },
+
+  rowPickerEyebrow: {
+    margin: "0 0 6px",
+    color: "#2563eb",
+    fontSize: 11,
     fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
 
-  rowLine: {
+  rowPickerTitle: {
+    margin: 0,
+    color: "#111827",
+    fontSize: "clamp(22px, 5vw, 28px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
+  rowPickerText: {
+    margin: "7px 0 0",
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 750,
+    overflowWrap: "anywhere",
+  },
+
+  rowSelectWrap: {
     display: "grid",
-    gridTemplateColumns: "76px 1fr",
-    gap: 10,
-    alignItems: "center",
+    gap: 6,
     minWidth: 0,
   },
 
-  rowButton: {
-    minHeight: 36,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "7px 8px",
-    borderRadius: 12,
-    background: "#f1f5f9",
+  labelDark: {
     color: "#334155",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+
+  rowSelect: {
+    width: "100%",
+    minHeight: 42,
+    padding: "9px 10px",
+    borderRadius: 13,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 14,
+    fontWeight: 850,
+    boxSizing: "border-box",
+  },
+
+  rowNavRow: {
+    display: "grid",
+    gridTemplateColumns:
+      "minmax(0, 0.25fr) minmax(220px, 0.5fr) minmax(0, 0.25fr)",
+    gap: 10,
+    alignItems: "stretch",
+  },
+
+  rowNavButton: {
+    minHeight: 48,
+    borderRadius: 16,
+    border: "1px solid #bfdbfe",
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    fontSize: 13,
+    fontWeight: 950,
+    padding: "10px 12px",
+    boxShadow: "0 8px 18px rgba(37,99,235,0.08)",
+  },
+
+  rowPositionCard: {
+    display: "grid",
+    gap: 4,
+    alignContent: "center",
+    padding: 12,
+    borderRadius: 16,
     border: "1px solid #e2e8f0",
+    background: "#ffffff",
+    minWidth: 0,
+    textAlign: "center",
+  },
+
+  rowPositionLabel: {
+    color: "#64748b",
+    fontSize: 10,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  rowPositionValue: {
+    color: "#0f172a",
+    fontSize: 16,
+    lineHeight: 1.15,
+    fontWeight: 950,
+  },
+
+  rowPositionHint: {
+    color: "#64748b",
+    fontSize: 12,
+    lineHeight: 1.35,
+    fontWeight: 750,
+  },
+
+  rowPills: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
+
+  windowedPillsLabel: {
+    display: "inline-flex",
+    width: "100%",
+    color: "#64748b",
     fontSize: 11,
     fontWeight: 950,
     textTransform: "uppercase",
-    letterSpacing: "0.04em",
-    whiteSpace: "nowrap",
+    letterSpacing: "0.08em",
   },
 
-  seatLine: {
-    display: "flex",
-    alignItems: "center",
-    gap: 7,
-    minHeight: 42,
-    minWidth: 0,
-  },
-
-  seatWrap: {
+  windowedPillsHint: {
     display: "inline-flex",
     alignItems: "center",
-    gap: 7,
+    minHeight: 38,
+    padding: "0 10px",
+    borderRadius: 999,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 850,
   },
 
-  aisle: {
+  rowPill: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    width: 64,
-    height: 28,
+    gap: 6,
+    minWidth: 44,
+    minHeight: 38,
+    padding: "0 12px",
     borderRadius: 999,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: 950,
+    cursor: "pointer",
+  },
+
+  rowPillActive: {
+    borderColor: "#1683f8",
+    background: "#1683f8",
+    color: "#ffffff",
+    boxShadow: "0 10px 20px rgba(22,131,248,0.16)",
+  },
+
+  rowPillBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 20,
+    height: 20,
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.22)",
+    color: "inherit",
+    fontSize: 11,
+    fontWeight: 950,
+  },
+
+  activeSummary: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  activeSummaryCard: {
+    display: "grid",
+    gap: 4,
+    padding: 12,
+    borderRadius: 16,
     background: "#f8fafc",
-    color: "#94a3b8",
-    border: "1px dashed #cbd5e1",
-    fontSize: 10,
-    fontWeight: 900,
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+  },
+
+  activeSummaryLabel: {
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 950,
     textTransform: "uppercase",
     letterSpacing: "0.06em",
+  },
+
+  activeSummaryValue: {
+    color: "#0f172a",
+    fontSize: 22,
+    lineHeight: 1,
+    fontWeight: 950,
+  },
+
+  rowCard: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    borderRadius: 22,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    minWidth: 0,
+    overflow: "visible",
+    scrollMarginTop: 16,
+  },
+
+  rowHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+
+  rowTitle: {
+    margin: 0,
+    color: "#111827",
+    fontSize: 18,
+    lineHeight: 1.15,
+    fontWeight: 950,
+    letterSpacing: "-0.02em",
+    overflowWrap: "break-word",
+  },
+
+  rowMeta: {
+    margin: "5px 0 0",
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.4,
+    fontWeight: 800,
+  },
+
+  desktopSeatRowWrap: {
+    display: "block",
+    overflowX: "auto",
+    overflowY: "visible",
+    padding: 10,
+    borderRadius: 16,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+
+  desktopSeatRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    width: "fit-content",
+    padding: 12,
+    borderRadius: 14,
+    background:
+      "linear-gradient(135deg, rgba(22,131,248,0.05), rgba(255,255,255,1))",
+  },
+
+  rowLabelPlate: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 72,
+    minHeight: 36,
+    padding: "0 12px",
+    borderRadius: 999,
+    background: "#0f172a",
+    color: "#fef3c7",
+    fontSize: 12,
+    fontWeight: 950,
+    marginRight: 4,
+    whiteSpace: "nowrap",
+  },
+
+  seatWithAisle: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+  },
+
+  aisleGap: {
+    display: "inline-flex",
+    width: 30,
+    height: 36,
+    borderRadius: 10,
+    background:
+      "repeating-linear-gradient(45deg, #e2e8f0 0, #e2e8f0 4px, #f8fafc 4px, #f8fafc 8px)",
+    border: "1px dashed #cbd5e1",
+  },
+
+  mobileSeatPanel: {
+    display: "none",
+    gap: 12,
+  },
+
+  mobileSeatPanelHeader: {
+    display: "grid",
+    gap: 6,
+  },
+
+  mobileSeatPanelTitle: {
+    color: "#0f172a",
+    fontSize: 18,
+    lineHeight: 1.15,
+    fontWeight: 950,
+    overflowWrap: "anywhere",
+  },
+
+  mobileSeatPanelText: {
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.4,
+    fontWeight: 750,
+  },
+
+  mobileSeatGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
+    gap: 8,
+  },
+
+  mobileSeatButton: {
+    display: "grid",
+    justifyItems: "center",
+    alignContent: "center",
+    gap: 1,
+    minHeight: 50,
+    borderRadius: 16,
+    boxSizing: "border-box",
+  },
+
+  mobileSeatButtonLabel: {
+    fontSize: 9,
+    lineHeight: 1,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    fontWeight: 950,
+    opacity: 0.78,
+  },
+
+  mobileSeatButtonValue: {
+    fontSize: 16,
+    lineHeight: 1.05,
+    fontWeight: 950,
   },
 
   helperNotice: {
@@ -1501,6 +2520,53 @@ const styles: Record<string, CSSProperties> = {
     flexShrink: 0,
   },
 
+  mobileSummary: {
+    display: "none",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    width: "100%",
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 20,
+    background: "rgba(15,23,42,0.94)",
+    color: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.12)",
+    boxShadow: "0 18px 40px rgba(15,23,42,0.26)",
+    backdropFilter: "blur(14px)",
+  },
+
+  mobileSummaryText: {
+    display: "grid",
+    gap: 2,
+    minWidth: 0,
+  },
+
+  mobileSummaryLabel: {
+    color: "#cbd5e1",
+    fontSize: 11,
+    fontWeight: 900,
+  },
+
+  mobileSummaryTotal: {
+    color: "#fef3c7",
+    fontSize: 17,
+    lineHeight: 1.1,
+    fontWeight: 950,
+  },
+
+  mobileSummaryButton: {
+    minHeight: 44,
+    padding: "0 14px",
+    borderRadius: 999,
+    border: "none",
+    background: "#1683f8",
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: 950,
+    flexShrink: 0,
+  },
+
   cart: {
     position: "sticky",
     top: 18,
@@ -1510,6 +2576,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     boxShadow: "0 18px 45px rgba(15,23,42,0.24)",
     minWidth: 0,
+    scrollMarginTop: 16,
   },
 
   cartGrid: {
@@ -1518,46 +2585,70 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
   },
 
-  cartTop: {
-    display: "flex",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
+  mobileBeforeDetailsNotice: {
+    display: "grid",
+    gap: 7,
     marginBottom: 14,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.14)",
   },
 
-  cartEyebrow: {
-    margin: 0,
-    color: "#facc15",
-    fontSize: 11,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.14em",
-  },
-
-  cartTitle: {
-    margin: "5px 0 0",
-    fontSize: "clamp(23px, 5vw, 28px)",
-    lineHeight: 1.05,
-    letterSpacing: "-0.045em",
+  mobileBeforeDetailsTitle: {
+    color: "#ffffff",
+    fontSize: 17,
+    lineHeight: 1.2,
     fontWeight: 950,
   },
 
-  countBadge: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: 42,
-    height: 42,
-    borderRadius: 999,
-    background: "rgba(250,204,21,0.16)",
-    color: "#fde68a",
-    border: "1px solid rgba(250,204,21,0.24)",
-    fontWeight: 950,
+  mobileBeforeDetailsText: {
+    color: "#cbd5e1",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 750,
   },
 
   summarySpacer: {
     height: 16,
+  },
+
+  accessCodeBox: {
+    display: "grid",
+    gap: 7,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.14)",
+  },
+
+  accessCodeLabel: {
+    color: "#facc15",
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  accessCodeInput: {
+    width: "100%",
+    minHeight: 44,
+    padding: "10px 12px",
+    borderRadius: 13,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontSize: 15,
+    fontWeight: 850,
+    boxSizing: "border-box",
+    textTransform: "uppercase",
+  },
+
+  accessCodeHelp: {
+    color: "#cbd5e1",
+    lineHeight: 1.4,
+    fontSize: 12,
+    fontWeight: 750,
   },
 
   addOnWorkflowBox: {
@@ -1603,6 +2694,44 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
   },
 
+  cartTop: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 14,
+  },
+
+  cartEyebrow: {
+    margin: 0,
+    color: "#facc15",
+    fontSize: 11,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.14em",
+  },
+
+  cartTitle: {
+    margin: "5px 0 0",
+    fontSize: "clamp(23px, 5vw, 28px)",
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+    fontWeight: 950,
+  },
+
+  countBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 42,
+    height: 42,
+    borderRadius: 999,
+    background: "rgba(250,204,21,0.16)",
+    color: "#fde68a",
+    border: "1px solid rgba(250,204,21,0.24)",
+    fontWeight: 950,
+  },
+
   emptyBox: {
     display: "grid",
     justifyItems: "center",
@@ -1634,6 +2763,32 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
   },
 
+  selectedSeatRibbon: {
+    display: "grid",
+    gap: 4,
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 16,
+    background: "rgba(96,165,250,0.14)",
+    border: "1px solid rgba(147,197,253,0.22)",
+  },
+
+  selectedSeatRibbonLabel: {
+    color: "#bfdbfe",
+    fontSize: 10,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  selectedSeatRibbonText: {
+    color: "#ffffff",
+    fontSize: 13,
+    lineHeight: 1.35,
+    fontWeight: 900,
+    overflowWrap: "anywhere",
+  },
+
   cartList: {
     display: "grid",
     gap: 12,
@@ -1660,6 +2815,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#ffffff",
     fontSize: 15,
     fontWeight: 950,
+    overflowWrap: "anywhere",
   },
 
   cartPrice: {
@@ -1740,6 +2896,20 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 850,
   },
 
+  accessCodeNotice: {
+    display: "grid",
+    gap: 4,
+    marginTop: 10,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(96,165,250,0.16)",
+    border: "1px solid rgba(147,197,253,0.2)",
+    color: "#dbeafe",
+    fontSize: 13,
+    lineHeight: 1.4,
+    fontWeight: 800,
+  },
+
   feeBox: {
     display: "flex",
     gap: 10,
@@ -1759,58 +2929,6 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 4,
     color: "#cbd5e1",
     lineHeight: 1.4,
-  },
-
-  accessCodeBox: {
-    display: "grid",
-    gap: 7,
-    padding: 14,
-    borderRadius: 18,
-    background: "rgba(255,255,255,0.06)",
-    border: "1px solid rgba(255,255,255,0.14)",
-  },
-
-  accessCodeLabel: {
-    color: "#facc15",
-    fontSize: 12,
-    fontWeight: 950,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-
-  accessCodeInput: {
-    width: "100%",
-    minHeight: 44,
-    padding: "10px 12px",
-    borderRadius: 13,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
-    fontSize: 15,
-    fontWeight: 850,
-    boxSizing: "border-box",
-    textTransform: "uppercase",
-  },
-
-  accessCodeHelp: {
-    color: "#cbd5e1",
-    lineHeight: 1.4,
-    fontSize: 12,
-    fontWeight: 750,
-  },
-
-  accessCodeNotice: {
-    display: "grid",
-    gap: 4,
-    marginTop: 10,
-    padding: 14,
-    borderRadius: 18,
-    background: "rgba(96,165,250,0.16)",
-    border: "1px solid rgba(147,197,253,0.2)",
-    color: "#dbeafe",
-    fontSize: 13,
-    lineHeight: 1.4,
-    fontWeight: 800,
   },
 
   totalBoxStrong: {
