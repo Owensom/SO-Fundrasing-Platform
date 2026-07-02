@@ -300,7 +300,6 @@ function seatHoverLabel(
 ${priceLine}
 Status: ${statusLabel(seat.status)}`;
 }
-
 function groupLabel(seat: Seat) {
   if (seat.table_name) return seat.table_name;
   return `Table ${seat.table_number || "Unassigned"}`;
@@ -588,6 +587,7 @@ function scrollToSelectorTarget(id: string) {
     block: "start",
   });
 }
+
 export default function PublicTableSelector({
   eventId,
   seats,
@@ -671,8 +671,7 @@ export default function PublicTableSelector({
         };
       });
   }, [groupedTables, seatingLayoutJson]);
-
-  const activeTable =
+    const activeTable =
     tableEntries.find((table) => table.tableNumber === selectedTableNumber) ||
     tableEntries[0] ||
     null;
@@ -839,7 +838,8 @@ export default function PublicTableSelector({
     (sum, addOn) => sum + addOn.quantity,
     0,
   );
-    function updateGuestData(seatId: string, patch: Partial<GuestData>) {
+
+  function updateGuestData(seatId: string, patch: Partial<GuestData>) {
     setGuestData((current) => ({
       ...current,
       [seatId]: {
@@ -849,8 +849,7 @@ export default function PublicTableSelector({
       },
     }));
   }
-
-  function updateAddOnQuantity(
+    function updateAddOnQuantity(
     addOn: PublicEventCheckoutAddOn,
     nextQuantity: number,
   ) {
@@ -1071,7 +1070,7 @@ export default function PublicTableSelector({
     }
   }
     return (
-    <>
+    <div className="public-table-selector-root" style={styles.root}>
       <style>
         {`
           @media (max-width: 980px) {
@@ -1329,7 +1328,7 @@ export default function PublicTableSelector({
                 style={styles.tableScroll}
               >
                 <div style={styles.singleTableStack}>
-                                    <section
+                  <section
                     className="public-table-selector-desktop-table-picker"
                     style={styles.tablePicker}
                   >
@@ -1477,8 +1476,7 @@ export default function PublicTableSelector({
                       ) : null}
                     </div>
                   </section>
-
-                  <div
+                                    <div
                     className="public-table-selector-active-summary"
                     style={styles.activeSummary}
                   >
@@ -1665,7 +1663,9 @@ export default function PublicTableSelector({
 
             <button
               type="button"
-              onClick={() => scrollToSelectorTarget("public-table-booking-details")}
+              onClick={() =>
+                scrollToSelectorTarget("public-table-booking-details")
+              }
               disabled={cartSeats.length === 0}
               style={{
                 ...styles.mobileSummaryButton,
@@ -1677,355 +1677,408 @@ export default function PublicTableSelector({
             </button>
           </div>
         </div>
-                          <section
-                    className="public-table-selector-desktop-table-picker"
-                    style={styles.tablePicker}
-                  >
-                    <div
-                      className="public-table-selector-picker-header"
-                      style={styles.tablePickerHeader}
-                    >
-                      <div>
-                        <p style={styles.tablePickerEyebrow}>Choose table</p>
-                        <h4 style={styles.tablePickerTitle}>
-                          {activeTable.tableLabel}
-                        </h4>
-                        <p style={styles.tablePickerText}>
-                          Showing one table at a time. Seats already selected
-                          from other tables remain in your booking summary.
-                        </p>
-                      </div>
 
-                      <label style={styles.tableSelectWrap}>
-                        <span style={styles.labelDark}>Current table</span>
-                        <select
-                          className="public-table-selector-table-select"
-                          value={activeTable.tableNumber}
-                          onChange={(event) =>
-                            setSelectedTableNumber(event.target.value)
-                          }
-                          style={styles.tableSelect}
-                        >
-                          {tableEntries.map((table, index) => (
-                            <option
-                              key={table.tableNumber}
-                              value={table.tableNumber}
-                            >
-                              Table {index + 1} of {tableEntries.length} ·{" "}
-                              {table.tableLabel} · {table.seats.length} seats
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
+        <aside
+          id="public-table-booking-details"
+          className="public-table-selector-cart"
+          style={styles.cart}
+        >
+          {!hasSeatSelection ? (
+            <div style={styles.mobileBeforeDetailsNotice}>
+              <span style={styles.mobileStepPill}>Next step</span>
+              <strong style={styles.mobileBeforeDetailsTitle}>
+                Choose at least one seat first
+              </strong>
+              <span style={styles.mobileBeforeDetailsText}>
+                Guest details, optional extras and checkout will unlock after a
+                table seat is selected.
+              </span>
+            </div>
+          ) : null}
 
-                    <div
-                      className="public-table-selector-nav-row"
-                      style={styles.tableNavRow}
-                    >
-                      <button
-                        type="button"
-                        className="public-table-selector-nav-button"
-                        onClick={() =>
-                          goToTableByIndex(resolvedActiveTableIndex - 1)
-                        }
-                        disabled={!canGoPreviousTable}
-                        style={{
-                          ...styles.tableNavButton,
-                          opacity: canGoPreviousTable ? 1 : 0.45,
-                          cursor: canGoPreviousTable
-                            ? "pointer"
-                            : "not-allowed",
-                        }}
-                      >
-                        ← Previous table
-                      </button>
+          <div
+            className={
+              hasSeatSelection
+                ? "public-table-selector-cart-grid"
+                : "public-table-selector-cart-grid public-table-selector-mobile-locked-details"
+            }
+            style={styles.cartGrid}
+          >
+            <div>
+              <BuyerDetailsFields
+                buyerName={buyerName}
+                buyerEmail={buyerEmail}
+                onBuyerNameChange={setBuyerName}
+                onBuyerEmailChange={setBuyerEmail}
+                dark
+              />
 
-                      <div
-                        className="public-table-selector-position-card"
-                        style={styles.tablePositionCard}
-                      >
-                        <span style={styles.tablePositionLabel}>
-                          {isLargeTableEvent ? "Large table event" : "Table"}
-                        </span>
-                        <strong style={styles.tablePositionValue}>
-                          Table {resolvedActiveTableIndex + 1} of{" "}
-                          {tableEntries.length}
-                        </strong>
-                        <span style={styles.tablePositionHint}>
-                          {isLargeTableEvent
-                            ? "Use the dropdown for direct access to any table."
-                            : "Use the table shortcuts below."}
-                        </span>
-                      </div>
+              <div style={styles.summarySpacer} />
 
-                      <button
-                        type="button"
-                        className="public-table-selector-nav-button"
-                        onClick={() =>
-                          goToTableByIndex(resolvedActiveTableIndex + 1)
-                        }
-                        disabled={!canGoNextTable}
-                        style={{
-                          ...styles.tableNavButton,
-                          opacity: canGoNextTable ? 1 : 0.45,
-                          cursor: canGoNextTable ? "pointer" : "not-allowed",
-                        }}
-                      >
-                        Next table →
-                      </button>
-                    </div>
+              <label style={styles.accessCodeBox}>
+                <span style={styles.accessCodeLabel}>
+                  VIP / complimentary code
+                </span>
+                <input
+                  value={accessCode}
+                  onChange={(event) => {
+                    setAccessCode(event.target.value);
+                    setCheckoutError("");
+                  }}
+                  placeholder="Enter access code"
+                  style={styles.accessCodeInput}
+                />
+                <small style={styles.accessCodeHelp}>
+                  Use this for VIP, sponsor, staff or complimentary bookings.
+                  Codes are validated securely before booking.
+                </small>
+              </label>
 
-                    <div
-                      className="public-table-selector-table-pills"
-                      style={styles.tablePills}
-                    >
-                      {isLargeTableEvent ? (
-                        <span style={styles.windowedPillsLabel}>
-                          Nearby tables
-                        </span>
-                      ) : null}
+              {checkoutAddOns.length > 0 ? (
+                <>
+                  <div style={styles.summarySpacer} />
 
-                      {visibleTableEntries.map((table) => {
-                        const active =
-                          table.tableNumber === activeTable.tableNumber;
-                        const counts = getTableSeatCounts(
-                          table,
-                          selectedSeatIds,
-                        );
-
-                        return (
-                          <button
-                            key={table.tableNumber}
-                            type="button"
-                            className="public-table-selector-table-pill"
-                            onClick={() =>
-                              setSelectedTableNumber(table.tableNumber)
-                            }
-                            style={{
-                              ...styles.tablePill,
-                              ...(active ? styles.tablePillActive : {}),
-                            }}
-                          >
-                            <span>{table.tableNumber}</span>
-                            {counts.selected > 0 ? (
-                              <strong style={styles.tablePillBadge}>
-                                {counts.selected}
-                              </strong>
-                            ) : null}
-                          </button>
-                        );
-                      })}
-
-                      {isLargeTableEvent ? (
-                        <span style={styles.windowedPillsHint}>
-                          Showing {visibleTableEntries.length} of{" "}
-                          {tableEntries.length}
-                        </span>
-                      ) : null}
-                    </div>
-                  </section>
-
-                  <div
-                    className="public-table-selector-active-summary"
-                    style={styles.activeSummary}
-                  >
-                    <div style={styles.activeSummaryCard}>
-                      <span style={styles.activeSummaryLabel}>Seats</span>
-                      <strong style={styles.activeSummaryValue}>
-                        {activeTableCounts.total}
-                      </strong>
-                    </div>
-
-                    <div style={styles.activeSummaryCard}>
-                      <span style={styles.activeSummaryLabel}>Available</span>
-                      <strong style={styles.activeSummaryValue}>
-                        {activeTableCounts.available}
-                      </strong>
-                    </div>
-
-                    <div style={styles.activeSummaryCard}>
-                      <span style={styles.activeSummaryLabel}>Unavailable</span>
-                      <strong style={styles.activeSummaryValue}>
-                        {activeTableCounts.unavailable}
-                      </strong>
-                    </div>
-
-                    <div style={styles.activeSummaryCard}>
-                      <span style={styles.activeSummaryLabel}>Selected</span>
-                      <strong style={styles.activeSummaryValue}>
-                        {activeTableCounts.selected}
-                      </strong>
-                    </div>
+                  <div style={styles.addOnWorkflowBox}>
+                    <span style={styles.addOnWorkflowBadge}>Step 3</span>
+                    <strong style={styles.addOnWorkflowTitle}>
+                      Add event extras
+                    </strong>
+                    <span style={styles.addOnWorkflowText}>
+                      Heads or Tails and Higher or Lower entries can be added
+                      once your table seat selection is started.
+                    </span>
                   </div>
 
-                  <section
-                    id="public-table-active-plan"
-                    className="public-table-selector-table-card"
-                    style={styles.tableCard}
-                  >
-                    <div style={styles.tableHeader}>
-                      <div>
-                        <h4 style={styles.tableTitle}>
-                          {activeTable.tableLabel}
-                        </h4>
-                        <p style={styles.tableMeta}>
-                          {activeTable.seats.length} seat
-                          {activeTable.seats.length === 1 ? "" : "s"} •{" "}
-                          {activeTable.shape === "round"
-                            ? "Round"
-                            : activeTable.shape === "square"
-                              ? "Square"
-                              : "Rectangle"}{" "}
-                          table
-                        </p>
-                      </div>
-                    </div>
-
-                    <div
-                      className="public-table-selector-desktop-table-plan"
-                      style={styles.desktopTablePlan}
-                    >
-                      <div
-                        className="public-table-selector-table-area"
-                        style={tableAreaStyle(activeTable.shape)}
-                      >
-                        <div style={tablePlateStyle(activeTable.shape)}>
-                          <span style={styles.tablePlateLabel}>
-                            {activeTable.tableLabel}
-                          </span>
-                        </div>
-
-                        {activeTable.seats.map((seat, index) => {
-                          const selected = selectedSeatIds.includes(seat.id);
-                          const colours = seatColours(seat.status, selected);
-                          const ticketType = ticketTypes.find(
-                            (item) => item.id === seat.ticket_type_id,
-                          );
-
-                          return (
-                            <button
-                              key={seat.id}
-                              type="button"
-                              onClick={() => toggleSeat(seat)}
-                              disabled={seat.status !== "available"}
-                              title={seatHoverLabel(seat, ticketType, currency)}
-                              style={{
-                                ...styles.tableSeat,
-                                ...seatPosition(
-                                  index,
-                                  activeTable.seats.length,
-                                  activeTable.shape,
-                                ),
-                                ...colours,
-                              }}
-                            >
-                              {seat.seat_number || index + 1}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <section
-                      className="public-table-selector-mobile-seat-panel"
-                      style={styles.mobileSeatPanel}
-                    >
-                      <div style={styles.mobileSeatPanelHeader}>
-                        <span style={styles.mobileStepPill}>Choose seats</span>
-                        <strong style={styles.mobileSeatPanelTitle}>
-                          {activeTable.tableLabel}
-                        </strong>
-                        <span style={styles.mobileSeatPanelText}>
-                          Tap available seats to add or remove them from your
-                          booking.
-                        </span>
-                      </div>
-
-                      <div
-                        className="public-table-selector-mobile-seat-grid"
-                        style={styles.mobileSeatGrid}
-                      >
-                        {activeTable.seats.map((seat, index) => {
-                          const selected = selectedSeatIds.includes(seat.id);
-                          const colours = seatColours(seat.status, selected);
-                          const ticketType = ticketTypes.find(
-                            (item) => item.id === seat.ticket_type_id,
-                          );
-
-                          return (
-                            <button
-                              key={seat.id}
-                              type="button"
-                              className="public-table-selector-mobile-seat-button"
-                              onClick={() => toggleSeat(seat)}
-                              disabled={seat.status !== "available"}
-                              title={seatHoverLabel(seat, ticketType, currency)}
-                              style={{
-                                ...styles.mobileSeatButton,
-                                ...colours,
-                                cursor:
-                                  seat.status === "available"
-                                    ? "pointer"
-                                    : "not-allowed",
-                              }}
-                            >
-                              <span style={styles.mobileSeatButtonLabel}>
-                                Seat
-                              </span>
-                              <strong style={styles.mobileSeatButtonValue}>
-                                {seat.seat_number || index + 1}
-                              </strong>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </section>
-                  </section>
-                </div>
-              </div>
-            </>
-          )}
-
-          <div
-            className="public-table-selector-helper-notice"
-            style={styles.helperNotice}
-          >
-            <span style={styles.helperIcon}>ⓘ</span>
-            Use the table selector above to switch between tables. On smaller
-            screens, the table list appears first so you can choose seats with
-            fewer distractions.
-          </div>
-
-          <div
-            className="public-table-selector-mobile-summary"
-            style={styles.mobileSummary}
-          >
-            <div style={styles.mobileSummaryText}>
-              <span style={styles.mobileSummaryLabel}>
-                {cartSeats.length} seat{cartSeats.length === 1 ? "" : "s"}{" "}
-                selected
-              </span>
-              <strong style={styles.mobileSummaryTotal}>
-                {currency} {moneyFromCents(checkoutSubtotal)}
-              </strong>
+                  <div style={styles.addOnStack}>
+                    {checkoutAddOns.map((addOn) => (
+                      <PublicEventCheckoutAddOnSelector
+                        key={addOn.type}
+                        addOn={addOn}
+                        currency={currency}
+                        quantity={safeAddOnQuantities[addOn.type] || 0}
+                        buyerAnswer={addOnBuyerAnswers[addOn.type] || ""}
+                        buyerName={buyerName}
+                        buyerEmail={buyerEmail}
+                        players={addOnPlayers[addOn.type] || []}
+                        disabled={addOnsLocked}
+                        disabledTitle={addOnLockedTitle}
+                        disabledReason={addOnLockedReason}
+                        onQuantityChange={(nextQuantity) =>
+                          updateAddOnQuantity(addOn, nextQuantity)
+                        }
+                        onBuyerAnswerChange={(answer) =>
+                          updateAddOnBuyerAnswer(addOn, answer)
+                        }
+                        onPlayersChange={(players) =>
+                          updateAddOnPlayers(addOn, players)
+                        }
+                      />
+                    ))}
+                  </div>
+                </>
+              ) : null}
             </div>
 
-            <button
-              type="button"
-              onClick={() => scrollToSelectorTarget("public-table-booking-details")}
-              disabled={cartSeats.length === 0}
-              style={{
-                ...styles.mobileSummaryButton,
-                opacity: cartSeats.length === 0 ? 0.55 : 1,
-                cursor: cartSeats.length === 0 ? "not-allowed" : "pointer",
-              }}
-            >
-              Continue
-            </button>
+            <div>
+              <div style={styles.cartTop}>
+                <div>
+                  <p style={styles.cartEyebrow}>Booking summary</p>
+                  <h3
+                    className="public-table-selector-cart-title"
+                    style={styles.cartTitle}
+                  >
+                    Your table seats
+                  </h3>
+                </div>
+
+                <div style={styles.countBadge}>{cartSeats.length}</div>
+              </div>
+
+              {cartSeats.length === 0 ? (
+                <div style={styles.emptyBox}>
+                  <img
+                    src={TICKET_PLACEHOLDER_IMAGE}
+                    alt="SO ticket"
+                    style={styles.emptyTicketImage}
+                  />
+
+                  <p style={styles.emptyTitle}>Select seats to begin</p>
+                  <p style={styles.emptyText}>
+                    Your selected table seats and guest details will appear here.
+                    Event add-ons unlock after you choose at least one table
+                    seat.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div style={styles.selectedSeatRibbon}>
+                    <span style={styles.selectedSeatRibbonLabel}>
+                      Selected seats
+                    </span>
+                    <strong style={styles.selectedSeatRibbonText}>
+                      {selectedTableLabels.slice(0, 2).join(" • ")}
+                      {selectedTableLabels.length > 2
+                        ? ` • +${selectedTableLabels.length - 2} more`
+                        : ""}
+                    </strong>
+                  </div>
+
+                  <div style={styles.cartList}>
+                    {cartSeats.map(({ seat, ticketType }) => {
+                      const data = guestData[seat.id] || getDefaultGuest();
+                      const availableTicketTypes = seat.ticket_type_id
+                        ? ticketTypes.filter(
+                            (currentTicketType) =>
+                              currentTicketType.id === seat.ticket_type_id,
+                          )
+                        : ticketTypes;
+
+                      return (
+                        <div
+                          key={seat.id}
+                          className="public-table-selector-cart-item"
+                          style={styles.cartItem}
+                        >
+                          <div
+                            className="public-table-selector-cart-item-header"
+                            style={styles.cartItemHeader}
+                          >
+                            <div>
+                              <p style={styles.cartSeatLabel}>
+                                {seatLabel(seat)}
+                              </p>
+                              <p style={styles.cartPrice}>
+                                {currency} {moneyFromCents(ticketType.price)}
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              className="public-table-selector-remove-button"
+                              onClick={() => removeSeat(seat.id)}
+                              style={styles.removeButton}
+                            >
+                              Remove
+                            </button>
+                          </div>
+
+                          <label style={styles.field}>
+                            <span style={styles.label}>Ticket type</span>
+                            <select
+                              value={ticketType.id}
+                              onChange={(event) =>
+                                updateTicketType(seat.id, event.target.value)
+                              }
+                              disabled={Boolean(seat.ticket_type_id)}
+                              style={styles.input}
+                            >
+                              {availableTicketTypes.map((currentTicketType) => (
+                                <option
+                                  key={currentTicketType.id}
+                                  value={currentTicketType.id}
+                                >
+                                  {currentTicketType.name} — {currency}{" "}
+                                  {moneyFromCents(currentTicketType.price)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label style={styles.field}>
+                            <span style={styles.label}>Guest name</span>
+                            <input
+                              value={data.guestName}
+                              onChange={(event) =>
+                                updateGuestData(seat.id, {
+                                  guestName: event.target.value,
+                                })
+                              }
+                              placeholder="Guest name"
+                              style={styles.input}
+                            />
+                          </label>
+
+                          <label style={styles.field}>
+                            <span style={styles.label}>
+                              Dietary requirements
+                            </span>
+                            <textarea
+                              value={data.dietaryRequirements}
+                              onChange={(event) =>
+                                updateGuestData(seat.id, {
+                                  dietaryRequirements: event.target.value,
+                                })
+                              }
+                              placeholder="None, vegetarian, gluten free, allergies..."
+                              rows={2}
+                              style={styles.textarea}
+                            />
+                          </label>
+
+                          <label style={styles.field}>
+                            <span style={styles.label}>Menu choice</span>
+                            {menuOptions.length > 0 ? (
+                              <select
+                                value={data.menuChoice}
+                                onChange={(event) =>
+                                  updateGuestData(seat.id, {
+                                    menuChoice: event.target.value,
+                                  })
+                                }
+                                style={styles.input}
+                              >
+                                <option value="">Select menu option</option>
+                                {menuOptions.map((option) => (
+                                  <option key={option} value={option}>
+                                    {option}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input
+                                value={data.menuChoice}
+                                onChange={(event) =>
+                                  updateGuestData(seat.id, {
+                                    menuChoice: event.target.value,
+                                  })
+                                }
+                                placeholder="Optional menu choice"
+                                style={styles.input}
+                              />
+                            )}
+                          </label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              <div style={styles.totalBox}>
+                <span>
+                  Ticket total
+                  {totalAddOnQuantity > 0
+                    ? ` • ${totalAddOnQuantity} add-on entr${
+                        totalAddOnQuantity === 1 ? "y" : "ies"
+                      }`
+                    : ""}
+                </span>
+                <strong>
+                  {currency} {moneyFromCents(checkoutSubtotal)}
+                </strong>
+              </div>
+
+              {checkoutAddOns.map((addOn) => {
+                const quantity = safeAddOnQuantities[addOn.type] || 0;
+
+                if (quantity <= 0) {
+                  return null;
+                }
+
+                return (
+                  <div key={addOn.type} style={styles.addOnSummaryRow}>
+                    <span>
+                      {addOn.title || "Event add-on"} × {quantity}
+                    </span>
+                    <strong>
+                      {currency}{" "}
+                      {moneyFromCents(
+                        Number(addOn.entryPriceCents || 0) * quantity,
+                      )}
+                    </strong>
+                  </div>
+                );
+              })}
+
+              {hasAccessCode ? (
+                <div style={styles.accessCodeNotice}>
+                  <strong>Access code entered.</strong>
+                  <span>
+                    If valid, this booking will complete without Stripe payment.
+                  </span>
+                </div>
+              ) : (
+                <label style={styles.feeBox}>
+                  <input
+                    type="checkbox"
+                    checked={coverFees}
+                    onChange={(event) => setCoverFees(event.target.checked)}
+                    disabled={checkoutSubtotal <= 0}
+                  />
+                  <span>
+                    <strong>
+                      I’d like to cover platform and payment costs
+                    </strong>
+                    <small style={styles.feeSmall}>
+                      Adds approximately {currency}{" "}
+                      {moneyFromCents(estimatedCoverFeeCents)} so the organiser
+                      receives the full ticket value.
+                    </small>
+                  </span>
+                </label>
+              )}
+
+              <div
+                style={
+                  hasAccessCode
+                    ? styles.totalBoxComplimentary
+                    : styles.totalBoxStrong
+                }
+              >
+                <span>
+                  {hasAccessCode ? "Due after valid code" : "Total today"}
+                </span>
+                <strong>
+                  {currency} {moneyFromCents(totalTodayCents)}
+                </strong>
+              </div>
+
+              {checkoutError ? (
+                <div style={styles.errorBox}>{checkoutError}</div>
+              ) : null}
+
+              <button
+                type="button"
+                className="public-table-selector-checkout"
+                onClick={startCheckout}
+                disabled={cartSeats.length === 0 || isCheckingOut}
+                style={{
+                  ...styles.checkout,
+                  opacity: cartSeats.length === 0 || isCheckingOut ? 0.55 : 1,
+                  cursor:
+                    cartSeats.length === 0 || isCheckingOut
+                      ? "not-allowed"
+                      : "pointer",
+                }}
+              >
+                {isCheckingOut
+                  ? "Processing..."
+                  : hasAccessCode
+                    ? "Validate code and book"
+                    : "Continue to checkout"}
+              </button>
+            </div>
           </div>
-        </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function Legend({ color, label }: { color: string; label: string }) {
+  return (
+    <span style={styles.legendItem}>
+      <span style={{ ...styles.legendDot, background: color }} />
+      {label}
+    </span>
+  );
+}
 const styles: Record<string, CSSProperties> = {
+  root: {
+    width: "100%",
+    minWidth: 0,
+  },
+
   shell: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1.2fr) minmax(340px, 0.8fr)",
